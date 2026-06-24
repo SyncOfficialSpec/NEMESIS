@@ -105,7 +105,7 @@ end
 -- (getcustomasset / getsynasset), cached on disk after the first load.
 ----------------------------------------------------------------------
 local LOGO_URL = "https://raw.githubusercontent.com/DiabloPaidProjects/NEMESIS/main/assets/nemesis_logo.png"
-local LOGO_FILE = "nemesis_logo.png"
+local LOGO_FILE = "nemesis_logo_v2.png" -- bump when assets/nemesis_logo.png changes (busts on-disk cache)
 local brandLogoCache = nil -- nil = untried, false = failed, string = rbxasset id
 
 local function customAssetFn()
@@ -1665,11 +1665,11 @@ function NEMESIS.Window(opts)
 	end
 
 	if brandAsset then
-		-- full N + NEMESIS brand image (aspect ~2.81); wordmark is part of it
+		-- full N + NEMESIS brand image (aspect ~3.67); wordmark is part of it
 		Create("ImageLabel", {
 			Position = UDim2.new(0, 14, 0.5, 0),
 			AnchorPoint = Vector2.new(0, 0.5),
-			Size = UDim2.new(0, 124, 0, 44),
+			Size = UDim2.new(0, 162, 0, 44),
 			BackgroundTransparency = 1,
 			Image = brandAsset,
 			ScaleType = Enum.ScaleType.Fit,

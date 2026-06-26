@@ -834,9 +834,10 @@ function Elements.Toggle(parent, accent, opts)
 		Position = UDim2.new(1, 0, 0.5, 0),
 		Size = UDim2.new(0, 20, 0, 20),
 		BackgroundColor3 = THEME.Element,
-		ClipsDescendants = true,
 		Parent = row,
-	}, { corner(5), stroke(THEME.ElementStroke, 1, 0.35) })
+	}, { corner(6), stroke(THEME.ElementStroke, 1, 0.35) })
+	-- fill matches the box corner and never exceeds it, so its corners stay
+	-- curved all through the grow animation (no square clipping)
 	local fill = Create("Frame", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(0.5, 0, 0.5, 0),
@@ -846,7 +847,7 @@ function Elements.Toggle(parent, accent, opts)
 		BorderSizePixel = 0,
 		Parent = box,
 	}, {
-		corner(4),
+		corner(6),
 		Create("UIGradient", {
 			Rotation = 90,
 			Color = ColorSequence.new(accent, accent:Lerp(Color3.fromRGB(255, 255, 255), 0.35)),
@@ -932,16 +933,18 @@ function Elements.Slider(parent, accent, opts)
 		BackgroundTransparency = 1,
 		Parent = row,
 	})
-	local valueLabel = Create("TextLabel", {
+	-- editable: click the number to type an exact value
+	local valueLabel = Create("TextBox", {
 		BackgroundTransparency = 1,
 		Position = UDim2.new(0, 0, 0.5, 0),
 		AnchorPoint = Vector2.new(0, 0.5),
-		Size = UDim2.new(0, 48, 0, 16),
+		Size = UDim2.new(0, 52, 0, 18),
 		Font = FONT_MED,
 		Text = fmt(value),
 		TextColor3 = THEME.Text,
 		TextSize = 15,
 		TextXAlignment = Enum.TextXAlignment.Left,
+		ClearTextOnFocus = false,
 		Parent = cluster,
 	})
 	local bar = Create("Frame", {
@@ -964,11 +967,21 @@ function Elements.Slider(parent, accent, opts)
 	local handle = Create("Frame", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new((value - min) / (max - min), 0, 0.5, 0),
-		Size = UDim2.new(0, 12, 0, 12),
+		Size = UDim2.new(0, 14, 0, 14),
 		BackgroundColor3 = accent,
 		ZIndex = 2,
 		Parent = bar,
-	}, { corner(6), stroke(THEME.Background, 2, 0) })
+	}, { corner(7), stroke(THEME.Background, 2, 0) })
+	-- tall invisible grab strip so the thin bar is easy to drag anywhere
+	local hit = Create("TextButton", {
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, 0, 0.5, 0),
+		Size = UDim2.new(1, -56, 0, 24),
+		BackgroundTransparency = 1,
+		Text = "",
+		ZIndex = 3,
+		Parent = cluster,
+	})
 
 	local control = {}
 	local function setFromAlpha(alpha, fire, instant)
@@ -993,16 +1006,21 @@ function Elements.Slider(parent, accent, opts)
 	function control.Set(v) setFromAlpha(((tonumber(v) or min) - min) / (max - min), true, false) end
 	function control.Get() return value end
 
-	bindBarDrag(bar, function(rel) setFromAlpha(rel, true, true) end)
-	bar.InputBegan:Connect(function(input)
+	bindBarDrag(hit, function(rel) setFromAlpha(rel, true, true) end)
+	hit.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			tween(handle, { Size = UDim2.new(0, 15, 0, 15) }, TI.POP)
+			tween(handle, { Size = UDim2.new(0, 17, 0, 17) }, TI.POP)
 		end
 	end)
 	UserInputService.InputEnded:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			tween(handle, { Size = UDim2.new(0, 12, 0, 12) }, TI.POP)
+			tween(handle, { Size = UDim2.new(0, 14, 0, 14) }, TI.POP)
 		end
+	end)
+	-- type an exact value into the number box
+	valueLabel.FocusLost:Connect(function()
+		local num = tonumber((valueLabel.Text:gsub("[^%d%.%-]", "")))
+		if num then control.Set(num) else valueLabel.Text = fmt(value) end
 	end)
 
 	if opts.flag then NEMESIS.Flags[opts.flag] = value end

@@ -10,13 +10,13 @@ MIT licensed. Works with any executor that supports `loadstring` and `game:HttpG
 ## Loading
 
 ```lua
-local NEMESIS = loadstring(game:HttpGet("https://raw.githubusercontent.com/DiabloPaidProjects/NEMESIS/main/source.lua"))()
+local NEMESIS = loadstring(game:HttpGet("https://raw.githubusercontent.com/DiabloPaidProjects/x93adw231fwad2/main/source.lua"))()
 ```
 
 ## Quick start
 
 ```lua
-local NEMESIS = loadstring(game:HttpGet("https://raw.githubusercontent.com/DiabloPaidProjects/NEMESIS/main/source.lua"))()
+local NEMESIS = loadstring(game:HttpGet("https://raw.githubusercontent.com/DiabloPaidProjects/x93adw231fwad2/main/source.lua"))()
 
 local Window = NEMESIS.Window({
     title = "My Script",
@@ -282,11 +282,10 @@ example from a color picker callback.
 
 ## Examples
 
-- `example.lua` is a realistic menu layout.
-- `showcase.lua` shows every element and option in one place:
+`showcase.lua` shows every element and option in one place:
 
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/DiabloPaidProjects/NEMESIS/main/showcase.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/DiabloPaidProjects/x93adw231fwad2/main/showcase.lua"))()
 ```
 
 ## License

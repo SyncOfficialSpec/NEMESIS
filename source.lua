@@ -3,7 +3,7 @@
 	A UI library for Roblox script executors.
 
 	Load:
-		local NEMESIS = loadstring(game:HttpGet("https://raw.githubusercontent.com/DiabloPaidProjects/NEMESIS/main/source.lua"))()
+		local NEMESIS = loadstring(game:HttpGet("https://raw.githubusercontent.com/DiabloPaidProjects/x93adw231fwad2/main/source.lua"))()
 
 	Hierarchy: Window > Tab > Group > Page > Section > controls
 
@@ -97,7 +97,7 @@ end
 -- versioned path: bump the filename (URL + on-disk cache) whenever the logo
 -- changes, so neither the GitHub CDN nor the executor serves a stale image
 -- grayscale logo so ImageColor3 can tint it to any hue at runtime
-local LOGO_URL = "https://raw.githubusercontent.com/DiabloPaidProjects/NEMESIS/main/assets/nemesis_logo_v4.png"
+local LOGO_URL = "https://raw.githubusercontent.com/DiabloPaidProjects/x93adw231fwad2/main/assets/nemesis_logo_v4.png"
 local LOGO_FILE = "nemesis_logo_v4.png"
 local brandLogoCache = nil -- nil = untried, false = failed, string = rbxasset id
 

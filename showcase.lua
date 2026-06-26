@@ -11,7 +11,7 @@
 ]]
 
 -- ?_=os.time() busts the GitHub / executor cache so you always pull the latest
-local NEMESIS = loadstring(game:HttpGet("https://raw.githubusercontent.com/DiabloPaidProjects/NEMESIS/main/source.lua?_=" .. tostring(os.time())))()
+local NEMESIS = loadstring(game:HttpGet("https://raw.githubusercontent.com/DiabloPaidProjects/x93adw231fwad2/main/source.lua?_=" .. tostring(os.time())))()
 
 local function notify(title, content, duration)
 	NEMESIS.Notify({ title = title, content = content, duration = duration or 3 })

@@ -2538,10 +2538,10 @@ function NEMESIS.Window(opts)
 	local function openSearch()
 		if searchOpen then return end
 		searchOpen = true
-		-- tabs fade + scale out with the same easing the bar comes in with
+		-- tabs leave like the search bar closes: zoom out + fade
 		tween(tabBar, { GroupTransparency = 1 }, sExp(0.25))
-		tween(tabScale, { Scale = 0.92 }, sExp(0.3))
-		task.delay(0.26, function() if searchOpen then tabBar.Visible = false end end)
+		tween(tabScale, { Scale = 1.12 }, sExp(0.3))
+		task.delay(0.28, function() if searchOpen then tabBar.Visible = false; tabScale.Scale = 1 end end)
 		searchBar.Visible = true
 		searchBar.BackgroundTransparency = 1
 		searchBar.Size = UDim2.new(0, 400, 0, 44)
@@ -2565,12 +2565,13 @@ function NEMESIS.Window(opts)
 		if searchBarStroke then tween(searchBarStroke, { Transparency = 1 }, sQuint(0.15)) end
 		searchBox.Text = ""
 		runSearch("")
-		-- tabs fade + scale back in
+		-- tabs settle in like the search bar does: start zoomed + transparent,
+		-- tighten down to 1 while fading in (same Exponential easing)
 		tabBar.Visible = true
 		tabBar.GroupTransparency = 1
-		tabScale.Scale = 0.92
-		tween(tabBar, { GroupTransparency = 0 }, sExp(0.35))
-		tween(tabScale, { Scale = 1 }, sExp(0.4))
+		tabScale.Scale = 1.12
+		tween(tabBar, { GroupTransparency = 0 }, sExp(0.3))
+		tween(tabScale, { Scale = 1 }, sExp(0.5))
 		task.delay(0.32, function()
 			if not searchOpen then searchBar.Visible = false end
 		end)

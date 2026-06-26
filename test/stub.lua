@@ -3,7 +3,7 @@
 	plain `lua` / `luau`. It installs just enough globals for source.lua to
 	LOAD and CONSTRUCT its UI table without a real Roblox runtime.
 
-	It does NOT emulate rendering, input, or tweening — event callbacks and
+	It does NOT emulate rendering, input, or tweening - event callbacks and
 	tweens are no-ops. It verifies the library parses, builds every element,
 	and that .Set/.Get behave. Visual behaviour is validated in-executor.
 
@@ -175,7 +175,7 @@ NumberSequenceKeypoint = { new = function(t, v) return { Time = t, Value = v } e
 NumberSequence = { new = function(a) return { Keypoints = a } end }
 
 ----------------------------------------------------------------------
--- Enum (permissive — any chain returns a harmless sentinel)
+-- Enum (permissive - any chain returns a harmless sentinel)
 ----------------------------------------------------------------------
 local enumMeta
 enumMeta = {

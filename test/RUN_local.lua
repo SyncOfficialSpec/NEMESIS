@@ -807,8 +807,8 @@ end
 -- parent, so a solid-centre blob would darken the panel it decorates); spread
 -- is baked into each PNG's hole geometry and must match here
 local SHADOW_ART = {
-	["cal2_shadow_win.png"] = { size = 96, margin = 40, spread = 20 },
-	["cal2_shadow_pop.png"] = { size = 64, margin = 24, spread = 14 },
+	["cal3_shadow_win.png"] = { size = 96, margin = 40, spread = 20 },
+	["cal3_shadow_pop.png"] = { size = 64, margin = 24, spread = 14 },
 }
 local function dropShadow(parent, artName, transparency)
 	local art = loadArt(artName)
@@ -816,7 +816,7 @@ local function dropShadow(parent, artName, transparency)
 	local meta = SHADOW_ART[artName] or { size = 64, margin = 24, spread = 14 }
 	return Create("ImageLabel", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 0, 0.5, 2),
+		Position = UDim2.new(0.5, 0, 0.5, 0),
 		Size = UDim2.new(1, meta.spread * 2, 1, meta.spread * 2),
 		BackgroundTransparency = 1,
 		Image = art,
@@ -1109,12 +1109,23 @@ end
 -- Inline row scaffold (label on the left, control on the right)
 -- Rows live inside a Section's body, separated by spacing only (no divider lines).
 local function newRow(parent, height)
-	return Create("Frame", {
+	local row = Create("Frame", {
 		BackgroundColor3 = THEME.Group,
 		BackgroundTransparency = 1,
 		Size = UDim2.new(1, 0, 0, height or ROW_H),
 		Parent = parent,
 	}, { padXY(ROW_PAD, 0) })
+	-- etched tick: a faint hairline under the row (reads as a readout grid)
+	Create("Frame", {
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, 0, 1, 0),
+		Size = UDim2.new(1, 0, 0, 1),
+		BackgroundColor3 = THEME.RowDivider,
+		BackgroundTransparency = 0.45,
+		BorderSizePixel = 0,
+		Parent = row,
+	})
+	return row
 end
 
 -- Left-hand label (single line by default; optional muted description line).
@@ -1829,7 +1840,7 @@ function Elements.Dropdown(parent, accent, opts)
 		panelStroke,
 		panelScale,
 	})
-	local panelShadow = dropShadow(panel, "cal2_shadow_pop.png", 1)
+	local panelShadow = dropShadow(panel, "cal3_shadow_pop.png", 1)
 	local holder = Create("ScrollingFrame", {
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, 6),
@@ -2315,7 +2326,7 @@ function Elements.ColorPicker(parent, accent, opts)
 		}, {
 			corner(5), stroke(THEME.Stroke, 1, 0.15), panelScale,
 		})
-		dropShadow(panel, "cal2_shadow_pop.png")
+		dropShadow(panel, "cal3_shadow_pop.png")
 		cpScale = panelScale
 		-- absorb taps on empty panel areas so they don't fall through to the backdrop
 		Create("TextButton", { Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, AutoButtonColor = false, Text = "", ZIndex = 1, Parent = panel })
@@ -2733,7 +2744,7 @@ local function keyGate(kopts, windowTitle)
 		ZIndex = 60000,
 		Parent = screenGui,
 	}, { corner(6), stroke(THEME.Stroke, 1, 0.1), padXY(18, 16) })
-	dropShadow(card, "cal2_shadow_win.png")
+	dropShadow(card, "cal3_shadow_win.png")
 	makeDraggable(card, card)
 
 	Create("TextLabel", {
@@ -2907,7 +2918,7 @@ function NEMESIS.Window(opts)
 		ZIndex = 0,
 		Parent = screenGui,
 	}, { Create("UIScale", { Scale = scale }) })
-	dropShadow(rootShadowHolder, "cal2_shadow_win.png")
+	dropShadow(rootShadowHolder, "cal3_shadow_win.png")
 	pcall(function()
 		root:GetPropertyChangedSignal("Position"):Connect(function() rootShadowHolder.Position = root.Position end)
 		root:GetPropertyChangedSignal("Size"):Connect(function() rootShadowHolder.Size = root.Size end)
@@ -3767,7 +3778,7 @@ function NEMESIS.Window(opts)
 				ZIndex = 50001,
 				Parent = layer,
 			}, { corner(5), stroke(THEME.Stroke, 1, 0.15), padXY(6, 6) })
-			dropShadow(panel, "cal2_shadow_pop.png")
+			dropShadow(panel, "cal3_shadow_pop.png")
 			_ddCurrent = { close = closePanel }
 			tween(panel, { Size = UDim2.new(0, 190, 0, fullH) }, TI.EXP)
 
@@ -4546,7 +4557,7 @@ function NEMESIS.Window(opts)
 			TextSize = 19,
 			Parent = screenGui,
 		}, { corner(8), stroke(THEME.Stroke, 1, 0.15) })
-		dropShadow(fab, "cal2_shadow_pop.png")
+		dropShadow(fab, "cal3_shadow_pop.png")
 		accentProp(fab, "TextColor3", accent)
 		makeDraggable(fab, fab)
 		fab.MouseButton1Click:Connect(function() setHidden(not hidden) end)

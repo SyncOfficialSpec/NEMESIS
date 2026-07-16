@@ -22,7 +22,7 @@
 
 local NEMESIS = {}
 NEMESIS.Flags = {}
-NEMESIS.Version = "1.0.0"
+NEMESIS.Version = "1.1.0"
 
 -- Services (cloneref-safe)
 local function getService(name)
@@ -337,26 +337,93 @@ local function tagSearch(frame, text)
 end
 
 -- Theme
-local THEME = {
-	Background = Color3.fromRGB(13, 14, 20),      -- window / content background
-	Sidebar = Color3.fromRGB(16, 17, 24),         -- left sidebar
-	Topbar = Color3.fromRGB(16, 17, 24),          -- top bar
-	SidebarActive = Color3.fromRGB(34, 28, 52),   -- active sidebar sub-tab tint
-	SidebarHover = Color3.fromRGB(24, 25, 34),    -- sidebar row hover
-	Group = Color3.fromRGB(20, 21, 29),           -- content section card
-	Element = Color3.fromRGB(25, 26, 35),         -- dropdown / keybind / input field
-	ElementHover = Color3.fromRGB(33, 34, 45),
-	Stroke = Color3.fromRGB(38, 40, 51),          -- borders / dividers
-	ElementStroke = Color3.fromRGB(46, 48, 61),
-	RowDivider = Color3.fromRGB(30, 32, 42),      -- hairline between rows
-	Text = Color3.fromRGB(236, 237, 243),
-	SubText = Color3.fromRGB(138, 140, 156),
-	Faint = Color3.fromRGB(92, 94, 110),          -- breadcrumb separators
-	Accent = Color3.fromRGB(140, 90, 255),        -- primary accent (purple)
-	ToggleOff = Color3.fromRGB(58, 60, 73),       -- toggle track when off
-	Knob = Color3.fromRGB(244, 245, 250),         -- toggle / slider knob
-	Good = Color3.fromRGB(80, 220, 130),          -- status dot
+-- Named theme presets. Dark is the default; switch at runtime with
+-- Win.SetTheme("Light") or pass partial overrides via Window({ theme = {...} }).
+-- Accent is deliberately not part of a preset (Win.SetAccent handles it).
+-- NOTE for new presets: Sidebar and Topbar must share one colour (the live
+-- re-theme walk matches instances by current colour value, so keys that share
+-- a value must share it in every preset).
+NEMESIS.Themes = {
+	Dark = {
+		Background = Color3.fromRGB(13, 14, 20),      -- window / content background
+		Sidebar = Color3.fromRGB(16, 17, 24),         -- left sidebar
+		Topbar = Color3.fromRGB(16, 17, 24),          -- top bar
+		SidebarActive = Color3.fromRGB(34, 28, 52),   -- active sidebar sub-tab tint
+		SidebarHover = Color3.fromRGB(24, 25, 34),    -- sidebar row hover
+		Group = Color3.fromRGB(20, 21, 29),           -- content section card
+		Element = Color3.fromRGB(25, 26, 35),         -- dropdown / keybind / input field
+		ElementHover = Color3.fromRGB(33, 34, 45),
+		Stroke = Color3.fromRGB(38, 40, 51),          -- borders / dividers
+		ElementStroke = Color3.fromRGB(46, 48, 61),
+		RowDivider = Color3.fromRGB(30, 32, 42),      -- hairline between rows
+		Text = Color3.fromRGB(236, 237, 243),
+		SubText = Color3.fromRGB(138, 140, 156),
+		Faint = Color3.fromRGB(92, 94, 110),          -- breadcrumb separators
+		ToggleOff = Color3.fromRGB(58, 60, 73),       -- toggle track when off
+		Knob = Color3.fromRGB(244, 245, 250),         -- toggle / slider knob
+		Good = Color3.fromRGB(80, 220, 130),          -- status dot
+	},
+	Midnight = {
+		Background = Color3.fromRGB(10, 12, 22),
+		Sidebar = Color3.fromRGB(13, 15, 26),
+		Topbar = Color3.fromRGB(13, 15, 26),
+		SidebarActive = Color3.fromRGB(26, 32, 58),
+		SidebarHover = Color3.fromRGB(19, 22, 36),
+		Group = Color3.fromRGB(16, 19, 32),
+		Element = Color3.fromRGB(21, 24, 40),
+		ElementHover = Color3.fromRGB(28, 32, 52),
+		Stroke = Color3.fromRGB(34, 38, 58),
+		ElementStroke = Color3.fromRGB(42, 47, 70),
+		RowDivider = Color3.fromRGB(27, 31, 48),
+		Text = Color3.fromRGB(232, 236, 248),
+		SubText = Color3.fromRGB(132, 140, 164),
+		Faint = Color3.fromRGB(88, 95, 122),
+		ToggleOff = Color3.fromRGB(52, 58, 82),
+		Knob = Color3.fromRGB(242, 245, 252),
+		Good = Color3.fromRGB(80, 220, 130),
+	},
+	Abyss = {
+		Background = Color3.fromRGB(8, 8, 10),
+		Sidebar = Color3.fromRGB(11, 11, 14),
+		Topbar = Color3.fromRGB(11, 11, 14),
+		SidebarActive = Color3.fromRGB(30, 30, 38),
+		SidebarHover = Color3.fromRGB(17, 17, 21),
+		Group = Color3.fromRGB(14, 14, 18),
+		Element = Color3.fromRGB(19, 19, 24),
+		ElementHover = Color3.fromRGB(26, 26, 33),
+		Stroke = Color3.fromRGB(32, 32, 40),
+		ElementStroke = Color3.fromRGB(40, 40, 50),
+		RowDivider = Color3.fromRGB(24, 24, 31),
+		Text = Color3.fromRGB(238, 238, 242),
+		SubText = Color3.fromRGB(140, 140, 152),
+		Faint = Color3.fromRGB(94, 94, 106),
+		ToggleOff = Color3.fromRGB(54, 54, 66),
+		Knob = Color3.fromRGB(245, 245, 248),
+		Good = Color3.fromRGB(80, 220, 130),
+	},
+	Light = {
+		Background = Color3.fromRGB(238, 239, 244),
+		Sidebar = Color3.fromRGB(245, 246, 250),
+		Topbar = Color3.fromRGB(245, 246, 250),
+		SidebarActive = Color3.fromRGB(226, 220, 246),
+		SidebarHover = Color3.fromRGB(233, 234, 240),
+		Group = Color3.fromRGB(248, 249, 252),
+		Element = Color3.fromRGB(240, 241, 246),
+		ElementHover = Color3.fromRGB(231, 232, 239),
+		Stroke = Color3.fromRGB(214, 216, 226),
+		ElementStroke = Color3.fromRGB(203, 206, 218),
+		RowDivider = Color3.fromRGB(226, 228, 236),
+		Text = Color3.fromRGB(28, 30, 40),
+		SubText = Color3.fromRGB(110, 114, 130),
+		Faint = Color3.fromRGB(150, 153, 168),
+		ToggleOff = Color3.fromRGB(196, 199, 210),
+		Knob = Color3.fromRGB(255, 255, 255),
+		Good = Color3.fromRGB(36, 170, 90),
+	},
 }
+
+local THEME = { Accent = Color3.fromRGB(140, 90, 255) }
+for k, v in pairs(NEMESIS.Themes.Dark) do THEME[k] = v end
 
 -- Inter font family (medium-weight base, per request)
 local INTER = "rbxasset://fonts/families/Inter.json"
@@ -415,6 +482,195 @@ local function tween(inst, props, info)
 	local t = TweenService:Create(inst, info or TI.SLIDE, props)
 	t:Play()
 	return t
+end
+
+-- Minimal JSON (own encoder/decoder so configs work on any executor without
+-- needing HttpService)
+local jsonEncode, jsonDecode
+do
+	local esc = { ['"'] = '\\"', ["\\"] = "\\\\", ["\n"] = "\\n", ["\r"] = "\\r", ["\t"] = "\\t" }
+	local function isArray(t)
+		local n = 0
+		for k in pairs(t) do
+			if type(k) ~= "number" then return false end
+			n = n + 1
+		end
+		return n == #t
+	end
+	function jsonEncode(v)
+		local tv = type(v)
+		if v == nil then return "null" end
+		if tv == "boolean" then return v and "true" or "false" end
+		if tv == "number" then return string.format("%.14g", v) end
+		if tv == "string" then return '"' .. v:gsub('[%z\1-\31"\\]', function(c) return esc[c] or string.format("\\u%04x", c:byte()) end) .. '"' end
+		if tv == "table" then
+			local out = {}
+			if isArray(v) then
+				for i = 1, #v do out[i] = jsonEncode(v[i]) end
+				return "[" .. table.concat(out, ",") .. "]"
+			end
+			for k, x in pairs(v) do out[#out + 1] = jsonEncode(tostring(k)) .. ":" .. jsonEncode(x) end
+			return "{" .. table.concat(out, ",") .. "}"
+		end
+		return "null"
+	end
+
+	local unesc = { ['"'] = '"', ["\\"] = "\\", ["/"] = "/", n = "\n", r = "\r", t = "\t", b = "\b", f = "\f" }
+	function jsonDecode(s)
+		local i = 1
+		local function skip()
+			while i <= #s and s:sub(i, i):match("%s") do i = i + 1 end
+		end
+		local parse
+		local function parseString()
+			i = i + 1
+			local buf = {}
+			while i <= #s do
+				local c = s:sub(i, i)
+				if c == '"' then i = i + 1; return table.concat(buf) end
+				if c == "\\" then
+					local e = s:sub(i + 1, i + 1)
+					if e == "u" then
+						buf[#buf + 1] = string.char(tonumber(s:sub(i + 2, i + 5), 16) % 256)
+						i = i + 6
+					else
+						buf[#buf + 1] = unesc[e] or e
+						i = i + 2
+					end
+				else
+					buf[#buf + 1] = c
+					i = i + 1
+				end
+			end
+			error("unterminated string")
+		end
+		function parse()
+			skip()
+			local c = s:sub(i, i)
+			if c == "{" then
+				i = i + 1
+				local t = {}
+				skip()
+				if s:sub(i, i) == "}" then i = i + 1; return t end
+				while true do
+					skip()
+					local k = parseString()
+					skip(); i = i + 1 -- ':'
+					t[k] = parse()
+					skip()
+					local d = s:sub(i, i); i = i + 1
+					if d == "}" then return t end
+				end
+			elseif c == "[" then
+				i = i + 1
+				local t = {}
+				skip()
+				if s:sub(i, i) == "]" then i = i + 1; return t end
+				while true do
+					t[#t + 1] = parse()
+					skip()
+					local d = s:sub(i, i); i = i + 1
+					if d == "]" then return t end
+				end
+			elseif c == '"' then
+				return parseString()
+			elseif s:sub(i, i + 3) == "true" then i = i + 4; return true
+			elseif s:sub(i, i + 4) == "false" then i = i + 5; return false
+			elseif s:sub(i, i + 3) == "null" then i = i + 4; return nil
+			else
+				local num = s:match("^-?%d+%.?%d*[eE]?[+-]?%d*", i)
+				if not num or num == "" then error("bad json at " .. i) end
+				i = i + #num
+				return tonumber(num)
+			end
+		end
+		local ok, v = pcall(parse)
+		return ok and v or nil
+	end
+end
+
+-- Executor file API, guarded so everything degrades to no-ops in-Studio
+local function hasFileApi()
+	return type(writefile) == "function" and type(readfile) == "function" and type(isfile) == "function"
+end
+local function fsEnsureFolder(path)
+	pcall(function()
+		if type(makefolder) == "function" and type(isfolder) == "function" and not isfolder(path) then
+			makefolder(path)
+		end
+	end)
+end
+local function fsRead(path)
+	local data
+	pcall(function()
+		if isfile(path) then data = readfile(path) end
+	end)
+	return data
+end
+local function fsWrite(path, data)
+	local ok = pcall(function() writefile(path, data) end)
+	return ok
+end
+local function fsDelete(path)
+	pcall(function()
+		if type(delfile) == "function" and isfile(path) then delfile(path) end
+	end)
+end
+local function fsList(folder)
+	local out = {}
+	pcall(function()
+		if type(listfiles) == "function" then
+			for _, p in ipairs(listfiles(folder)) do out[#out + 1] = p end
+		end
+	end)
+	return out
+end
+
+-- Flag registry: every element created with { flag = "..." } registers its
+-- control here so configs can read (Get) and push (Set) values by flag name
+local flagged = {}
+local function bindFlag(flag, control, kind)
+	if flag then flagged[flag] = { control = control, kind = kind } end
+end
+
+-- config value <-> plain-json shapes (Color3s and KeyCodes need wrapping)
+local function packValue(kind, rec)
+	local v = rec.control.Get()
+	if kind == "colorpicker" then
+		local a = rec.control.GetAlpha()
+		if typeof(v) == "table" then
+			return { __g = { { math.floor(v[1].R * 255 + 0.5), math.floor(v[1].G * 255 + 0.5), math.floor(v[1].B * 255 + 0.5) },
+				{ math.floor(v[2].R * 255 + 0.5), math.floor(v[2].G * 255 + 0.5), math.floor(v[2].B * 255 + 0.5) } }, a = a }
+		end
+		return { __c = { math.floor(v.R * 255 + 0.5), math.floor(v.G * 255 + 0.5), math.floor(v.B * 255 + 0.5) }, a = a }
+	end
+	if kind == "keybind" then
+		if v == nil then return nil end
+		if type(v) == "string" then return v end
+		local ok, name = pcall(function() return v.Name end)
+		return ok and { __kc = name } or nil
+	end
+	return v
+end
+local function unpackValue(kind, rec, v)
+	local ctrl = rec.control
+	if type(v) == "table" and v.__c then
+		ctrl.Set(Color3.fromRGB(v.__c[1], v.__c[2], v.__c[3]), tonumber(v.a) or 0)
+		return
+	end
+	if type(v) == "table" and v.__g then
+		local a = type(v.a) == "table" and v.a or {}
+		ctrl.SetGradient(
+			Color3.fromRGB(v.__g[1][1], v.__g[1][2], v.__g[1][3]),
+			Color3.fromRGB(v.__g[2][1], v.__g[2][2], v.__g[2][3]),
+			tonumber(a[1]), tonumber(a[2]))
+		return
+	end
+	if type(v) == "table" and v.__kc then
+		pcall(function() ctrl.Set(Enum.KeyCode[v.__kc]) end)
+		return
+	end
+	ctrl.Set(v)
 end
 
 -- Accent registry: callbacks run on Win.SetAccent so the menu recolours live
@@ -980,6 +1236,7 @@ function Elements.Listbox(parent, accent, opts)
 	function control.SetOptions(newOpts) options = newOpts or {}; rebuild() end
 
 	if opts.flag then NEMESIS.Flags[opts.flag] = control.Get() end
+	bindFlag(opts.flag, control, "listbox")
 	return control
 end
 
@@ -1000,6 +1257,7 @@ function Elements.Paragraph(parent, accent, opts)
 		}),
 		Create("UIListLayout", { Padding = UDim.new(0, 7), SortOrder = Enum.SortOrder.LayoutOrder }),
 		Create("TextLabel", {
+			Name = "Title",
 			BackgroundTransparency = 1,
 			Size = UDim2.new(1, 0, 0, 18),
 			Font = FONT_BOLD,
@@ -1024,6 +1282,7 @@ function Elements.Paragraph(parent, accent, opts)
 	tagSearch(holder, (opts.title or "") .. " " .. (opts.content or ""))
 	return {
 		Set = function(v) holder:FindFirstChild("Body").Text = tostring(v) end,
+		SetTitle = function(v) holder:FindFirstChild("Title").Text = tostring(v) end,
 	}
 end
 
@@ -1051,7 +1310,8 @@ function Elements.Button(parent, accent, opts)
 	}, { corner(8), stroke(THEME.ElementStroke, 1, 0.35) })
 	click.MouseEnter:Connect(function() tween(chip, { BackgroundColor3 = THEME.ElementHover }, TI.EXP) end)
 	click.MouseLeave:Connect(function() tween(chip, { BackgroundColor3 = THEME.Element }, TI.EXP) end)
-	click.MouseButton1Click:Connect(function()
+	local control = { Instance = row }
+	function control.Fire()
 		tween(chip, { BackgroundColor3 = accent }, TI.FAST)
 		tween(chip, { TextColor3 = THEME.Text }, TI.FAST)
 		task.delay(0.18, function()
@@ -1059,8 +1319,10 @@ function Elements.Button(parent, accent, opts)
 			tween(chip, { TextColor3 = accent }, TI.EXP)
 		end)
 		if type(opts.callback) == "function" then pcall(opts.callback) end
-	end)
-	return { Instance = row }
+	end
+	function control.SetText(t) chip.Text = tostring(t) end
+	click.MouseButton1Click:Connect(control.Fire)
+	return control
 end
 
 function Elements.Toggle(parent, accent, opts)
@@ -1142,6 +1404,7 @@ function Elements.Toggle(parent, accent, opts)
 	click.MouseButton1Click:Connect(function() control.Set(not state) end)
 
 	if opts.flag then NEMESIS.Flags[opts.flag] = state end
+	bindFlag(opts.flag, control, "toggle")
 	render(false)
 	return control
 end
@@ -1264,6 +1527,7 @@ function Elements.Slider(parent, accent, opts)
 	end)
 
 	if opts.flag then NEMESIS.Flags[opts.flag] = value end
+	bindFlag(opts.flag, control, "slider")
 	return control
 end
 
@@ -1565,6 +1829,7 @@ function Elements.Dropdown(parent, accent, opts)
 
 	rebuildOptions(); refreshLabel()
 	if opts.flag then NEMESIS.Flags[opts.flag] = control.Get() end
+	bindFlag(opts.flag, control, "dropdown")
 	return control
 end
 function Elements.Input(parent, accent, opts)
@@ -1607,7 +1872,11 @@ function Elements.Input(parent, accent, opts)
 	growBox(field, box, MIN_W, MAX_W, 22)
 
 	local control = {}
-	function control.Set(v) box.Text = tostring(v) end
+	function control.Set(v)
+		box.Text = tostring(v)
+		if opts.flag then NEMESIS.Flags[opts.flag] = box.Text end
+		if type(opts.callback) == "function" then pcall(opts.callback, box.Text) end
+	end
 	function control.Get() return box.Text end
 	box.Focused:Connect(function()
 		if fieldStroke then tween(fieldStroke, { Color = accent }, TI.EXP) end
@@ -1618,6 +1887,7 @@ function Elements.Input(parent, accent, opts)
 		if type(opts.callback) == "function" then pcall(opts.callback, box.Text) end
 	end)
 	if opts.flag then NEMESIS.Flags[opts.flag] = box.Text end
+	bindFlag(opts.flag, control, "input")
 	return control
 end
 
@@ -1714,6 +1984,7 @@ function Elements.Keybind(parent, accent, opts)
 	end)
 
 	if opts.flag then NEMESIS.Flags[opts.flag] = key end
+	bindFlag(opts.flag, control, "keybind")
 	return control
 end
 
@@ -2041,10 +2312,12 @@ function Elements.ColorPicker(parent, accent, opts)
 		if panel then syncUI() end
 		commit()
 	end
-	function control.SetGradient(c1, c2)
+	function control.SetGradient(c1, c2, a1, a2)
 		isGradient = true
 		slots[1].h, slots[1].s, slots[1].v = (c1 or slotColor(1)):ToHSV()
 		slots[2].h, slots[2].s, slots[2].v = (c2 or slotColor(2)):ToHSV()
+		if a1 ~= nil then slots[1].alpha = a1 end
+		if a2 ~= nil then slots[2].alpha = a2 end
 		if slotRow then slotRow.Visible = true; slotRow.Size = UDim2.new(1, 0, 0, 22) end
 		if setModeVisual then setModeVisual(2) end
 		layoutSwatches(); if panel then syncUI() end; commit()
@@ -2053,6 +2326,7 @@ function Elements.ColorPicker(parent, accent, opts)
 	function control.GetAlpha() return isGradient and { slots[1].alpha, slots[2].alpha } or slots[1].alpha end
 
 	commit()
+	bindFlag(opts.flag, control, "colorpicker")
 	return control
 end
 
@@ -2191,12 +2465,176 @@ local function titleCase(str)
 	end))
 end
 
+-- Key system. Window({ key = { keys = {"..."}, note = "...", saveKey = true } })
+-- shows a small unlock card and blocks until a listed key is entered. A saved
+-- key (Nemesis/key.txt by default) skips the prompt on later runs. Closing the
+-- card raises an error so the caller's script stops instead of running keyless.
+local function keyGate(kopts, windowTitle)
+	local keys = {}
+	if type(kopts.key) == "string" then keys[1] = kopts.key end
+	if type(kopts.keys) == "table" then
+		for _, k in ipairs(kopts.keys) do keys[#keys + 1] = k end
+	end
+	if #keys == 0 then return true end
+
+	local function matches(text)
+		text = tostring(text or ""):gsub("^%s+", ""):gsub("%s+$", "")
+		for _, k in ipairs(keys) do
+			if text == tostring(k) then return true end
+		end
+		return false
+	end
+
+	local saveKey = kopts.saveKey ~= false
+	local keyFile = kopts.fileName or "Nemesis/key.txt"
+	if saveKey and hasFileApi() then
+		local saved = fsRead(keyFile)
+		if saved and matches(saved) then return true end
+	end
+
+	ensureRoot()
+	local result = nil
+
+	local card = Create("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.5, 0),
+		Size = UDim2.new(0, 340, 0, 0),
+		BackgroundColor3 = THEME.Background,
+		BorderSizePixel = 0,
+		ClipsDescendants = true,
+		ZIndex = 60000,
+		Parent = screenGui,
+	}, { corner(14), stroke(THEME.Stroke, 1, 0.1), padXY(18, 16) })
+	makeDraggable(card, card)
+
+	Create("TextLabel", {
+		Size = UDim2.new(1, -28, 0, 20),
+		BackgroundTransparency = 1,
+		Font = FONT_BOLD,
+		Text = tostring(kopts.title or ((windowTitle or "NEMESIS") .. "  |  key required")),
+		TextColor3 = THEME.Text,
+		TextSize = 16,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 60001,
+		Parent = card,
+	})
+	Create("TextLabel", {
+		Position = UDim2.new(0, 0, 0, 24),
+		Size = UDim2.new(1, 0, 0, 34),
+		BackgroundTransparency = 1,
+		Font = FONT,
+		Text = tostring(kopts.note or "Enter your key to continue."),
+		TextColor3 = THEME.SubText,
+		TextSize = 14,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		ZIndex = 60001,
+		Parent = card,
+	})
+
+	local field = Create("Frame", {
+		Position = UDim2.new(0, 0, 0, 62),
+		Size = UDim2.new(1, 0, 0, 34),
+		BackgroundColor3 = THEME.Element,
+		BorderSizePixel = 0,
+		ZIndex = 60001,
+		Parent = card,
+	}, { corner(9) })
+	local fieldStroke = stroke(THEME.ElementStroke, 1, 0.2)
+	fieldStroke.Parent = field
+	local box = Create("TextBox", {
+		Size = UDim2.new(1, -24, 1, 0),
+		Position = UDim2.new(0, 12, 0, 0),
+		BackgroundTransparency = 1,
+		ClearTextOnFocus = false,
+		Font = FONT,
+		PlaceholderText = "key...",
+		PlaceholderColor3 = THEME.Faint,
+		Text = "",
+		TextColor3 = THEME.Text,
+		TextSize = 15,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 60002,
+		Parent = field,
+	})
+
+	local submit = Create("TextButton", {
+		Position = UDim2.new(0, 0, 0, 104),
+		Size = UDim2.new(1, 0, 0, 34),
+		BackgroundColor3 = THEME.Accent,
+		AutoButtonColor = false,
+		Font = FONT_BOLD,
+		Text = "Unlock",
+		TextColor3 = Color3.fromRGB(255, 255, 255),
+		TextSize = 15,
+		ZIndex = 60001,
+		Parent = card,
+	}, { corner(9) })
+
+	local closeBtn = Create("TextButton", {
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, 4, 0, -2),
+		Size = UDim2.new(0, 24, 0, 24),
+		BackgroundTransparency = 1,
+		Font = FONT,
+		Text = "\u{2715}",
+		TextColor3 = THEME.SubText,
+		TextSize = 14,
+		ZIndex = 60002,
+		Parent = card,
+	})
+
+	local function finish(ok)
+		if result ~= nil then return end
+		result = ok
+		tween(card, { Size = UDim2.new(0, 340, 0, 0) }, TI.SLIDE)
+		task.delay(0.22, function() card:Destroy() end)
+	end
+
+	local function trySubmit()
+		if matches(box.Text) then
+			if saveKey and hasFileApi() then
+				fsEnsureFolder("Nemesis")
+				fsWrite(keyFile, (box.Text:gsub("^%s+", ""):gsub("%s+$", "")))
+			end
+			finish(true)
+		else
+			tween(fieldStroke, { Color = Color3.fromRGB(255, 80, 90), Transparency = 0 }, TI.FAST)
+			task.delay(0.5, function()
+				tween(fieldStroke, { Color = THEME.ElementStroke, Transparency = 0.2 }, TI.EXP)
+			end)
+		end
+	end
+	submit.MouseButton1Click:Connect(trySubmit)
+	box.FocusLost:Connect(function(enterPressed)
+		if enterPressed then trySubmit() end
+	end)
+	closeBtn.MouseButton1Click:Connect(function() finish(false) end)
+
+	tween(card, { Size = UDim2.new(0, 340, 0, 172) }, TI.OPEN)
+	while result == nil do
+		task.wait()
+	end
+	return result
+end
+
 function NEMESIS.Window(opts)
 	opts = opts or {}
 	-- opts.theme = { Background = Color3, Element = Color3, ... } overrides any
 	-- THEME colour (see the Theme table near the top of this file for the keys)
 	if type(opts.theme) == "table" then
 		for key, value in pairs(opts.theme) do THEME[key] = value end
+	elseif type(opts.theme) == "string" and NEMESIS.Themes[opts.theme] then
+		-- a preset name works too: Window({ theme = "Light" })
+		for key, value in pairs(NEMESIS.Themes[opts.theme]) do THEME[key] = value end
+	end
+
+	-- key system gate: nothing is built until the key checks out
+	if type(opts.key) == "table" then
+		if not keyGate(opts.key, opts.title) then
+			error("NEMESIS: key required", 0)
+		end
 	end
 	local accent = opts.accent or THEME.Accent
 	local accentHex = hexOf(accent)
@@ -2311,7 +2749,7 @@ function NEMESIS.Window(opts)
 	end
 
 	-- wordmark beside the logo
-	Create("TextLabel", {
+	local wordmark = Create("TextLabel", {
 		Position = UDim2.new(0, 64, 0.5, 0),
 		AnchorPoint = Vector2.new(0, 0.5),
 		Size = UDim2.new(0, 140, 1, 0),
@@ -2515,9 +2953,11 @@ function NEMESIS.Window(opts)
 		Parent = body,
 	}, { corner(14), stroke(THEME.Stroke, 1, 0.15) })
 
-	-- scroll region (tab sidebars stack here, one visible at a time)
+	-- scroll region (tab sidebars stack here, one visible at a time), leaving
+	-- room for the status footer pinned to the card's bottom
+	local SB_FOOTER_H = 50
 	local sidebarScroll = Create("ScrollingFrame", {
-		Size = UDim2.new(1, 0, 1, 0),
+		Size = UDim2.new(1, 0, 1, -SB_FOOTER_H),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 0,
@@ -2527,6 +2967,82 @@ function NEMESIS.Window(opts)
 		ZIndex = 2,
 		Parent = sidebarBG,
 	})
+
+	-- footer: green status dot + game / status lines + live FPS
+	local sbFooter = Create("Frame", {
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, 0, 1, 0),
+		Size = UDim2.new(1, 0, 0, SB_FOOTER_H),
+		BackgroundTransparency = 1,
+		ZIndex = 2,
+		Parent = sidebarBG,
+	})
+	Create("Frame", {
+		Size = UDim2.new(1, -24, 0, 1),
+		Position = UDim2.new(0, 12, 0, 0),
+		BackgroundColor3 = THEME.RowDivider,
+		BorderSizePixel = 0,
+		Parent = sbFooter,
+	})
+	Create("Frame", {
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 14, 0.5, 1),
+		Size = UDim2.new(0, 8, 0, 8),
+		BackgroundColor3 = THEME.Good,
+		BorderSizePixel = 0,
+		Parent = sbFooter,
+	}, { corner(4) })
+	local gameLabel = Create("TextLabel", {
+		Position = UDim2.new(0, 30, 0, 8),
+		Size = UDim2.new(1, -86, 0, 16),
+		BackgroundTransparency = 1,
+		Font = FONT_MED,
+		Text = tostring(opts.game or "Connected"),
+		TextColor3 = THEME.Text,
+		TextSize = 13,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = sbFooter,
+	})
+	local statusLabel = Create("TextLabel", {
+		Position = UDim2.new(0, 30, 0, 25),
+		Size = UDim2.new(1, -86, 0, 14),
+		BackgroundTransparency = 1,
+		Font = FONT,
+		Text = tostring(opts.status or ""),
+		TextColor3 = THEME.SubText,
+		TextSize = 12,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = sbFooter,
+	})
+	local fpsLabel = Create("TextLabel", {
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -14, 0.5, 1),
+		Size = UDim2.new(0, 52, 0, 16),
+		BackgroundTransparency = 1,
+		Font = FONT,
+		Text = "",
+		TextColor3 = THEME.SubText,
+		TextSize = 12,
+		TextXAlignment = Enum.TextXAlignment.Right,
+		Parent = sbFooter,
+	})
+	local fpsConn
+	do
+		local frames, acc = 0, 0
+		local ok = pcall(function()
+			fpsConn = RunService.Heartbeat:Connect(function(dt)
+				frames = frames + 1
+				acc = acc + (tonumber(dt) or 0)
+				if acc >= 0.5 then
+					fpsLabel.Text = tostring(math.floor(frames / acc + 0.5)) .. " fps"
+					frames, acc = 0, 0
+				end
+			end)
+		end)
+		if not ok then fpsLabel.Visible = false end
+	end
 
 	local content = Create("Frame", {
 		Position = UDim2.new(0, SB_MARGIN + SIDEBAR_W + SB_GAP, 0, 0),
@@ -2732,6 +3248,367 @@ function NEMESIS.Window(opts)
 			setCrumb(tab, nil)
 		end
 	end
+
+	-- ===== configs: every { flag = ... } element serialized to json on disk =====
+	local cfgFolder = nil
+	if hasFileApi() and opts.config ~= false then
+		local safe = tostring(opts.title or "NEMESIS"):gsub("[^%w%-_ ]", ""):gsub("%s+", "_")
+		cfgFolder = (type(opts.config) == "table" and opts.config.folder)
+			or (type(opts.folder) == "string" and opts.folder)
+			or ("Nemesis/" .. safe)
+	end
+	local autoloadFile = cfgFolder and (cfgFolder .. "/autoload.txt")
+
+	local function sanitizeName(name)
+		name = tostring(name or ""):gsub("[^%w%-_ ]", ""):gsub("%s+", "_")
+		if name == "" or name == "autoload" then return nil end
+		return name
+	end
+	local function cfgPath(name) return cfgFolder .. "/" .. name .. ".json" end
+
+	function Win.SaveConfig(name)
+		name = sanitizeName(name)
+		if not (cfgFolder and name) then return false end
+		fsEnsureFolder("Nemesis")
+		fsEnsureFolder(cfgFolder)
+		local out = {}
+		for flag, rec in pairs(flagged) do
+			local ok, v = pcall(packValue, rec.kind, rec)
+			if ok and v ~= nil then out[flag] = v end
+		end
+		local ok = fsWrite(cfgPath(name), jsonEncode(out))
+		if ok and type(opts.onSave) == "function" then pcall(opts.onSave, name) end
+		return ok
+	end
+
+	function Win.LoadConfig(name)
+		name = sanitizeName(name)
+		if not (cfgFolder and name) then return false end
+		local raw = fsRead(cfgPath(name))
+		local data = raw and jsonDecode(raw)
+		if type(data) ~= "table" then
+			-- not on disk: still hand the name to the script's own handler so
+			-- preset names passed via opts.configs keep working
+			if type(opts.onConfig) == "function" then pcall(opts.onConfig, name) end
+			return false
+		end
+		for flag, v in pairs(data) do
+			local rec = flagged[flag]
+			if rec then pcall(unpackValue, rec.kind, rec, v) end
+		end
+		if type(opts.onConfig) == "function" then pcall(opts.onConfig, name) end
+		return true
+	end
+
+	function Win.ListConfigs()
+		local names, seen = {}, {}
+		if cfgFolder then
+			for _, p in ipairs(fsList(cfgFolder)) do
+				local n = p:match("([^/\\]+)%.json$")
+				if n and not seen[n] then seen[n] = true; names[#names + 1] = n end
+			end
+		end
+		if type(opts.configs) == "table" then
+			for _, raw in ipairs(opts.configs) do
+				local n = sanitizeName(raw)
+				if n and not seen[n] then seen[n] = true; names[#names + 1] = n end
+			end
+		end
+		table.sort(names)
+		return names
+	end
+
+	function Win.DeleteConfig(name)
+		name = sanitizeName(name)
+		if not (cfgFolder and name) then return false end
+		fsDelete(cfgPath(name))
+		if Win.GetAutoload() == name then Win.SetAutoload(nil) end
+		return true
+	end
+
+	function Win.SetAutoload(name)
+		if not autoloadFile then return end
+		if name == nil then
+			fsDelete(autoloadFile)
+		else
+			fsWrite(autoloadFile, tostring(name))
+		end
+	end
+	function Win.GetAutoload()
+		local v = autoloadFile and fsRead(autoloadFile)
+		if v then v = v:gsub("%s+$", "") end
+		return v ~= "" and v or nil
+	end
+
+	-- header config controls: a pill showing the active config (click for the
+	-- config panel) + a save icon. Right-click a config row to mark it autoload.
+	local cfgCurrent = "default"
+	local updatePill -- set when the header pill exists
+	if cfgFolder or type(opts.configs) == "table" then
+		breadcrumb.Size = UDim2.new(1, -216, 1, 0)
+
+		local pill = Create("TextButton", {
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -38, 0.5, 0),
+			Size = UDim2.new(0, 150, 0, 30),
+			BackgroundColor3 = THEME.Element,
+			AutoButtonColor = false,
+			Text = "",
+			Parent = header,
+		}, { corner(9), stroke(THEME.ElementStroke, 1, 0.35) })
+		local pillLabel = Create("TextLabel", {
+			Position = UDim2.new(0, 12, 0, 0),
+			Size = UDim2.new(1, -36, 1, 0),
+			BackgroundTransparency = 1,
+			Font = FONT_MED,
+			Text = cfgCurrent,
+			TextColor3 = THEME.Text,
+			TextSize = 14,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Parent = pill,
+		})
+		local pillChev = Create("ImageLabel", {
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -10, 0.5, 0),
+			Size = UDim2.new(0, 14, 0, 14),
+			BackgroundTransparency = 1,
+			ImageColor3 = THEME.SubText,
+			Parent = pill,
+		})
+		local pillGlyph
+		if not applyIcon(pillChev, resolveIcon("chevron-down")) then
+			pillGlyph = Create("TextLabel", {
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, -10, 0.5, 0),
+				Size = UDim2.new(0, 14, 0, 14),
+				BackgroundTransparency = 1,
+				Font = FONT,
+				Text = "\u{25BE}",
+				TextColor3 = THEME.SubText,
+				TextSize = 12,
+				Parent = pill,
+			})
+		end
+
+		local saveBtn = iconButton(header, "save", "\u{1F5AB}", 30, { bg = THEME.Element, iconSize = 15 })
+		saveBtn.AnchorPoint = Vector2.new(1, 0.5)
+		saveBtn.Position = UDim2.new(1, 0, 0.5, 0)
+		local sbStroke = stroke(THEME.ElementStroke, 1, 0.35)
+		sbStroke.Parent = saveBtn
+
+		local function setCurrent(name)
+			cfgCurrent = name
+			pillLabel.Text = name
+		end
+		updatePill = setCurrent
+
+		saveBtn.MouseButton1Click:Connect(function()
+			if Win.SaveConfig(cfgCurrent) then
+				NEMESIS.Notify({ title = "Config saved", content = cfgCurrent, duration = 2, icon = "save" })
+			end
+		end)
+
+		local panel
+		local outsideConn
+		local function closePanel()
+			if not panel then return end
+			local p = panel
+			panel = nil
+			_ddCurrent = nil
+			if outsideConn then outsideConn:Disconnect(); outsideConn = nil end
+			tween(p, { Size = UDim2.new(0, 190, 0, 0) }, TI.FAST)
+			task.delay(0.15, function() p:Destroy() end)
+		end
+
+		local function openPanel()
+			if panel then closePanel(); return end
+			closeOpenDropdown()
+			local layer = dropdownLayer(header)
+			if not layer then return end
+
+			local names = Win.ListConfigs()
+			if #names == 0 then names = { cfgCurrent } end
+			local autoName = Win.GetAutoload()
+
+			local ROWS_H = #names * 28
+			local FOOT_H = 34
+			local fullH = ROWS_H + FOOT_H + 12
+			panel = Create("Frame", {
+				Position = UDim2.new(0, pill.AbsolutePosition.X, 0, pill.AbsolutePosition.Y + pill.AbsoluteSize.Y + 6),
+				Size = UDim2.new(0, 190, 0, 0),
+				BackgroundColor3 = THEME.Element,
+				BorderSizePixel = 0,
+				ClipsDescendants = true,
+				ZIndex = 50001,
+				Parent = layer,
+			}, { corner(10), stroke(THEME.ElementStroke, 1, 0.25), padXY(6, 6) })
+			_ddCurrent = { close = closePanel }
+			tween(panel, { Size = UDim2.new(0, 190, 0, fullH) }, TI.EXP)
+
+			outsideConn = UserInputService.InputBegan:Connect(function(input)
+				if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+				if not panel then return end
+				local p = input.Position
+				local ap, as = panel.AbsolutePosition, panel.AbsoluteSize
+				local bp, bs = pill.AbsolutePosition, pill.AbsoluteSize
+				local inPanel = p.X >= ap.X and p.X <= ap.X + as.X and p.Y >= ap.Y and p.Y <= ap.Y + as.Y
+				local inPill = p.X >= bp.X and p.X <= bp.X + bs.X and p.Y >= bp.Y and p.Y <= bp.Y + bs.Y
+				if not inPanel and not inPill then closePanel() end
+			end)
+
+			for i, name in ipairs(names) do
+				local isAuto = (name == autoName)
+				local rowBtn = Create("TextButton", {
+					Position = UDim2.new(0, 0, 0, (i - 1) * 28),
+					Size = UDim2.new(1, 0, 0, 28),
+					BackgroundColor3 = THEME.ElementHover,
+					BackgroundTransparency = 1,
+					AutoButtonColor = false,
+					Font = (name == cfgCurrent) and FONT_MED or FONT,
+					Text = (isAuto and "\u{2605} " or "") .. name,
+					TextColor3 = (name == cfgCurrent) and THEME.Text or THEME.SubText,
+					TextSize = 14,
+					TextXAlignment = Enum.TextXAlignment.Left,
+					ZIndex = 50002,
+					Parent = panel,
+				}, { corner(7), padXY(8, 0) })
+				rowBtn.MouseEnter:Connect(function() tween(rowBtn, { BackgroundTransparency = 0 }, TI.HOVER) end)
+				rowBtn.MouseLeave:Connect(function() tween(rowBtn, { BackgroundTransparency = 1 }, TI.HOVER) end)
+				rowBtn.MouseButton1Click:Connect(function()
+					setCurrent(name)
+					Win.LoadConfig(name)
+					closePanel()
+				end)
+				rowBtn.MouseButton2Click:Connect(function()
+					Win.SetAutoload(isAuto and nil or name)
+					NEMESIS.Notify({
+						title = "Autoload",
+						content = isAuto and "cleared" or (name .. " loads on start"),
+						duration = 2,
+					})
+					closePanel()
+				end)
+			end
+
+			-- footer actions: new / save / delete
+			local function actionBtn(text, xFrac, cb)
+				local b = Create("TextButton", {
+					Position = UDim2.new(xFrac, xFrac > 0 and 3 or 0, 1, -28),
+					Size = UDim2.new(1 / 3, xFrac > 0 and -3 or -3, 0, 26),
+					BackgroundColor3 = THEME.ElementHover,
+					AutoButtonColor = false,
+					Font = FONT_MED,
+					Text = text,
+					TextColor3 = THEME.SubText,
+					TextSize = 13,
+					ZIndex = 50002,
+					Parent = panel,
+				}, { corner(7) })
+				b.MouseEnter:Connect(function() tween(b, { TextColor3 = THEME.Text }, TI.HOVER) end)
+				b.MouseLeave:Connect(function() tween(b, { TextColor3 = THEME.SubText }, TI.HOVER) end)
+				b.MouseButton1Click:Connect(cb)
+				return b
+			end
+			actionBtn("New", 0, function()
+				local n = 1
+				local taken = {}
+				for _, existing in ipairs(Win.ListConfigs()) do taken[existing] = true end
+				while taken["config" .. n] do n = n + 1 end
+				local name = "config" .. n
+				if Win.SaveConfig(name) then
+					setCurrent(name)
+					NEMESIS.Notify({ title = "Config created", content = name, duration = 2 })
+				end
+				closePanel()
+			end)
+			actionBtn("Save", 1 / 3, function()
+				if Win.SaveConfig(cfgCurrent) then
+					NEMESIS.Notify({ title = "Config saved", content = cfgCurrent, duration = 2 })
+				end
+				closePanel()
+			end)
+			actionBtn("Del", 2 / 3, function()
+				Win.DeleteConfig(cfgCurrent)
+				NEMESIS.Notify({ title = "Config deleted", content = cfgCurrent, duration = 2 })
+				local left = Win.ListConfigs()
+				setCurrent(left[1] or "default")
+				closePanel()
+			end)
+		end
+
+		pill.MouseButton1Click:Connect(openPanel)
+		pill.MouseEnter:Connect(function() tween(pill, { BackgroundColor3 = THEME.ElementHover }, TI.HOVER) end)
+		pill.MouseLeave:Connect(function() tween(pill, { BackgroundColor3 = THEME.Element }, TI.HOVER) end)
+	end
+
+	-- autoload: apply the marked config shortly after the script builds its UI
+	if cfgFolder then
+		task.delay(0.7, function()
+			local name = Win.GetAutoload()
+			if name then
+				if updatePill then updatePill(name) else cfgCurrent = name end
+				pcall(Win.LoadConfig, name)
+			end
+		end)
+	end
+
+	-- ===== runtime theme switching =====
+	-- Win.SetTheme("Light") / Win.SetTheme({ Background = ... }) recolours the
+	-- live UI by matching every gui object's colours against the outgoing
+	-- palette, then updates THEME so anything built later uses the new one
+	local THEME_COLOR_PROPS = { "BackgroundColor3", "TextColor3", "ImageColor3", "PlaceholderColor3", "ScrollBarImageColor3", "Color" }
+	function Win.SetTheme(theme)
+		local palette = (type(theme) == "string") and NEMESIS.Themes[theme] or theme
+		if type(palette) ~= "table" then return false end
+
+		local keys = {}
+		for k in pairs(NEMESIS.Themes.Dark) do keys[#keys + 1] = k end
+		table.sort(keys)
+		local oldByHex = {}
+		for _, k in ipairs(keys) do
+			local c = THEME[k]
+			if typeof(c) == "Color3" then
+				local h = hexOf(c)
+				if oldByHex[h] == nil then oldByHex[h] = k end
+			end
+		end
+
+		for k, v in pairs(palette) do
+			if k ~= "Accent" then THEME[k] = v end
+		end
+
+		local function recolor(inst)
+			for _, prop in ipairs(THEME_COLOR_PROPS) do
+				pcall(function()
+					local cur = inst[prop]
+					if typeof(cur) == "Color3" then
+						local key = oldByHex[hexOf(cur)]
+						if key and typeof(THEME[key]) == "Color3" then
+							inst[prop] = THEME[key]
+						end
+					end
+				end)
+			end
+		end
+		pcall(function()
+			for _, inst in ipairs(screenGui:GetDescendants()) do
+				recolor(inst)
+			end
+		end)
+
+		-- rebuild the colour-embedding rich text + active page tint
+		if activeTab and activeTab.activePage then
+			pcall(function() applyPageVisual(activeTab, activeTab.activePage, false) end)
+			pcall(function() setCrumb(activeTab, activeTab.activePage) end)
+		end
+		return true
+	end
+
+	-- small live setters
+	function Win.SetTitle(t) wordmark.Text = string.upper(tostring(t or "NEMESIS")) end
+	function Win.SetGame(t) gameLabel.Text = tostring(t or "") end
+	function Win.SetStatus(t) statusLabel.Text = tostring(t or "") end
 
 	-- Tab / Group / Page builders
 	function Win.Tab(name, icon, ...)
@@ -3298,9 +4175,12 @@ function NEMESIS.Window(opts)
 	minBtn.MouseButton1Click:Connect(function() setMinimized(not minimized) end)
 
 	function Win.Destroy()
+		if fpsConn then pcall(function() fpsConn:Disconnect() end); fpsConn = nil end
+		closeOpenDropdown()
 		tween(root, { Size = UDim2.new(0, W, 0, 0) }, TI.SLIDE)
 		task.delay(0.25, function() if root then root:Destroy() end end)
 	end
+	Win.Unload = Win.Destroy
 	closeBtn.MouseButton1Click:Connect(function() Win.Destroy() end)
 
 	local hidden = false

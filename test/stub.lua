@@ -68,7 +68,17 @@ METHODS = {
 		for i, c in ipairs(self._children) do t[i] = c end
 		return t
 	end,
-	GetDescendants = function() return {} end,
+	GetDescendants = function(self)
+		local out = {}
+		local function walk(inst)
+			for _, c in ipairs(rawget(inst, "_children") or {}) do
+				out[#out + 1] = c
+				walk(c)
+			end
+		end
+		walk(self)
+		return out
+	end,
 	IsA = function(self, cn) return self._props.ClassName == cn end,
 	FindFirstChild = function(self, name)
 		for _, c in ipairs(self._children) do
@@ -142,14 +152,39 @@ Instance = { new = function(cn) return newInstance(cn) end }
 local function color3(r, g, b)
 	return {
 		R = r, G = g, B = b,
-		ToHSV = function() return 0, 0, 0 end,
+		_isColor3 = true,
+		ToHSV = function()
+			local mx, mn = math.max(r, g, b), math.min(r, g, b)
+			local d = mx - mn
+			local h = 0
+			if d > 0 then
+				if mx == r then h = ((g - b) / d) % 6
+				elseif mx == g then h = (b - r) / d + 2
+				else h = (r - g) / d + 4 end
+				h = h / 6
+			end
+			return h, (mx == 0 and 0 or d / mx), mx
+		end,
 		Lerp = function(self) return self end,
 	}
 end
 Color3 = {
 	new = function(r, g, b) return color3(r or 0, g or 0, b or 0) end,
 	fromRGB = function(r, g, b) return color3((r or 0) / 255, (g or 0) / 255, (b or 0) / 255) end,
-	fromHSV = function(h, s, v) return color3(h or 0, s or 0, v or 0) end,
+	fromHSV = function(h, s, v)
+		h = (h or 0) % 1
+		s = s or 0
+		v = v or 0
+		local i = math.floor(h * 6) % 6
+		local f = h * 6 - math.floor(h * 6)
+		local p, q, t = v * (1 - s), v * (1 - f * s), v * (1 - (1 - f) * s)
+		if i == 0 then return color3(v, t, p) end
+		if i == 1 then return color3(q, v, p) end
+		if i == 2 then return color3(p, v, t) end
+		if i == 3 then return color3(p, q, v) end
+		if i == 4 then return color3(t, p, v) end
+		return color3(v, p, q)
+	end,
 }
 
 Vector2 = {
@@ -194,7 +229,10 @@ Font = {
 	end,
 }
 function typeof(v)
-	if type(v) == "table" and getmetatable(v) == nil and v._isFont then return "Font" end
+	if type(v) == "table" and getmetatable(v) == nil then
+		if v._isFont then return "Font" end
+		if v._isColor3 then return "Color3" end
+	end
 	return type(v)
 end
 
@@ -240,13 +278,29 @@ if not loadstring then loadstring = load end
 
 local RAW_BASE = "https://raw.githubusercontent.com/SyncOfficialSpec/NEMESIS/main/"
 local fakeDisk = {}
+local fakeFolders = {}
 writefile = function(path, data) fakeDisk[path] = data end
 isfile = function(path) return fakeDisk[path] ~= nil end
 readfile = function(path) return fakeDisk[path] end
+delfile = function(path) fakeDisk[path] = nil end
+makefolder = function(path) fakeFolders[path] = true end
+isfolder = function(path) return fakeFolders[path] == true end
+listfiles = function(folder)
+	local out = {}
+	for path in pairs(fakeDisk) do
+		if path:sub(1, #folder + 1) == folder .. "/" and not path:sub(#folder + 2):find("/", 1, true) then
+			out[#out + 1] = path
+		end
+	end
+	table.sort(out)
+	return out
+end
 getcustomasset = function(path)
 	assert(fakeDisk[path], "getcustomasset on missing file: " .. tostring(path))
 	return "rbxasset://stub/" .. path
 end
+-- expose the fake disk so smoke tests can seed key/config files
+STUB_DISK = fakeDisk
 
 game = {
 	GetService = function(_, name)

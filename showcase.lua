@@ -22,6 +22,10 @@ local Win = NEMESIS.Window({
 	accent = Color3.fromRGB(140, 90, 255),   -- purple accent
 	columns = 2,                              -- panels per page (desktop)
 	toggleKey = Enum.KeyCode.RightShift,
+	game = "Showcase",                        -- sidebar footer, first line
+	status = "All systems live",              -- sidebar footer, second line
+	configs = { "default" },                  -- header config pill starts with this
+	-- key = { key = "hello123", note = "Demo key gate." }, -- uncomment to try the key system
 	-- logoColor = Color3.fromRGB(150, 85, 255), -- optional: recolor the N logo
 })
 
@@ -193,6 +197,24 @@ s_note.Input({ text = "Custom message", placeholder = "type then press Send", fl
 s_note.Button({ text = "Send custom", button = "Send", callback = function()
 	local msg = NEMESIS.Flags.sc_note_msg
 	notify("Custom", (msg ~= nil and msg ~= "" and msg) or "Type something in the box above.", 3)
+end })
+
+local s_theme = Cfg.Section("THEME")
+s_theme.Dropdown({ text = "Menu theme", options = { "Dark", "Midnight", "Abyss", "Light" }, default = "Dark", flag = "sc_theme",
+	callback = function(v) Win.SetTheme(v) end })
+s_theme.Label("The whole menu recolors live. Your accent stays put.")
+
+local s_save = Cfg.Section("CONFIGS")
+s_save.Label("Everything with a flag saves: toggles, sliders, colors, gradients, keybinds. Use the pill in the header, or these:")
+s_save.Button({ text = "Save as showcase.json", button = "Save", callback = function()
+	if Win.SaveConfig("showcase") then notify("Config", "Saved as showcase.", 2) end
+end })
+s_save.Button({ text = "Load showcase.json", button = "Load", callback = function()
+	if Win.LoadConfig("showcase") then notify("Config", "Loaded showcase.", 2) end
+end })
+s_save.Button({ text = "Autoload showcase.json", button = "Mark", callback = function()
+	Win.SetAutoload("showcase")
+	notify("Config", "showcase loads on every start.", 2)
 end })
 
 local s_credits = Cfg.Section("ABOUT")

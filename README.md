@@ -74,7 +74,12 @@ local Window = NEMESIS.Window({
     logoColor = Color3.fromRGB(150, 85, 255),     -- tint for the built-in logo
     logoGradient = { color1, color2 },            -- a gradient on the logo
     logo = 0,                                     -- a Roblox image id to replace the logo
-    theme = { Background = Color3.new(0, 0, 0) }, -- override any theme color
+    theme = "Midnight",                           -- preset name, or a table of overrides
+    game = "Arsenal",                             -- sidebar footer, first line
+    status = "Undetected",                        -- sidebar footer, second line
+    configs = { "Legit", "Rage" },                -- preset config names for the header
+    folder = "Nemesis/MyScript",                  -- config folder, defaults to Nemesis/<title>
+    key = { key = "hello123" },                   -- key system, see below
 })
 ```
 
@@ -84,16 +89,31 @@ Everything is optional, but you usually want a `title` and an `accent`.
 
 ```lua
 Window.Tab(name, icon)              -- add a tab, returns the Tab
-Window.SetAccent(color)            -- recolor the whole menu at runtime
-Window.SetLogoColor(color)         -- set a solid logo tint
-Window.SetLogoGradient(c1, c2)     -- set a gradient on the logo
-Window.Toggle(force)               -- minimize or restore, force is optional
-Window.Destroy()                   -- remove the menu
+Window.SetAccent(color)             -- recolor the whole menu at runtime
+Window.SetTheme("Light")            -- switch theme at runtime (name or table)
+Window.SetTitle(text)               -- change the top bar title
+Window.SetGame(text)                -- change the footer game line
+Window.SetStatus(text)              -- change the footer status line
+Window.SetLogoColor(color)          -- set a solid logo tint
+Window.SetLogoGradient(c1, c2)      -- set a gradient on the logo
+Window.Toggle(force)                -- minimize or restore, force is optional
+Window.Destroy()                    -- remove the menu (Window.Unload works too)
+
+Window.SaveConfig(name)             -- write every flagged element to disk
+Window.LoadConfig(name)             -- read a config back and apply it
+Window.ListConfigs()                -- saved configs + your preset names
+Window.DeleteConfig(name)           -- remove a config file
+Window.SetAutoload(name)            -- this config loads on every start (nil clears)
+Window.GetAutoload()                -- current autoload name or nil
 ```
 
 Built in shortcuts: `RightShift` (or your `toggleKey`) hides and shows the menu,
 `Ctrl + K` focuses the search box, and the bottom right corner can be dragged to
 resize the window.
+
+The sidebar has a footer with a status dot, your `game` and `status` lines, and a
+live FPS counter. The content header has a config pill and a save button next to
+the breadcrumb.
 
 ## Tabs, groups, pages, sections
 
@@ -134,11 +154,13 @@ Every element takes a single table of options. Most return a control object with
 ### Button
 
 ```lua
-Section.Button({
+local Btn = Section.Button({
     text = "Run",
     button = "Go",
     callback = function() print("clicked") end,
 })
+Btn.Fire()          -- trigger it from code
+Btn.SetText("Redo") -- rename the chip
 ```
 
 ### Toggle
@@ -241,7 +263,9 @@ Pass `multi = true` for multiple selection. Methods: `Set`, `Get`, `SetOptions`.
 
 ```lua
 Section.Label("Some short text.")
-Section.Paragraph({ title = "Notes", content = "A longer block of wrapping text." })
+local Par = Section.Paragraph({ title = "Notes", content = "A longer block of wrapping text." })
+Par.Set("New body text.")
+Par.SetTitle("Changed")
 Section.Divider({ text = "ADVANCED" })   -- text is optional
 ```
 
@@ -268,9 +292,59 @@ Section.Toggle({ text = "Enabled", flag = "enabled" })
 if NEMESIS.Flags.enabled then ... end
 ```
 
+## Configs
+
+Every element with a `flag` is saved and restored automatically, including
+colors, gradients and keybinds. Configs are json files in your `folder`
+(default `Nemesis/<title>`).
+
+```lua
+Window.SaveConfig("legit")     -- write current values
+Window.LoadConfig("legit")     -- apply them back (callbacks fire)
+Window.SetAutoload("legit")    -- load this one on every start
+```
+
+The header has the same thing as UI: the pill shows the active config and opens
+a panel with every saved config plus New / Save / Del actions. Right click a
+config in the panel to make it the autoload (marked with a star). Pass
+`configs = { "Legit", "Rage" }` to pre-seed names, and `onSave` / `onConfig`
+callbacks if your script wants to react.
+
+On executors without a file API the config UI hides itself and the methods
+return false.
+
+## Key system
+
+Gate the menu behind a key. Nothing is built until the key checks out.
+
+```lua
+local Window = NEMESIS.Window({
+    title = "My Script",
+    key = {
+        keys = { "hello123", "vip-key" },  -- any of these unlocks (key = "..." works too)
+        note = "Get the key from our discord.",
+        saveKey = true,                    -- remember it (Nemesis/key.txt), default true
+    },
+})
+```
+
+With `saveKey` on, a returning user with a valid saved key never sees the
+prompt. Closing the prompt raises an error, so the rest of the script does not
+run without a key.
+
 ## Theming
 
-Colors come from a theme table. Override any of the keys per window:
+Four presets ship with the library: `Dark` (default), `Midnight`, `Abyss` and
+`Light`. Pick one at creation or switch live, the whole menu recolors in place:
+
+```lua
+NEMESIS.Window({ theme = "Midnight" })
+-- or at runtime, for example from a dropdown callback:
+Window.SetTheme("Light")
+```
+
+You can also override individual keys per window, or pass a full table to
+`SetTheme`:
 
 ```lua
 NEMESIS.Window({

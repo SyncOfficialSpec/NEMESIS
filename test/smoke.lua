@@ -150,4 +150,60 @@ local function findAtlasImage(inst)
 end
 check(findAtlasImage(Win.Instance) ~= nil, "icon atlas resolves from bundled spritesheets")
 
+-- configs: save, list, mutate everything, load, verify the roundtrip
+tog.Set(true); sld.Set(0.25); dd.Set("Snipers"); mdd.Set({ "y", "z" })
+inp.Set("abc123"); kb.Set("MOUSE2"); cp.Set(Color3.fromRGB(10, 200, 30), 0.5)
+check(Win.SaveConfig("smoketest") == true, "SaveConfig writes a config")
+
+local names = Win.ListConfigs()
+local sawSaved, sawPreset = false, false
+for _, n in ipairs(names) do
+	if n == "smoketest" then sawSaved = true end
+	if n == "HvH" then sawPreset = true end
+end
+check(sawSaved, "ListConfigs sees the saved config")
+check(sawPreset, "ListConfigs sees preset names from opts.configs")
+
+tog.Set(false); sld.Set(0.9); dd.Set("Pistols"); mdd.Set({ "x" })
+inp.Set("overwritten"); kb.Set("MOUSE3"); cp.Set(Color3.fromRGB(1, 2, 3), 0)
+check(Win.LoadConfig("smoketest") == true, "LoadConfig reads it back")
+check(NEMESIS.Flags.aim_enable == true, "toggle restored from config")
+check(math.abs(NEMESIS.Flags.scale - 0.25) < 1e-6, "slider restored from config")
+check(NEMESIS.Flags.wg == "Snipers", "dropdown restored from config")
+check(type(NEMESIS.Flags.tg) == "table" and #NEMESIS.Flags.tg == 2, "multi dropdown restored from config")
+check(NEMESIS.Flags.wh == "abc123", "input restored from config")
+check(NEMESIS.Flags.kb == "MOUSE2", "keybind restored from config")
+local rc = cp.Get()
+check(math.abs(rc.R * 255 - 10) < 1.01 and math.abs(rc.G * 255 - 200) < 1.01, "colorpicker colour restored from config")
+check(math.abs(cp.GetAlpha() - 0.5) < 1e-6, "colorpicker alpha restored from config")
+
+Win.SetAutoload("smoketest")
+check(Win.GetAutoload() == "smoketest", "autoload marker set")
+Win.DeleteConfig("smoketest")
+check(Win.GetAutoload() == nil, "deleting the autoload config clears the marker")
+
+-- theme switching: window recolours live, palette merges into future builds
+check(Win.SetTheme("Light") == true, "SetTheme accepts a preset name")
+local light = NEMESIS.Themes.Light
+check(math.abs(Win.Instance.BackgroundColor3.R - light.Background.R) < 1e-6, "window recoloured to the Light palette")
+check(Win.SetTheme("Dark") == true, "SetTheme back to Dark")
+
+-- key system: a saved key file unlocks with no prompt (and no blocking)
+STUB_DISK["Nemesis/key.txt"] = "SMOKE-KEY"
+local KWin = NEMESIS.Window({ title = "KEYTEST", key = { key = "SMOKE-KEY" } })
+check(type(KWin) == "table", "key system: saved key unlocks without prompting")
+KWin.Destroy()
+
+-- button control surface
+local fired = false
+local btn = gen.Button({ text = "Do", callback = function() fired = true end })
+btn.Fire()
+check(fired, "Button.Fire runs the callback")
+
+-- footer + title live setters
+Win.SetGame("SmokeGame")
+Win.SetStatus("Testing")
+Win.SetTitle("Renamed")
+print("  ok: SetGame / SetStatus / SetTitle ran")
+
 print("\nALL CHECKS PASSED")

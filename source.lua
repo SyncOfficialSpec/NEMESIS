@@ -233,6 +233,43 @@ local function corner(rad)
 	return Create("UICorner", { CornerRadius = UDim.new(0, rad or 8) })
 end
 
+-- Make `fill` conform to whatever rounded shape `box` has, automatically.
+-- Instead of hand-matching a radius, the fill mirrors the box's UICorner and
+-- stays in sync with it, so no matter the box type -- a small fixed radius, a
+-- scaled radius, or a full pill -- the fill's corners curve the same way and it
+-- can never spill past the box's boundary. Scaled radii (UDim scale > 0) even
+-- self-adjust as the fill grows/shrinks, so partial and animated fills stay
+-- inside too. Returns the fill for chaining.
+local function conformFill(fill, box)
+	local fillCorner = fill:FindFirstChildOfClass("UICorner") or corner(0)
+	fillCorner.Parent = fill
+
+	local boxCorner = box:FindFirstChildOfClass("UICorner")
+	local function sync()
+		fillCorner.CornerRadius = boxCorner and boxCorner.CornerRadius or UDim.new(0, 0)
+	end
+
+	local radiusConn
+	local function bind()
+		if radiusConn then radiusConn:Disconnect() end
+		if boxCorner then
+			radiusConn = boxCorner:GetPropertyChangedSignal("CornerRadius"):Connect(sync)
+		end
+		sync()
+	end
+	bind()
+
+	-- if the box's corner is added/swapped/removed later, re-mirror it
+	box.ChildAdded:Connect(function(child)
+		if child:IsA("UICorner") then boxCorner = child; bind() end
+	end)
+	box.ChildRemoved:Connect(function(child)
+		if child == boxCorner then boxCorner = box:FindFirstChildOfClass("UICorner"); bind() end
+	end)
+
+	return fill
+end
+
 local function stroke(color, thickness, transparency)
 	return Create("UIStroke", {
 		Color = color or Color3.fromRGB(45, 45, 58),
@@ -1019,7 +1056,8 @@ function Elements.Toggle(parent, accent, opts)
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Parent = box,
-	}, { corner(6), fillGrad })
+	}, { fillGrad })
+	conformFill(fill, box)
 	accentProp(fill, "BackgroundColor3", accent)
 	accentGrad(fillGrad, accent)
 	local check
@@ -1128,7 +1166,8 @@ function Elements.Slider(parent, accent, opts)
 		Size = UDim2.new((value - min) / (max - min), 0, 1, 0),
 		BackgroundColor3 = accent,
 		Parent = bar,
-	}, { corner(3), fillGrad })
+	}, { fillGrad })
+	conformFill(fill, bar)
 	accentProp(fill, "BackgroundColor3", accent)
 	accentGrad(fillGrad, accent)
 	local handle = Create("Frame", {

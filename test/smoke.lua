@@ -131,4 +131,23 @@ check(NEMESIS.Flags.grid_a == true and NEMESIS.Flags.grid_b == false, "columns p
 NEMESIS.Notify({ title = "Loaded", content = "NEMESIS ready", duration = 2 })
 print("  ok: Notify ran without error")
 
+-- icon atlas pipeline: the topbar icons (x/minus/search) resolve through the
+-- bundled index + spritesheets, so somewhere under the window there must be an
+-- image pointing at a stub-cached sheet with a 48x48 sprite rect
+local function findAtlasImage(inst)
+	local img = inst._props and inst._props.Image
+	if type(img) == "string" and img:find("rbxasset://stub/nemesis_icons_", 1, true) == 1 then
+		local rect = inst._props.ImageRectSize
+		if rect and rect.X == 48 and rect.Y == 48 then
+			return inst
+		end
+	end
+	for _, c in ipairs(rawget(inst, "_children") or {}) do
+		local hit = findAtlasImage(c)
+		if hit then return hit end
+	end
+	return nil
+end
+check(findAtlasImage(Win.Instance) ~= nil, "icon atlas resolves from bundled spritesheets")
+
 print("\nALL CHECKS PASSED")

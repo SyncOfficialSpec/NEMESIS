@@ -115,6 +115,12 @@ local Right   = Page.Section("VISUALS", { side = "right" })  -- or { column = 2 
 Icons accept a Lucide name (for example `"crosshair"`, `"eye"`, `"settings"`) or a
 Roblox image id. Pages can set their own column count with `{ columns = 2 }`.
 
+The full Lucide set (about 2000 icons) ships with this repo as spritesheets under
+`assets/icons`, so icon loading has no third-party dependency. Sheets download
+once and cache on disk through `getcustomasset`; executors without that function
+fall back to text glyphs. Regenerate the atlas with the scripts in `tools/iconsgen`
+(node for rasterizing, python for packing).
+
 ## Elements
 
 Every element takes a single table of options. Most return a control object with

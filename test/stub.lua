@@ -233,6 +233,21 @@ localPlayer.PlayerGui = playerGui
 table.insert(localPlayer._children, playerGui)
 services.Players = makeServiceInstance("Players", { LocalPlayer = localPlayer })
 
+-- fake executor file API + HttpGet that serves this repo's own raw URLs from
+-- disk, so the icon atlas pipeline (index -> sheet -> getcustomasset) runs
+-- for real during the smoke test
+if not loadstring then loadstring = load end
+
+local RAW_BASE = "https://raw.githubusercontent.com/SyncOfficialSpec/NEMESIS/main/"
+local fakeDisk = {}
+writefile = function(path, data) fakeDisk[path] = data end
+isfile = function(path) return fakeDisk[path] ~= nil end
+readfile = function(path) return fakeDisk[path] end
+getcustomasset = function(path)
+	assert(fakeDisk[path], "getcustomasset on missing file: " .. tostring(path))
+	return "rbxasset://stub/" .. path
+end
+
 game = {
 	GetService = function(_, name)
 		if not services[name] then
@@ -240,7 +255,18 @@ game = {
 		end
 		return services[name]
 	end,
-	HttpGet = function() return "" end,
+	HttpGet = function(_, url)
+		if type(url) == "string" and url:sub(1, #RAW_BASE) == RAW_BASE then
+			local rel = url:sub(#RAW_BASE + 1):gsub("%?.*$", "")
+			local f = io.open(rel, "rb")
+			if f then
+				local data = f:read("*a")
+				f:close()
+				return data
+			end
+		end
+		error("HttpGet unavailable in stub: " .. tostring(url))
+	end,
 }
 setmetatable(game, { __index = function(_, k) return services[k] end })
 

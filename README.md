@@ -1,4 +1,4 @@
-# x93adw231fwad2
+# NEMESIS
 
 A UI library for Roblox script executors. It gives you a desktop style window with
 tabs, a sidebar, collapsible sections, and the usual set of controls (toggles,
@@ -10,13 +10,13 @@ MIT licensed. Works with any executor that supports `loadstring` and `game:HttpG
 ## Loading
 
 ```lua
-local NEMESIS = loadstring(game:HttpGet("https://raw.githubusercontent.com/DiabloPaidProjects/x93adw231fwad2/main/source.lua"))()
+local NEMESIS = loadstring(game:HttpGet("https://raw.githubusercontent.com/SyncOfficialSpec/NEMESIS/main/source.lua"))()
 ```
 
 ## Quick start
 
 ```lua
-local NEMESIS = loadstring(game:HttpGet("https://raw.githubusercontent.com/DiabloPaidProjects/x93adw231fwad2/main/source.lua"))()
+local NEMESIS = loadstring(game:HttpGet("https://raw.githubusercontent.com/SyncOfficialSpec/NEMESIS/main/source.lua"))()
 
 local Window = NEMESIS.Window({
     title = "My Script",
@@ -285,7 +285,7 @@ example from a color picker callback.
 `showcase.lua` shows every element and option in one place:
 
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/DiabloPaidProjects/x93adw231fwad2/main/showcase.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/SyncOfficialSpec/NEMESIS/main/showcase.lua"))()
 ```
 
 ## License

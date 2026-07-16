@@ -3,7 +3,7 @@
 	A UI library for Roblox script executors.
 
 	Load:
-		local NEMESIS = loadstring(game:HttpGet("https://raw.githubusercontent.com/DiabloPaidProjects/x93adw231fwad2/main/source.lua"))()
+		local NEMESIS = loadstring(game:HttpGet("https://raw.githubusercontent.com/SyncOfficialSpec/NEMESIS/main/source.lua"))()
 
 	Hierarchy: Window > Tab > Group > Page > Section > controls
 
@@ -97,7 +97,7 @@ end
 -- versioned path: bump the filename (URL + on-disk cache) whenever the logo
 -- changes, so neither the GitHub CDN nor the executor serves a stale image
 -- grayscale logo so ImageColor3 can tint it to any hue at runtime
-local LOGO_URL = "https://raw.githubusercontent.com/DiabloPaidProjects/x93adw231fwad2/main/assets/nemesis_logo_v4.png"
+local LOGO_URL = "https://raw.githubusercontent.com/SyncOfficialSpec/NEMESIS/main/assets/nemesis_logo_v4.png"
 local LOGO_FILE = "nemesis_logo_v4.png"
 local brandLogoCache = nil -- nil = untried, false = failed, string = rbxasset id
 
@@ -132,8 +132,8 @@ local function loadBrandLogo()
 	return brandLogoCache or nil
 end
 
--- Icons (Lucide names via Rayfield's icon map, or raw asset IDs)
-local ICON_URL = "https://raw.githubusercontent.com/SiriusSoftwareLtd/Rayfield/refs/heads/main/icons.lua"
+-- Icons (Lucide names via the bundled icon atlas, or raw asset IDs)
+local ICON_URL = "https://raw.githubusercontent.com/SyncOfficialSpec/NEMESIS/main/icons.lua"
 local iconMap = nil -- nil = not tried, false = failed, table = loaded
 
 local function loadIconMap()
@@ -558,7 +558,7 @@ end
 function NEMESIS.Notify(opts)
 	opts = opts or {}
 	ensureRoot()
-	-- copied from Rayfield's RayfieldLibrary:Notify: grow the height in, stagger
+	-- notification anim: grow the height in, stagger
 	-- the fade-in (bg -> title -> icon -> content), then fade out + shrink to 0
 	task.spawn(function()
 		local accent = opts.accent or THEME.Accent
@@ -768,7 +768,7 @@ end
 local Elements = {}
 
 function Elements.Label(parent, accent, text)
-	-- Rayfield-style: text inside a subtle rounded card
+	-- text inside a subtle rounded card
 	local holder = Create("Frame", {
 		BackgroundColor3 = THEME.Element,
 		Size = UDim2.new(1, -ROW_PAD * 2, 0, 0),
@@ -1538,7 +1538,7 @@ function Elements.Input(parent, accent, opts)
 	opts = opts or {}
 	local row = newRow(parent, ROW_H)
 	rowText(row, opts.text, opts.desc, FIELD_FRAC, 16)
-	-- Rayfield-style: starts small, grows with the text up to a cap, then clips
+	-- starts small, grows with the text up to a cap, then clips
 	-- (past the cap the front scrolls off instead of spilling outside the field)
 	local MIN_W, MAX_W = 84, 220
 	local field = Create("Frame", {
@@ -2420,7 +2420,7 @@ function NEMESIS.Window(opts)
 	-- search is a small icon; clicking it opens the search bar over the tabs
 	local searchBtn = topbarIcon("search", "\u{1F50E}", -82, 16)
 
-	-- the search bar that animates in over the tab area (Rayfield style)
+	-- the search bar that animates in over the tab area
 	local searchBar = Create("Frame", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(0.5, 45, 0.5, 0),
@@ -2578,7 +2578,7 @@ function NEMESIS.Window(opts)
 
 	searchBox:GetPropertyChangedSignal("Text"):Connect(function() runSearch(searchBox.Text) end)
 
-	-- Rayfield-style search: the bar grows in over the tabs, then shrinks back out
+	-- search: the bar grows in over the tabs, then shrinks back out
 	local searchOpen = false
 	local function sExp(t) return TweenInfo.new(t, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out) end
 	local function sQuint(t) return TweenInfo.new(t, Enum.EasingStyle.Quint, Enum.EasingDirection.Out) end
@@ -3092,7 +3092,7 @@ function NEMESIS.Window(opts)
 	-- visible; below this the centred tabs would start to overlap
 	local minW = IS_MOBILE and 480 or 820
 	local minH = 380
-	-- SIRIUS X resize handle: a large invisible hit area + the curved corner icon
+	-- resize handle: a large invisible hit area + the curved corner icon
 	local resizeGrip = Create("ImageButton", {
 		Name = "ResizeGrip",
 		AnchorPoint = Vector2.new(1, 1),
@@ -3121,10 +3121,10 @@ function NEMESIS.Window(opts)
 		Parent = resizeGrip,
 	})
 	do
-		-- SIRIUS-style smooth resize: a RenderStepped loop where the visual size
+		-- smooth resize: a RenderStepped loop where the visual size
 		-- eases toward a cursor-driven target each frame (frame-rate independent
 		-- exponential smoothing), so the window butter-glides to follow the cursor.
-		local SMOOTH_K = 26          -- higher = tighter cursor-follow (SIRIUS ~28)
+		local SMOOTH_K = 26          -- higher = tighter cursor-follow
 		local resizing = false
 		local hovering = false
 		local startPointer, startW, startH
@@ -3142,7 +3142,7 @@ function NEMESIS.Window(opts)
 			local vp = viewportSize()
 			return math.max(minW, vp.X / scale - 40), math.max(minH, vp.Y / scale - 40)
 		end
-		-- SIRIUS stretch: normalize the cursor's position inside the grip, then
+		-- grip stretch: normalize the cursor's position inside the grip, then
 		-- stretch the icon NON-uniformly toward it (wider/taller as you move in)
 		local function normResize()
 			local mouse = UserInputService:GetMouseLocation()

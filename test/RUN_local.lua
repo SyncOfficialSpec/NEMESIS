@@ -2298,15 +2298,23 @@ function Elements.ColorPicker(parent, accent, opts)
 	end
 	local function multiSequence()
 		local sorted = sortedStops()
+		local n = #sorted
+		if n < 2 then
+			return ColorSequence.new(slotColor(1), slotColor(1))
+		end
+		-- Roblox requires the first keypoint at time=0 and the last at time=1,
+		-- strictly increasing in between. Force the endpoints and keep the middle
+		-- keypoints monotonic without ever reaching 1.
 		local kps, lastT = {}, -1
-		for _, st in ipairs(sorted) do
-			local t = math.clamp(st.pos, 0, 1)
+		for i, st in ipairs(sorted) do
+			local t
+			if i == 1 then t = 0
+			elseif i == n then t = 1
+			else t = math.clamp(st.pos, 0, 1) end
 			if t <= lastT then t = lastT + 0.001 end
+			if i < n and t >= 1 then t = 1 - (n - i) * 0.001 end
 			lastT = t
 			kps[#kps + 1] = ColorSequenceKeypoint.new(math.clamp(t, 0, 1), Color3.fromHSV(st.h, st.s, st.v))
-		end
-		if #kps < 2 then
-			kps = { ColorSequenceKeypoint.new(0, slotColor(1)), ColorSequenceKeypoint.new(1, slotColor(1)) }
 		end
 		return ColorSequence.new(kps)
 	end

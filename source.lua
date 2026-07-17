@@ -3130,70 +3130,165 @@ function Elements.BarChart(parent, accent, opts)
 	return chart
 end
 
--- Chart: a line / area sparkline. The line is drawn as thin rotated segments
--- between points; optional dots and a gradient area fill. Wipes in on reveal.
+-- Catmull-Rom spline point (for the smooth line option)
+local function catmull(p0, p1, p2, p3, t)
+	local t2, t3 = t * t, t * t * t
+	return 0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (-p0 + 3 * p1 - 3 * p2 + p3) * t3)
+end
+local function commafy(s)
+	local out = s:reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
+	return out
+end
+local TI_MORPH = TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+
+-- Chart: line / area sparkline. Faithful port of the Gen2 chart: a green line
+-- built from thin rotated segments, white dots, a 3px-column gradient area fill,
+-- two faint gridlines + a hover hairline/scrub, and a wipe + dot-pop entrance.
 function Elements.Chart(parent, accent, opts)
 	opts = opts or {}
-	onAccent(function(c) accent = c end)
 	local vals = cleanNumbers(opts.points or opts.values or opts.data)
+	if #vals == 1 then vals[2] = vals[1] end
 	local card, valLbl, plot = chartShell(parent, accent, opts, 100)
 	local lineColor = opts.color or CHART_ACCENT
-	local suffix, prefix = opts.suffix or "", opts.prefix or ""
+	local suffix, prefix, decimals = opts.suffix or "", opts.prefix or "", tonumber(opts.decimals) or 0
 	local filled = opts.filled ~= false
-	local dots = opts.dots ~= false
-	local clip = Create("Frame", { Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, ClipsDescendants = true, Parent = plot })
-	local parts = {}
+	local smooth = opts.smooth == true
+	local showDots = opts.dots == true or (opts.dots == nil and not smooth)
+	local function fmt(n)
+		local str = decimals > 0 and string.format("%." .. decimals .. "f", n) or tostring(math.floor(n + 0.5))
+		return prefix .. commafy(str) .. suffix
+	end
+	-- gridlines (top-mid + bottom) and a hover hairline
+	local function gridline(y) Create("Frame", { BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.93, BorderSizePixel = 0, Position = UDim2.new(0, 0, y, y == 1 and -1 or 0), Size = UDim2.new(1, 0, 0, 1), Parent = plot }) end
+	gridline(0.5); gridline(1)
+	local hairline = Create("Frame", { BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.82, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.new(0, 1, 1, 0), Visible = false, ZIndex = 2, Parent = plot })
+	local fillHolder = Create("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Parent = plot })
+	local segHolder = Create("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), ZIndex = 3, Parent = plot })
+	local segCanvas = Create("Frame", { BackgroundTransparency = 1, Parent = segHolder })
+	local dotHolder = Create("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), ZIndex = 4, Parent = plot })
+	local dots, segs, cols = {}, {}, {}
+	local xs, ys = {}, {}
+	local hoverIdx, animToken = nil, 0
+	valLbl.Text = fmt(vals[#vals])
+
 	local function redraw(animate)
-		for _, p in ipairs(parts) do p:Destroy() end; parts = {}
 		local w, h = 0, 0
 		pcall(function() w = plot.AbsoluteSize.X; h = plot.AbsoluteSize.Y end)
-		if w <= 0 then w = 300 end; if h <= 0 then h = 90 end
+		if w < 24 or h < 24 then w = math.max(w, 280); h = math.max(h, 80) end
+		segCanvas.Size = UDim2.fromOffset(w, h)
 		local n = #vals
-		local mn, mx = math.huge, -math.huge
-		for _, v in ipairs(vals) do mn = math.min(mn, v); mx = math.max(mx, v) end
-		if mx <= mn then mx = mn + 1 end
-		local pad = 10
-		local function px(i) return (n == 1) and w / 2 or ((i - 1) / (n - 1)) * (w - pad * 2) + pad end
-		local function py(v) return h - pad - ((v - mn) / (mx - mn)) * (h - pad * 2) end
-		for i = 1, n - 1 do
-			local x1, y1, x2, y2 = px(i), py(vals[i]), px(i + 1), py(vals[i + 1])
-			local dx, dy = x2 - x1, y2 - y1
-			local len = math.sqrt(dx * dx + dy * dy)
-			local ang = math.deg(math.atan2(dy, dx))
-			if filled then
-				local col = Create("Frame", {
-					AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset((x1 + x2) / 2, h),
-					Size = UDim2.fromOffset(math.max(len, 2), h - (y1 + y2) / 2), BackgroundColor3 = lineColor,
-					BackgroundTransparency = 0.85, Rotation = 0, ZIndex = 1, Parent = clip,
-				}, { Create("UIGradient", { Rotation = 90, Transparency = NumberSequence.new(0.2, 0.95) }) })
-				parts[#parts + 1] = col
-			end
-			local seg = Create("Frame", {
-				AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset((x1 + x2) / 2, (y1 + y2) / 2),
-				Size = UDim2.fromOffset(len + 2, 3), BackgroundColor3 = lineColor, Rotation = ang, ZIndex = 3, Parent = clip,
-			}, { corner(2) })
-			parts[#parts + 1] = seg
+		local lo, hi = vals[1], vals[1]
+		for _, v in ipairs(vals) do lo = math.min(lo, v); hi = math.max(hi, v) end
+		local range = hi - lo; if range == 0 then range = math.max(math.abs(hi), 1) end
+		local edgePad = (smooth and 3 or 4) / 2 + 1.5
+		for i = 1, n do
+			xs[i] = edgePad + (n == 1 and 0 or (i - 1) / (n - 1)) * (w - edgePad * 2)
+			ys[i] = math.floor(10 + (1 - (vals[i] - lo) / range) * (h - 22) + 0.5)
 		end
-		if dots then
-			for i = 1, n do
-				local d = Create("Frame", {
-					AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(px(i), py(vals[i])),
-					Size = UDim2.fromOffset(8, 8), BackgroundColor3 = THEME.Knob, ZIndex = 4, Parent = clip,
-				}, { corner(4) })
-				parts[#parts + 1] = d
+		for i = #xs, n + 1, -1 do xs[i] = nil; ys[i] = nil end
+		local rxs, rys = xs, ys
+		if smooth and n >= 3 then
+			rxs, rys = {}, {}
+			for i = 1, n - 1 do
+				local x0, y0 = xs[i > 1 and i - 1 or 1], ys[i > 1 and i - 1 or 1]
+				local x1, y1, x2, y2 = xs[i], ys[i], xs[i + 1], ys[i + 1]
+				local x3, y3 = xs[i + 2] or x2, ys[i + 2] or y2
+				local sub = math.clamp(math.ceil((x2 - x1) / 3), 8, 36)
+				for tstep = 0, sub - 1 do
+					local a = tstep / sub
+					rxs[#rxs + 1] = catmull(x0, x1, x2, x3, a)
+					rys[#rys + 1] = math.clamp(catmull(y0, y1, y2, y3, a), 2, h - 2)
+				end
+			end
+			rxs[#rxs + 1] = xs[n]; rys[#rys + 1] = ys[n]
+		end
+		local rn = #rxs
+		for i = #dots, n + 1, -1 do dots[i]:Destroy(); dots[i] = nil end
+		for i = #segs, rn, -1 do segs[i]:Destroy(); segs[i] = nil end
+		-- dots (white, 10px)
+		for i = 1, n do
+			local d = dots[i]
+			if not d then
+				d = Create("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(10, 10), BackgroundColor3 = THEME.Knob, ZIndex = 4, Visible = showDots, Parent = dotHolder }, { corner(99) })
+				dots[i] = d
+			end
+			d.Position = UDim2.fromOffset(xs[i], ys[i])
+		end
+		-- line segments (green, 3px rounded)
+		for i = 1, rn - 1 do
+			local s = segs[i]
+			if not s then s = Create("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), BorderSizePixel = 0, BackgroundColor3 = lineColor, ZIndex = 3, Parent = segCanvas }, { corner(99) }); segs[i] = s end
+			local dx, dy = rxs[i + 1] - rxs[i], rys[i + 1] - rys[i]
+			local len = math.max(math.sqrt(dx * dx + dy * dy), 0.001)
+			local ov = smooth and 3 or 4
+			s.Position = UDim2.new((rxs[i] + dx / 2) / w, 0, (rys[i] + dy / 2) / h, 0)
+			s.Size = UDim2.fromOffset(math.ceil(len + (rn == 2 and 0 or ov)), 3)
+			s.Rotation = math.deg(math.atan2(dy, dx))
+		end
+		-- gradient area fill (3px columns)
+		if filled then
+			local colW, fillX = 3, rxs[1]
+			local count = math.max(math.ceil((rxs[rn] - fillX) / colW), 1)
+			for i = #cols, count + 1, -1 do cols[i]:Destroy(); cols[i] = nil end
+			local seg = 1
+			for c = 1, count do
+				local f = cols[c]
+				if not f then f = Create("Frame", { AnchorPoint = Vector2.new(0, 1), BorderSizePixel = 0, BackgroundColor3 = lineColor, BackgroundTransparency = 0.12, Parent = fillHolder }, { Create("UIGradient", { Rotation = 90, Transparency = NumberSequence.new(0, 0.78) }) }); cols[c] = f end
+				local left = fillX + (c - 1) * colW
+				local cw = math.min(colW, rxs[rn] - left)
+				local cx = left + cw / 2
+				while seg < rn - 1 and rxs[seg + 1] < cx do seg = seg + 1 end
+				local x1, x2 = rxs[seg], rxs[seg + 1]
+				local a = math.clamp((cx - x1) / math.max(x2 - x1, 1), 0, 1)
+				local y = rys[seg] + (rys[seg + 1] - rys[seg]) * a
+				f.Position = UDim2.fromOffset(left, h - 1)
+				f.Size = UDim2.fromOffset(math.max(cw, 1), math.max(h - 1 - y, 0))
 			end
 		end
-		valLbl.Text = prefix .. tostring(vals[#vals] or 0) .. suffix
+		valLbl.Text = fmt(vals[#vals])
 		if animate then
-			clip.Size = UDim2.new(0, 0, 1, 0)
-			tween(clip, { Size = UDim2.new(1, 0, 1, 0) }, TweenInfo.new(0.7, Enum.EasingStyle.Quart, Enum.EasingDirection.Out))
+			animToken = animToken + 1; local my = animToken
+			local D = 0.75
+			segHolder.ClipsDescendants = true; segHolder.Size = UDim2.new(0, 0, 1, 0)
+			tween(segHolder, { Size = UDim2.new(1, 0, 1, 0) }, TweenInfo.new(D, Enum.EasingStyle.Quart, Enum.EasingDirection.Out))
+			task.delay(D + 0.1, function() if my == animToken then segHolder.ClipsDescendants = false; segHolder.Size = UDim2.new(1, 0, 1, 0) end end)
+			for i, d in ipairs(dots) do
+				local at = w > 0 and (xs[i] or 0) / w or 0
+				d.Size = UDim2.fromOffset(0, 0)
+				task.delay(at * D * 0.62, function() if my == animToken and d.Parent then tween(d, { Size = UDim2.fromOffset(10, 10) }, TweenInfo.new(0.42, Enum.EasingStyle.Back, Enum.EasingDirection.Out)) end end)
+			end
+			for c, f in ipairs(cols) do
+				local tgt = f.Size
+				f.Size = UDim2.fromOffset(tgt.X.Offset, 0)
+				local at = w > 0 and (f.Position.X.Offset) / w or 0
+				task.delay(at * D * 0.62 + 0.05, function() if my == animToken and f.Parent then tween(f, { Size = tgt }, TweenInfo.new(0.55, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)) end end)
+			end
 		end
 	end
+	-- hover scrub: highlight the nearest point + hairline, read its value
+	local function applyHover(i)
+		if hoverIdx == i then return end
+		if hoverIdx and dots[hoverIdx] then dots[hoverIdx].Size = UDim2.fromOffset(10, 10); dots[hoverIdx].BackgroundColor3 = THEME.Knob; dots[hoverIdx].Visible = showDots end
+		hoverIdx = i
+		local d = i and dots[i]
+		if d then d.Size = UDim2.fromOffset(14, 14); d.BackgroundColor3 = lineColor; d.Visible = true; hairline.Position = UDim2.fromOffset(xs[i], 0); hairline.Visible = true; valLbl.Text = fmt(vals[i])
+		else hairline.Visible = false; valLbl.Text = fmt(vals[#vals]) end
+	end
+	local function scrub(input)
+		if #xs < 2 then return end
+		local rx = input.Position.X - plot.AbsolutePosition.X
+		local best, bd = nil, math.huge
+		for i = 1, #vals do local dist = math.abs((xs[i] or 0) - rx); if dist < bd then best, bd = i, dist end end
+		applyHover(best)
+	end
+	card.InputChanged:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then scrub(input) end end)
+	card.MouseLeave:Connect(function() applyHover(nil) end)
 	local chart = {}
 	function chart.Set(s) if s and s.Points then vals = cleanNumbers(s.Points) end redraw(true) end
-	function chart.Push(v) vals[#vals + 1] = tonumber(v) or 0; if #vals > (opts.maxPoints or 24) then table.remove(vals, 1) end redraw(true) end
+	function chart.Push(v) vals[#vals + 1] = tonumber(v) or 0; if #vals > (opts.maxPoints or math.max(#vals, 12)) then table.remove(vals, 1) end redraw(true) end
 	function chart.Replay() redraw(true) end
 	task.defer(function() redraw(true) end)
+	plot:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() redraw(false) end)
 	return chart
 end
 
@@ -3443,15 +3538,6 @@ function Elements.CollapsibleSection(parent, accent, opts)
 	return makeSection(parent, accent, opts.text or opts.title or "Section", opts.open == false)
 end
 
--- Spoiler: a tap-to-reveal container that starts collapsed and hosts nested elements.
-function Elements.Spoiler(parent, accent, opts)
-	opts = opts or {}
-	if type(opts) == "string" then opts = { text = opts } end
-	local host = makeSection(parent, accent, opts.text or opts.title or "Spoiler", opts.revealed ~= true)
-	host.Reveal = function() host.SetOpen(true, true) end
-	host.Hide = function() host.SetOpen(false, true) end
-	return host
-end
 
 -- FAQ: an accordion of question/answer cards; opening one closes the others.
 function Elements.FAQ(parent, accent, opts)
@@ -3558,43 +3644,112 @@ function Elements.GradientPicker(parent, accent, opts)
 	return Elements.ColorPicker(parent, accent, opts)
 end
 
--- PinnedList: a list of item rows each with a pin toggle; pinned items float up.
+-- PinnedList: item cards each with a pin toggle; pinning floats an item to the
+-- top and the whole list smoothly reflows to its new order (Gen2-style).
 function Elements.PinnedList(parent, accent, opts)
 	opts = opts or {}
 	onAccent(function(c) accent = c end)
 	Elements.Divider(parent, accent, { text = opts.title or "All Items" })
-	local wrap = Create("Frame", { Size = UDim2.new(1, -ROW_PAD * 2, 0, 0), Position = UDim2.new(0, ROW_PAD, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, Parent = parent }, {
-		Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 6) }),
-	})
-	local order = 0
+	local CARD_H, GAP = 40, 6
+	local items = opts.items or {}
+	local wrap = Create("Frame", { Size = UDim2.new(1, -ROW_PAD * 2, 0, #items * (CARD_H + GAP)), Position = UDim2.new(0, ROW_PAD, 0, 0), BackgroundTransparency = 1, Parent = parent })
 	local records = {}
-	local function reflow()
+	local stamp = 0
+	local function reflow(animate)
 		table.sort(records, function(a, b)
 			if a.pinned ~= b.pinned then return a.pinned end
+			if a.pinned then return a.pinStamp < b.pinStamp end
 			return a.idx < b.idx
 		end)
-		for i, r in ipairs(records) do r.card.LayoutOrder = i end
+		for i, r in ipairs(records) do
+			local target = UDim2.new(1, 0, 0, (i - 1) * (CARD_H + GAP))
+			if animate then tween(r.card, { Position = target }, TI.EXPAND) else r.card.Position = target end
+		end
 	end
-	for i, it in ipairs(opts.items or {}) do
-		order = order + 1
-		local card = Create("Frame", { Size = UDim2.new(1, 0, 0, 40), BackgroundColor3 = THEME.Element, LayoutOrder = order, Parent = wrap }, { corner(8), stroke(THEME.ElementStroke, 1, 0.4), padXY(ROW_PAD, 0) })
+	for i, it in ipairs(items) do
+		local card = Create("Frame", {
+			AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, (i - 1) * (CARD_H + GAP)),
+			Size = UDim2.new(1, 0, 0, CARD_H), BackgroundColor3 = THEME.Element, Parent = wrap,
+		}, { corner(12), stroke(THEME.ElementStroke, 1, 0.3), padXY(ROW_PAD, 0), Create("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(216, 216, 216)), Transparency = NumberSequence.new(0.9) }) })
 		tagSearch(card, (it.Name or it.name or "Item") .. " " .. (it.Description or it.desc or ""))
-		Create("TextLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(1, -34, 1, 0), BackgroundTransparency = 1, Font = FONT_MED, Text = tostring(it.Name or it.name or "Item"), TextColor3 = THEME.Text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = card })
-		local pin = Create("TextButton", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 24, 0, 24), BackgroundTransparency = 1, AutoButtonColor = false, Text = "", Parent = card })
+		local ix = 0
+		if it.Icon or it.icon then local img = Create("ImageLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(0, 16, 0, 16), BackgroundTransparency = 1, ImageColor3 = THEME.SubText, Parent = card }); local isp = resolveIcon(it.Icon or it.icon); if isp then applyIcon(img, isp); ix = 24 end end
+		Create("TextLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, ix, 0.5, 0), Size = UDim2.new(1, -34 - ix, 1, 0), BackgroundTransparency = 1, Font = FONT_MED, Text = tostring(it.Name or it.name or "Item"), TextColor3 = THEME.Text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = card })
+		local pin = Create("TextButton", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 26, 0, 26), BackgroundTransparency = 1, AutoButtonColor = false, Text = "", Parent = card })
 		local pinIcon = Create("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, 15, 0, 15), BackgroundTransparency = 1, ImageColor3 = THEME.SubText, Parent = pin })
 		local spec = resolveIcon("pin"); if spec then applyIcon(pinIcon, spec) end
-		local rec = { card = card, idx = order, pinned = it.Pinned and true or false }
-		local function paint() pinIcon.ImageColor3 = rec.pinned and accent or THEME.SubText end
-		pin.MouseButton1Click:Connect(function()
-			rec.pinned = not rec.pinned; paint(); reflow()
-			if type(opts.callback) == "function" then pcall(opts.callback, it.Name or it.name, rec.pinned) end
-		end)
-		paint()
+		local rec = { card = card, idx = i, pinned = false, pinStamp = 0, name = it.Name or it.name, pin = pin, icon = pinIcon }
+		local function paint() tween(pinIcon, { ImageColor3 = rec.pinned and accent or THEME.SubText, Rotation = rec.pinned and 45 or 0 }, TI.FAST) end
+		rec.set = function(state)
+			state = state and true or false
+			if state == rec.pinned then return end
+			rec.pinned = state
+			if state then stamp = stamp + 1; rec.pinStamp = stamp end
+			paint(); reflow(true)
+			if type(opts.callback) == "function" then pcall(opts.callback, rec.name, rec.pinned) end
+		end
+		pin.MouseButton1Click:Connect(function() rec.set(not rec.pinned) end)
+		if it.Pinned then rec.pinned = true; stamp = stamp + 1; rec.pinStamp = stamp; paint() end
 		records[#records + 1] = rec
 	end
-	reflow()
+	reflow(false)
 	local control = {}
-	function control.Pin(name, state) for _, r in ipairs(records) do end end
+	function control.Pin(name, state) for _, r in ipairs(records) do if r.name == name then r.set(state ~= false) end end end
+	function control.GetPinned() local t = {} for _, r in ipairs(records) do if r.pinned then t[#t + 1] = r.name end end return t end
+	return control
+end
+
+-- EnhancedView: a card with a 3D ViewportFrame that shows and slowly spins a
+-- model/object (Syde's "EnchancedView"). opts { title, model/object, height, rotate }.
+function Elements.EnhancedView(parent, accent, opts)
+	opts = opts or {}
+	local h = tonumber(opts.height) or 170
+	local card = Create("Frame", {
+		Size = UDim2.new(1, -ROW_PAD * 2, 0, h), Position = UDim2.new(0, ROW_PAD, 0, 0),
+		BackgroundColor3 = THEME.Element, ClipsDescendants = true, Parent = parent,
+	}, {
+		corner(12), stroke(THEME.ElementStroke, 1, 0.3), padding(12),
+		Create("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(216, 216, 216)), Transparency = NumberSequence.new(0.9) }),
+	})
+	tagSearch(card, opts.title or "3D View")
+	Create("TextLabel", {
+		Size = UDim2.new(1, 0, 0, 18), BackgroundTransparency = 1, Font = FONT_BOLD, Text = tostring(opts.title or "3D View"),
+		TextColor3 = THEME.Text, TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, Parent = card,
+	})
+	local stage = Create("Frame", { Position = UDim2.new(0, 0, 0, 26), Size = UDim2.new(1, 0, 1, -26), BackgroundTransparency = 1, Parent = card })
+	local control, rotConn = {}, nil
+	local function mount(obj)
+		if rotConn then pcall(function() rotConn:Disconnect() end); rotConn = nil end
+		for _, c in ipairs(stage:GetChildren()) do c:Destroy() end
+		if not obj then
+			Create("TextLabel", { Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Font = FONT, Text = "No model", TextColor3 = THEME.SubText, TextSize = 12, Parent = stage })
+			return
+		end
+		pcall(function()
+			local vpf = Create("ViewportFrame", { Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Ambient = Color3.fromRGB(150, 150, 150), LightColor = Color3.fromRGB(255, 255, 255), Parent = stage })
+			local cam = Instance.new("Camera"); cam.Parent = vpf; vpf.CurrentCamera = cam
+			local world = Instance.new("Model"); world.Name = "View"; world.Parent = vpf
+			local model = obj:Clone(); model.Parent = world
+			-- frame the camera on the model's bounding box
+			local ok, cf, size = pcall(function() return model:GetBoundingBox() end)
+			if not ok then cf, size = CFrame.new(), Vector3.new(4, 4, 4) end
+			local radius = math.max(size.X, size.Y, size.Z)
+			local dist = radius * 2 + 2
+			local center = cf.Position
+			local angle = 0
+			cam.CFrame = CFrame.new(center + Vector3.new(0, radius * 0.3, dist), center)
+			if opts.rotate ~= false then
+				rotConn = RunService.RenderStepped:Connect(function(dt)
+					if not vpf.Parent then return end
+					angle = (angle + dt * 0.6) % (math.pi * 2)
+					cam.CFrame = CFrame.new(center + Vector3.new(math.sin(angle) * dist, radius * 0.3, math.cos(angle) * dist), center)
+				end)
+			end
+		end)
+	end
+	mount(opts.model or opts.object)
+	function control.SetModel(m) mount(m) end
+	control.Instance = card
 	return control
 end
 
@@ -3742,12 +3897,13 @@ function makeSection(host, accent, title, startClosed)
 	host.ScrollHint = bind("ScrollHint")
 	host.CursorTag = bind("CursorTag")
 	host.CollapsibleSection = bind("CollapsibleSection")
-	host.Spoiler = bind("Spoiler")
 	host.FAQ = bind("FAQ")
 	host.Changelog = bind("Changelog")
 	host.SegmentedPicker = bind("SegmentedPicker")
 	host.GradientPicker = bind("GradientPicker")
 	host.PinnedList = bind("PinnedList")
+	host.EnhancedView = bind("EnhancedView")
+	host.EnchancedView = bind("EnhancedView")   -- Syde-name alias
 	host.SetOpen = function(o, animate) if sectionSetOpen then sectionSetOpen(o ~= false, animate) end end
 	return host
 end

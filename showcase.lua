@@ -136,9 +136,6 @@ s_pick.Button({ text = "Toast", button = "Show", callback = function() NEMESIS.T
 local s_deco = WG.Section("DECORATIVE")
 s_deco.ShimmerLabel({ text = "NEMESIS PREMIUM", bold = true })
 s_deco.Spacer({ height = 6 })
-local spoiler = s_deco.Spoiler({ text = "Spoiler: hidden options" })
-spoiler.Toggle({ text = "Secret toggle", default = false })
-spoiler.Slider({ text = "Secret slider", min = 0, max = 10, default = 5 })
 s_deco.FAQ({ items = {
 	{ question = "How do I bind a key?", answer = "Click a keybind pill, then press any key or mouse button." },
 	{ question = "Where are configs saved?", answer = "Under the executor workspace, as JSON per config name." },

@@ -2570,6 +2570,7 @@ function Elements.ColorPicker(parent, accent, opts)
 		accentProp(thumb, "BackgroundColor3", accent)
 		local sel = 1
 		local btns = {}
+		local paint   -- forward-declared so the button clicks can drive the slide
 		for i, label in ipairs(options) do
 			local b = Create("TextButton", {
 				Size = UDim2.new(1 / n, 0, 1, 0), Position = UDim2.new((i - 1) / n, 0, 0, 0),
@@ -2578,10 +2579,10 @@ function Elements.ColorPicker(parent, accent, opts)
 				ZIndex = 2, Parent = frame,
 			})
 			btns[i] = b
-			b.MouseButton1Click:Connect(function() sel = i; onPick(i) end)
+			b.MouseButton1Click:Connect(function() sel = i; paint(true); onPick(i) end)
 		end
-		local function paint(animate)
-			local info = animate == false and TweenInfo.new(0) or TI.EXP
+		paint = function(animate)
+			local info = animate == false and TweenInfo.new(0) or TI.SYDE_SIZE
 			tween(thumb, { Position = UDim2.new((sel - 1) / n, 3, 0, 3) }, info)
 			for i, b in ipairs(btns) do
 				tween(b, { TextColor3 = i == sel and accentTextColor(accent) or THEME.SubText }, TI.FAST)
@@ -2630,7 +2631,7 @@ function Elements.ColorPicker(parent, accent, opts)
 			mode = (i == 3) and "Multi" or (i == 2) and "Double" or "Single"
 			isGradient = (mode == "Double")
 			if mode ~= "Double" then active = 1 end
-			applyMode()
+			applyMode(true)
 			syncUI(); commit()
 		end)
 		modeSeg.AnchorPoint = Vector2.new(1, 0.5)
@@ -2708,12 +2709,16 @@ function Elements.ColorPicker(parent, accent, opts)
 			end
 		end)
 
-		-- switch which editor rows are shown for the active mode
-		function applyMode()
-			slotRow.Visible = (mode == "Double")
-			slotRow.Size = UDim2.new(1, 0, 0, mode == "Double" and 22 or 0)
-			railRow.Visible = (mode == "Multi")
-			railRow.Size = UDim2.new(1, 0, 0, mode == "Multi" and 40 or 0)
+		-- switch which editor rows are shown for the active mode; the rows grow /
+		-- collapse (Syde reflow) instead of snapping so the switch reads smoothly
+		function applyMode(animate)
+			local info = animate and TI.SYDE_REFLOW or TweenInfo.new(0)
+			local dW = (mode == "Double") and 22 or 0
+			local dH = (mode == "Multi") and 40 or 0
+			slotRow.ClipsDescendants = true; railRow.ClipsDescendants = true
+			slotRow.Visible = true; railRow.Visible = true
+			tween(slotRow, { Size = UDim2.new(1, 0, 0, dW) }, info)
+			tween(railRow, { Size = UDim2.new(1, 0, 0, dH) }, info)
 			layoutSwatches()
 			if mode == "Multi" then refreshRail() end
 		end
@@ -2878,20 +2883,20 @@ function Elements.ColorPicker(parent, accent, opts)
 			-- centre-anchored: convert the top-left target to a centre point
 			local cx, cy = sx + pw / 2, sy + ph / 2
 			cpOpenPos = Vector2.new(cx, cy)
-			panel.Position = UDim2.fromOffset(cx, cy + 10)
+			panel.Position = UDim2.fromOffset(cx, cy + 12)
 			panel.GroupTransparency = 1
-			if cpScale then cpScale.Scale = 0.92 end
+			if cpScale then cpScale.Scale = 0.85 end
 			backdrop.Visible = true
 			panel.Visible = true
-			-- Syde open: quick fade + scale settle
+			-- Syde open: the panel grows up from a smaller box while fading in
 			tween(panel, { GroupTransparency = 0, Position = UDim2.fromOffset(cx, cy) }, TI.EXPAND)
-			if cpScale then tween(cpScale, { Scale = 1 }, TI.EXPAND) end
+			if cpScale then tween(cpScale, { Scale = 1 }, TI.SYDE_SIZE) end
 		else
 			if _ddCurrent == cpHandle then _ddCurrent = nil end
-			tween(panel, { GroupTransparency = 1 }, TI.FAST)
-			if cpScale then tween(cpScale, { Scale = 0.94 }, TI.FAST) end
+			tween(panel, { GroupTransparency = 1, Position = UDim2.fromOffset(cpOpenPos.X, cpOpenPos.Y + 8) }, TI.EXPAND)
+			if cpScale then tween(cpScale, { Scale = 0.9 }, TI.EXPAND) end
 			backdrop.Visible = false
-			task.delay(0.18, function()
+			task.delay(0.22, function()
 				if not opened then panel.Visible = false end
 			end)
 		end

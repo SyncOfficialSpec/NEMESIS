@@ -4861,35 +4861,23 @@ function NEMESIS.Window(opts)
 		ZIndex = 7,
 		Parent = root,
 	})
-	-- our baked grip ticks (three diagonal lines); stretches toward the cursor
-	local gripArt = loadArt("cal1_grip.png")
+	-- the exact curved corner grip from the original NEMESIS (a Roblox-hosted
+	-- asset, so it resolves on any executor), 9-sliced so it stretches cleanly
 	local resizeIcon = Create("ImageLabel", {
 		Name = "Icon",
 		AnchorPoint = Vector2.new(1, 1),
 		Position = UDim2.new(1, 0, 1, 0),
 		Size = UDim2.new(0, 30, 0, 30),
 		BackgroundTransparency = 1,
-		Image = gripArt or "",
+		Image = "rbxassetid://86527207319523",
 		ImageColor3 = Color3.fromRGB(228, 231, 240),
-		ImageTransparency = gripArt and 0 or 1,
+		ImageTransparency = 0,
+		ScaleType = Enum.ScaleType.Slice,
+		SliceCenter = Rect.new(51, 52, 51, 52),
+		SliceScale = 0.5,
 		ZIndex = 8,
 		Parent = resizeGrip,
 	})
-	if not gripArt then
-		-- fallback: two rotated hairlines forming the grip corner
-		for i, off in ipairs({ 5, 11 }) do
-			Create("Frame", {
-				AnchorPoint = Vector2.new(1, 1),
-				Position = UDim2.new(1, -2, 1, -off),
-				Size = UDim2.new(0, 14 - (i - 1) * 6, 0, 1),
-				BackgroundColor3 = THEME.Faint,
-				BorderSizePixel = 0,
-				Rotation = -45,
-				ZIndex = 8,
-				Parent = resizeGrip,
-			})
-		end
-	end
 	do
 		-- smooth resize: a RenderStepped loop where the visual size
 		-- eases toward a cursor-driven target each frame (frame-rate independent

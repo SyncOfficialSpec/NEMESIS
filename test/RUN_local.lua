@@ -984,124 +984,80 @@ end
 function NEMESIS.Notify(opts)
 	opts = opts or {}
 	ensureRoot()
-	-- instrument card: left accent filament, mechanical grow-in, linear drain
-	-- bar along the bottom edge, quick fade + fold out
+	-- Rayfield Gen1 notification: a semi-transparent card grows its height in over
+	-- 0.6s Exponential, then title / icon / description / stroke / shadow fade in
+	-- staggered; on exit everything fades and the height shrinks out over 1s.
 	task.spawn(function()
 		local accent = opts.accent or THEME.Accent
 		local iconSpec = resolveIcon(opts.icon)
-		local Q = function(t) return TweenInfo.new(t, Enum.EasingStyle.Quint, Enum.EasingDirection.Out) end
+		local EXP = function(t) return TweenInfo.new(t, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out) end
 
 		local card = Create("Frame", {
 			Name = "Notif",
-			BackgroundColor3 = THEME.Group,
-			Size = UDim2.new(1, 0, 0, 0),
-			AutomaticSize = Enum.AutomaticSize.Y,
+			BackgroundColor3 = THEME.Background,
+			Size = UDim2.new(1, 0, 0, 60),
 			BackgroundTransparency = 1,
-			ClipsDescendants = true,
 			Parent = notifyHolder,
-		}, {
-			corner(10),
-			stroke(THEME.Stroke, 1, 1),
-			Create("UIPadding", {
-				PaddingLeft = UDim.new(0, 14), PaddingRight = UDim.new(0, 12),
-				PaddingTop = UDim.new(0, 10), PaddingBottom = UDim.new(0, 12),
-			}),
-			Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 6) }),
-		})
+		}, { corner(9), stroke(THEME.Text, 1, 1) })
 		local notifStroke = card:FindFirstChildOfClass("UIStroke")
+		local shadow = dropShadow(card, 1)
 
-		local head = Create("Frame", { Size = UDim2.new(1, 0, 0, 17), BackgroundTransparency = 1, LayoutOrder = 1, Parent = card })
+		local hasIcon = iconSpec ~= nil
+		local textLeft = hasIcon and 60 or 18
 		local img
-		local titleLeft = 0
-		if iconSpec then
+		if hasIcon then
 			img = Create("ImageLabel", {
-				AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(0, 16, 0, 16),
-				BackgroundTransparency = 1, ImageColor3 = accent, ImageTransparency = 1, Parent = head,
+				AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 20, 0.5, 0), Size = UDim2.new(0, 30, 0, 30),
+				BackgroundTransparency = 1, ImageColor3 = THEME.Text, ImageTransparency = 1, Parent = card,
 			})
 			applyIcon(img, iconSpec)
-			local lampArt = loadArt("cal1_glow_dot.png")
-			if lampArt then
-				Create("ImageLabel", {
-					AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 8, 0.5, 0), Size = UDim2.new(0, 26, 0, 26),
-					BackgroundTransparency = 1, Image = lampArt, ImageColor3 = accent, ImageTransparency = 0.75, ZIndex = 0, Parent = head,
-				})
-			end
-			titleLeft = 24
 		end
 		local title = Create("TextLabel", {
-			Name = "Title", AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, titleLeft, 0.5, 0),
-			Size = UDim2.new(1, -titleLeft, 1, 0), BackgroundTransparency = 1, Font = FONT_SEMI,
-			Text = tostring(opts.title or "Notification"),
-			TextColor3 = THEME.Text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextTransparency = 1, Parent = head,
+			Name = "Title", Position = UDim2.new(0, textLeft, 0, 12), Size = UDim2.new(1, -textLeft - 16, 0, 16),
+			BackgroundTransparency = 1, Font = FONT_SEMI, Text = tostring(opts.title or "Notification"),
+			TextColor3 = THEME.Text, TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
+			TextTransparency = 1, Parent = card,
+		})
+		local desc = Create("TextLabel", {
+			Name = "Content", Position = UDim2.new(0, textLeft, 0, 30), Size = UDim2.new(1, -textLeft - 16, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, Font = FONT, Text = tostring(opts.content or ""),
+			TextColor3 = THEME.Text, TextSize = 13, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left,
+			TextTransparency = 1, Parent = card,
 		})
 
-		local content
-		if opts.content and opts.content ~= "" then
-			content = Create("TextLabel", {
-				Name = "Content", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
-				Font = FONT, Text = tostring(opts.content), TextColor3 = THEME.SubText, TextSize = 12, TextWrapped = true,
-				TextXAlignment = Enum.TextXAlignment.Left, TextTransparency = 1, LayoutOrder = 2, Parent = card,
-			})
-		end
-
-		-- drain bar (the timer): crisp 2px line shrinking right-to-left
-		local track = Create("Frame", {
-			Name = "Track", Size = UDim2.new(1, 0, 0, 2), BackgroundColor3 = THEME.RowDivider,
-			BackgroundTransparency = 1, LayoutOrder = 3, Parent = card,
-		}, { corner(1) })
-		local progress = Create("Frame", {
-			Size = UDim2.new(1, 0, 1, 0), BackgroundColor3 = accent, BackgroundTransparency = 1, BorderSizePixel = 0, Parent = track,
-		}, { corner(1) })
-
-		-- left filament: the card's live edge. Parented to the head frame (which
-		-- has no list layout) so the card's UIListLayout leaves it alone; its
-		-- height is set from the measured card height below.
-		local fil = Create("Frame", {
-			Position = UDim2.new(0, -14, 0, -10),
-			Size = UDim2.new(0, 2, 0, 40),
-			BackgroundColor3 = accent,
-			BackgroundTransparency = 1,
-			BorderSizePixel = 0,
-			ZIndex = 2,
-			Parent = head,
-		})
-
-		-- measure the natural height, then collapse to 0 and grow in
+		-- measure text, size the card, then collapse to 0 and grow in
 		task.wait()
-		local target = 60
-		pcall(function() target = card.AbsoluteSize.Y end)
-		fil.Size = UDim2.new(0, 2, 0, target)
-		card.AutomaticSize = Enum.AutomaticSize.None
+		local tb, db = 16, 16
+		pcall(function() tb = title.TextBounds.Y; db = desc.TextBounds.Y end)
+		local fullH = math.max(tb + db + 31, 60)
 		card.Size = UDim2.new(1, 0, 0, 0)
 
-		tween(card, { Size = UDim2.new(1, 0, 0, target) }, Q(0.22))
-		tween(card, { BackgroundTransparency = 0 }, Q(0.22))
-		if notifStroke then tween(notifStroke, { Transparency = 0.15 }, Q(0.22)) end
-		task.wait(0.08)
-		tween(title, { TextTransparency = 0 }, Q(0.18))
-		tween(fil, { BackgroundTransparency = 0 }, Q(0.18))
-		if img then tween(img, { ImageTransparency = 0 }, Q(0.18)) end
-		if content then tween(content, { TextTransparency = 0 }, Q(0.18)) end
-		tween(track, { BackgroundTransparency = 0.45 }, Q(0.18))
-		tween(progress, { BackgroundTransparency = 0 }, Q(0.18))
+		tween(card, { Size = UDim2.new(1, 0, 0, fullH) }, EXP(0.6))
+		task.wait(0.15)
+		tween(card, { BackgroundTransparency = 0.45 }, EXP(0.4))
+		tween(title, { TextTransparency = 0 }, EXP(0.3))
+		task.wait(0.05)
+		if img then tween(img, { ImageTransparency = 0 }, EXP(0.3)) end
+		task.wait(0.05)
+		tween(desc, { TextTransparency = 0.35 }, EXP(0.3))
+		if notifStroke then tween(notifStroke, { Transparency = 0.95 }, EXP(0.4)) end
+		if shadow then tween(shadow, { ImageTransparency = 0.82 }, EXP(0.3)) end
 
-		local duration = tonumber(opts.duration) or 4
-		tween(progress, { Size = UDim2.new(0, 0, 1, 0) }, TweenInfo.new(duration, Enum.EasingStyle.Linear), true)
+		local duration = tonumber(opts.duration) or math.min(math.max(#tostring(opts.content or "") * 0.1 + 2.5, 3), 10)
 		task.wait(duration)
 
-		tween(card, { BackgroundTransparency = 1 }, Q(0.16))
-		if notifStroke then tween(notifStroke, { Transparency = 1 }, Q(0.16)) end
-		tween(title, { TextTransparency = 1 }, Q(0.14))
-		tween(fil, { BackgroundTransparency = 1 }, Q(0.14))
-		if content then tween(content, { TextTransparency = 1 }, Q(0.14)) end
-		if img then tween(img, { ImageTransparency = 1 }, Q(0.14)) end
-		tween(track, { BackgroundTransparency = 1 }, Q(0.14))
-		tween(progress, { BackgroundTransparency = 1 }, Q(0.14))
-		tween(card, { Size = UDim2.new(1, 0, 0, 0) }, Q(0.2))
-		task.wait(0.25)
+		if img then img.Visible = false end
+		tween(card, { BackgroundTransparency = 1 }, EXP(0.4))
+		if notifStroke then tween(notifStroke, { Transparency = 1 }, EXP(0.4)) end
+		if shadow then tween(shadow, { ImageTransparency = 1 }, EXP(0.3)) end
+		tween(title, { TextTransparency = 1 }, EXP(0.3))
+		tween(desc, { TextTransparency = 1 }, EXP(0.3))
+		tween(card, { Size = UDim2.new(1, 0, 0, 0) }, EXP(1))
+		task.wait(1.05)
 		if card then card:Destroy() end
 	end)
 end
+
 
 -- Inline row scaffold (label on the left, control on the right)
 -- Rows live inside a Section's body, separated by spacing only (no divider lines).
@@ -1370,7 +1326,7 @@ function Elements.Listbox(parent, accent, opts)
 		for _, rec in ipairs(items) do rec.btn:Destroy() end
 		items = {}
 		for _, v in ipairs(options) do
-			local ob = Create("TextButton", { Size = UDim2.new(1, 0, 0, 26), BackgroundTransparency = 1, AutoButtonColor = false, Text = "", Parent = holder })
+			local ob = Create("TextButton", { Size = UDim2.new(1, 0, 0, 26), BackgroundColor3 = THEME.ElementHover, BackgroundTransparency = 1, AutoButtonColor = false, Text = "", Parent = holder }, { corner(6) })
 			local dot = Create("Frame", {
 				AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0), Size = UDim2.new(0, 4, 0, 4),
 				BackgroundColor3 = accent, BackgroundTransparency = 1, BorderSizePixel = 0, Parent = ob,
@@ -1383,13 +1339,14 @@ function Elements.Listbox(parent, accent, opts)
 			})
 			local function paint(animate)
 				local on = selected[v] and true or false
-				local info = animate and TI.FAST or TweenInfo.new(0)
+				local info = animate and TI.SYDE_OPT or TweenInfo.new(0)
+				tween(ob, { BackgroundTransparency = on and 0.55 or 1 }, info)
 				tween(dot, { BackgroundTransparency = on and 0 or 1 }, info)
 				tween(lbl, { TextTransparency = on and 0 or 0.35, Position = on and UDim2.new(0, 18, 0.5, 0) or UDim2.new(0, 8, 0.5, 0) }, info)
 			end
 			paint(false)
-			ob.MouseEnter:Connect(function() if not selected[v] then tween(lbl, { TextTransparency = 0.1 }, TI.HOVER) end end)
-			ob.MouseLeave:Connect(function() if not selected[v] then tween(lbl, { TextTransparency = 0.35 }, TI.HOVEROFF) end end)
+			ob.MouseEnter:Connect(function() if not selected[v] then tween(lbl, { TextTransparency = 0.1 }, TI.HOVER); tween(ob, { BackgroundTransparency = 0.8 }, TI.HOVER) end end)
+			ob.MouseLeave:Connect(function() if not selected[v] then tween(lbl, { TextTransparency = 0.35 }, TI.HOVEROFF); tween(ob, { BackgroundTransparency = 1 }, TI.HOVEROFF) end end)
 			ob.MouseButton1Click:Connect(function()
 				if multi then
 					selected[v] = not selected[v] or nil
@@ -4352,10 +4309,10 @@ function NEMESIS.Window(opts)
 		if string.match(img, "^%d+$") then img = "rbxassetid://" .. img end
 		bgImage.Image = img
 		bgImage.Visible = true
-		bgImage.ImageTransparency = 1 - math.clamp(tonumber(opacity) or 0.3, 0, 1)
+		bgImage.ImageTransparency = 1 - math.clamp(tonumber(opacity) or 0.5, 0, 1)
 	end
 	function Win.SetBackgroundOpacity(opacity)
-		bgImage.ImageTransparency = 1 - math.clamp(tonumber(opacity) or 0.3, 0, 1)
+		bgImage.ImageTransparency = 1 - math.clamp(tonumber(opacity) or 0.5, 0, 1)
 	end
 
 	-- Win.SetColor(themeKey, Color3): override any single palette colour live and
@@ -5259,7 +5216,7 @@ function NEMESIS.Window(opts)
 		local bgSec = S.Section("BACKGROUND IMAGE")
 		bgSec.Label("Show any image behind the menu. Paste an asset id, submit, then set the opacity.")
 		local bgInput = bgSec.Input({ text = "Image id", icon = "image", placeholder = "e.g. 13094912294" })
-		local bgOpacity = 0.3
+		local bgOpacity = 0.55
 		bgSec.Button({ text = "Apply background", button = "Apply", icon = "check", callback = function()
 			local id = tostring(bgInput.Get() or ""):gsub("%s+", "")
 			if id ~= "" then
@@ -5267,7 +5224,7 @@ function NEMESIS.Window(opts)
 				NEMESIS.Notify({ title = "Background", content = "Applied.", duration = 2, icon = "image" })
 			end
 		end })
-		bgSec.Slider({ text = "Opacity", icon = "eye", min = 0, max = 100, default = 30, suffix = "%", flag = "nem_bg_opacity",
+		bgSec.Slider({ text = "Opacity", icon = "eye", min = 0, max = 100, default = 55, suffix = "%", flag = "nem_bg_opacity",
 			callback = function(v) bgOpacity = v / 100; Win.SetBackgroundOpacity(bgOpacity) end })
 		bgSec.Button({ text = "Clear background", button = "Clear", icon = "x", callback = function()
 			Win.SetBackgroundImage(nil)

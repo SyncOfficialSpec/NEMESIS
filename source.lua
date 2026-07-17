@@ -5179,7 +5179,15 @@ function NEMESIS.Window(opts)
 			GroupTransparency = 1, Visible = false, ZIndex = 40001, Parent = screenGui,
 		}, { corner(14), stroke(THEME.Stroke, 1, 0.3), pScale })
 		siblingShadow(card)
-		makeDraggable(card, card)
+		-- absorb clicks on the panel's empty areas so they don't fall through to the
+		-- backdrop and close it (only the backdrop outside the card, or the X, closes
+		-- it). It sits under the header/body/controls (they get their clicks first) and
+		-- doubles as the drag handle so the panel can still be moved by empty space.
+		local absorb = Create("TextButton", {
+			Name = "Absorb", Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1,
+			AutoButtonColor = false, Text = "", ZIndex = 1, Parent = card,
+		})
+		makeDraggable(card, absorb)
 
 		local header = Create("Frame", { Size = UDim2.new(1, 0, 0, 44), BackgroundTransparency = 1, ZIndex = 40002, Parent = card }, { padXY(16, 0) })
 		local hx = 0

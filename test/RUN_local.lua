@@ -2346,6 +2346,8 @@ function Elements.Keybind(parent, accent, opts)
 
 	local listening = false
 	local toggled = false
+	local prevKey = nil        -- restored if a rebind is cancelled
+	local swallowClick = false -- eat the click that binds MOUSE1 so it doesn't re-arm
 	local control = {}
 	function control.Set(v)
 		key = v
@@ -2358,10 +2360,16 @@ function Elements.Keybind(parent, accent, opts)
 	function control.Get() return key end
 
 	btn.MouseButton1Click:Connect(function()
+		if swallowClick then swallowClick = false; return end
+		prevKey = key
 		listening = true
 		btn.Text = "..."
 		btn.TextColor3 = accent
 		if fieldStroke then tween(fieldStroke, { Color = accent, Thickness = 1.6 }, TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)) end
+	end)
+	-- right-click the pill to clear the bind (listening state uses right-click for MOUSE2)
+	btn.MouseButton2Click:Connect(function()
+		if not listening then control.Set(nil) end
 	end)
 	UserInputService.InputBegan:Connect(function(input, gpe)
 		-- these UIS connections outlive the control; bail (and disarm) once the
@@ -2370,12 +2378,23 @@ function Elements.Keybind(parent, accent, opts)
 		if listening then
 			if input.UserInputType == Enum.UserInputType.Keyboard then
 				listening = false
-				if input.KeyCode == Enum.KeyCode.Escape then control.Set(nil) else control.Set(input.KeyCode) end
+				-- Escape backs out of the rebind without wiping the existing key
+				if input.KeyCode == Enum.KeyCode.Escape then control.Set(prevKey) else control.Set(input.KeyCode) end
 				return
 			elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
 				listening = false; control.Set("MOUSE2"); return
 			elseif input.UserInputType == Enum.UserInputType.MouseButton3 then
 				listening = false; control.Set("MOUSE3"); return
+			elseif input.UserInputType == Enum.UserInputType.MouseButton1 then
+				listening = false
+				-- clicking the pill itself binds left-click; a click anywhere else cancels
+				local p, fp, fs = input.Position, field.AbsolutePosition, field.AbsoluteSize
+				if p.X >= fp.X and p.X <= fp.X + fs.X and p.Y >= fp.Y and p.Y <= fp.Y + fs.Y then
+					swallowClick = true; control.Set("MOUSE1")
+				else
+					control.Set(prevKey)
+				end
+				return
 			end
 			return
 		end
@@ -6196,11 +6215,11 @@ function NEMESIS.Window(opts)
 		end
 	end
 	local toggleKey = opts.toggleKey or Enum.KeyCode.RightShift
+	-- the "Toggle menu" keybind in Settings owns hide/show; this listener only keeps
+	-- the Ctrl+K search and Escape shortcuts (no toggle branch, or it double-fires)
 	UserInputService.InputBegan:Connect(function(input, gpe)
 		if gpe then return end
-		if input.KeyCode == toggleKey then
-			setHidden(not hidden)
-		elseif input.KeyCode == Enum.KeyCode.K then
+		if input.KeyCode == Enum.KeyCode.K then
 			local ok, down = pcall(function()
 				return UserInputService:IsKeyDown(Enum.KeyCode.LeftControl)
 					or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)
@@ -6475,7 +6494,8 @@ function NEMESIS.Window(opts)
 		end })
 
 		local kSec = S.Section("CONTROLS")
-		kSec.Keybind({ text = "Toggle menu", icon = "eye", default = "RightShift", desc = "Key that hides / shows the menu." })
+		kSec.Keybind({ text = "Toggle menu", icon = "eye", default = toggleKey, desc = "Key that hides / shows the menu.",
+			callback = function() setHidden(not hidden) end })
 		local sessSec = S.Section("SESSION")
 		sessSec.Label("Game  " .. tostring(game.PlaceId))
 		local fpsRow = sessSec.Label("FPS  ...")

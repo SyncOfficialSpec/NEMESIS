@@ -3233,9 +3233,9 @@ function Elements.Chart(parent, accent, opts)
 			s.Size = UDim2.fromOffset(math.ceil(len + (rn == 2 and 0 or ov)), 3)
 			s.Rotation = math.deg(math.atan2(dy, dx))
 		end
-		-- gradient area fill (3px columns)
+		-- gradient area fill (thin columns -> smooth top edge, no visible staircase)
 		if filled then
-			local colW, fillX = 3, rxs[1]
+			local colW, fillX = 1, rxs[1]
 			local count = math.max(math.ceil((rxs[rn] - fillX) / colW), 1)
 			for i = #cols, count + 1, -1 do cols[i]:Destroy(); cols[i] = nil end
 			local seg = 1
@@ -3257,19 +3257,21 @@ function Elements.Chart(parent, accent, opts)
 		if animate then
 			animToken = animToken + 1; local my = animToken
 			local D = 0.75
-			segHolder.ClipsDescendants = true; segHolder.Size = UDim2.new(0, 0, 1, 0)
-			tween(segHolder, { Size = UDim2.new(1, 0, 1, 0) }, TweenInfo.new(D, Enum.EasingStyle.Quart, Enum.EasingDirection.Out))
-			task.delay(D + 0.1, function() if my == animToken then segHolder.ClipsDescendants = false; segHolder.Size = UDim2.new(1, 0, 1, 0) end end)
+			-- reveal the line and the fill together with one left-to-right wipe
+			for _, holder in ipairs({ segHolder, fillHolder }) do
+				holder.ClipsDescendants = true; holder.Size = UDim2.new(0, 0, 1, 0)
+				tween(holder, { Size = UDim2.new(1, 0, 1, 0) }, TweenInfo.new(D, Enum.EasingStyle.Quart, Enum.EasingDirection.Out))
+			end
+			task.delay(D + 0.1, function()
+				if my == animToken then
+					segHolder.ClipsDescendants = false; segHolder.Size = UDim2.new(1, 0, 1, 0)
+					fillHolder.ClipsDescendants = false; fillHolder.Size = UDim2.new(1, 0, 1, 0)
+				end
+			end)
 			for i, d in ipairs(dots) do
 				local at = w > 0 and (xs[i] or 0) / w or 0
 				d.Size = UDim2.fromOffset(0, 0)
 				task.delay(at * D * 0.62, function() if my == animToken and d.Parent then tween(d, { Size = UDim2.fromOffset(10, 10) }, TweenInfo.new(0.42, Enum.EasingStyle.Back, Enum.EasingDirection.Out)) end end)
-			end
-			for c, f in ipairs(cols) do
-				local tgt = f.Size
-				f.Size = UDim2.fromOffset(tgt.X.Offset, 0)
-				local at = w > 0 and (f.Position.X.Offset) / w or 0
-				task.delay(at * D * 0.62 + 0.05, function() if my == animToken and f.Parent then tween(f, { Size = tgt }, TweenInfo.new(0.55, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)) end end)
 			end
 		end
 	end

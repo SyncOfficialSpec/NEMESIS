@@ -782,6 +782,8 @@ local function dropShadow(parent, transparency)
 		Size = UDim2.new(1, RF_SHADOW.pad * 2, 1, RF_SHADOW.pad * 2),
 		BackgroundTransparency = 1,
 		Image = art,
+		-- the Rayfield shadow asset is white; tint it black so it reads as a shadow
+		ImageColor3 = Color3.fromRGB(0, 0, 0),
 		ImageTransparency = transparency or 0.4,
 		ScaleType = Enum.ScaleType.Slice,
 		SliceCenter = RF_SHADOW.slice,
@@ -3659,10 +3661,9 @@ function NEMESIS.Window(opts)
 	})
 	local fpsConn
 	do
-		-- doubles as the reduced-motion governor: a starved framerate flips
-		-- every future tween to a near-instant set (one way, per session)
+		-- live FPS readout only. Motion is user-controlled via the Settings
+		-- "Animations" toggle; nothing auto-reduces animation on fps dips.
 		local frames, acc = 0, 0
-		local lowStreak = 0
 		local ok = pcall(function()
 			fpsConn = RunService.Heartbeat:Connect(function(dt)
 				frames = frames + 1
@@ -3670,10 +3671,6 @@ function NEMESIS.Window(opts)
 				if acc >= 0.5 then
 					local fps = math.floor(frames / acc + 0.5)
 					fpsLabel.Text = tostring(fps) .. " fps"
-					if not reducedMotion then
-						if fps < 24 then lowStreak = lowStreak + 1 else lowStreak = 0 end
-						if lowStreak >= 6 then reducedMotion = true end
-					end
 					frames, acc = 0, 0
 				end
 			end)
@@ -3723,22 +3720,50 @@ function NEMESIS.Window(opts)
 	-- The bottom fade is taller and rounded so it also restores the window's
 	-- rounded bottom-right corner (it would otherwise square it off).
 	local TOP_FADE_H, BOT_FADE_H = 28, 58
-	Create("Frame", {
+	local topFade = Create("Frame", {
 		Size = UDim2.new(1, 0, 0, TOP_FADE_H),
 		BackgroundColor3 = THEME.Background,
+		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ZIndex = 5,
 		Parent = pagesHost,
 	}, { Create("UIGradient", { Rotation = 90, Transparency = numSeq(0, 1) }) })
-	Create("Frame", {
+	local botFade = Create("Frame", {
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.new(0, 0, 1, 0),
 		Size = UDim2.new(1, 0, 0, BOT_FADE_H),
 		BackgroundColor3 = THEME.Background,
+		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ZIndex = 5,
 		Parent = pagesHost,
 	}, { corner(RADIUS), Create("UIGradient", { Rotation = 90, Transparency = numSeq(1, 0) }) })
+	-- the fades only appear when there is actually content to scroll toward: top
+	-- fade when scrolled down, bottom fade when more content sits below
+	local fadeConns = {}
+	local function updateFades(body)
+		if not body then topFade.BackgroundTransparency = 1; botFade.BackgroundTransparency = 1; return end
+		local pos, canvasY, viewY = 0, 0, 0
+		pcall(function()
+			pos = body.CanvasPosition.Y
+			canvasY = body.AbsoluteCanvasSize.Y
+			viewY = body.AbsoluteWindowSize and body.AbsoluteWindowSize.Y or body.AbsoluteSize.Y
+		end)
+		local maxScroll = math.max(0, canvasY - viewY)
+		topFade.BackgroundTransparency = 1 - math.clamp(pos / 24, 0, 1)
+		botFade.BackgroundTransparency = 1 - math.clamp((maxScroll - pos) / 24, 0, 1)
+	end
+	local function bindFades(body)
+		for _, c in ipairs(fadeConns) do pcall(function() c:Disconnect() end) end
+		fadeConns = {}
+		if not body then updateFades(nil); return end
+		pcall(function()
+			fadeConns[#fadeConns + 1] = body:GetPropertyChangedSignal("CanvasPosition"):Connect(function() updateFades(body) end)
+			fadeConns[#fadeConns + 1] = body:GetPropertyChangedSignal("AbsoluteCanvasSize"):Connect(function() updateFades(body) end)
+			fadeConns[#fadeConns + 1] = body:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() updateFades(body) end)
+		end)
+		task.defer(function() updateFades(body) end)
+	end
 
 	-- open animation (Syde-style): the window unfolds from a smaller centred box
 	-- to full size on a smooth Quint curve (the shadow holder mirrors the size)
@@ -3877,6 +3902,7 @@ function NEMESIS.Window(opts)
 				end
 			end)
 		end
+		bindFades(page.body)
 		setCrumb(tab, page)
 		runSearch(searchBox.Text)
 	end

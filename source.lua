@@ -4856,8 +4856,9 @@ function NEMESIS.Window(opts)
 		ZIndex = 7,
 		Parent = root,
 	})
-	-- our baked grip ticks (three diagonal lines); stretches toward the cursor
-	local gripArt = loadArt("cal1_grip.png")
+	-- curved corner grip (concentric arcs hugging the rounded corner, like the
+	-- original 1.0 handle); stretches toward the cursor
+	local gripArt = loadArt("nemesis_grip_curve_v1.png")
 	local resizeIcon = Create("ImageLabel", {
 		Name = "Icon",
 		AnchorPoint = Vector2.new(1, 1),

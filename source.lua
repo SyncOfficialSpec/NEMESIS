@@ -3038,27 +3038,37 @@ function Elements.CopyButton(parent, accent, opts)
 	return b
 end
 
--- shared card + header for the chart family: a full-width card with a title on
--- the left and a live value readout on the right, and a clipped plot area below.
+-- Gen2-style chart palette + the accent charts default to (matches the green
+-- family of the Gen2 fanmade charts). opts.color / opts.colors override it.
+local CHART_ACCENT = Color3.fromRGB(23, 153, 110)
+local CHART_PALETTE = {
+	Color3.fromRGB(70, 168, 120), Color3.fromRGB(150, 222, 186), Color3.fromRGB(44, 108, 80),
+	Color3.fromRGB(26, 62, 47), Color3.fromRGB(214, 240, 226),
+}
+
+-- shared card + header for the chart family, styled like the Gen2 element card:
+-- 12px corners, a soft top-to-bottom sheen gradient, a 1px whisper stroke.
 local function chartShell(parent, accent, opts, plotHeight)
 	local card = Create("Frame", {
 		Size = UDim2.new(1, -ROW_PAD * 2, 0, 44 + plotHeight),
 		Position = UDim2.new(0, ROW_PAD, 0, 0),
 		BackgroundColor3 = THEME.Element, ClipsDescendants = true, Parent = parent,
-	}, { corner(10), stroke(THEME.ElementStroke, 1, 0.4), padding(12) })
+	}, {
+		corner(12), stroke(THEME.ElementStroke, 1, 0.3), padding(12),
+		Create("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(216, 216, 216)), Transparency = NumberSequence.new(0.9) }),
+	})
 	tagSearch(card, opts.text or opts.name or "Chart")
 	local head = Create("Frame", { Size = UDim2.new(1, 0, 0, 20), BackgroundTransparency = 1, Parent = card })
 	Create("TextLabel", {
-		Size = UDim2.new(0.6, 0, 1, 0), BackgroundTransparency = 1, Font = FONT_SEMI,
-		Text = tostring(opts.text or opts.name or "Chart"), TextColor3 = THEME.Text, TextSize = 14,
+		Size = UDim2.new(0.6, 0, 1, 0), BackgroundTransparency = 1, Font = FONT_BOLD,
+		Text = tostring(opts.text or opts.name or "Chart"), TextColor3 = THEME.Text, TextSize = 15,
 		TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = head,
 	})
 	local valLbl = Create("TextLabel", {
 		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.new(0.4, 0, 1, 0),
-		BackgroundTransparency = 1, Font = FONT_BOLD, Text = "", TextColor3 = accent, TextSize = 16,
+		BackgroundTransparency = 1, Font = FONT_BOLD, Text = "", TextColor3 = CHART_ACCENT, TextSize = 18,
 		TextXAlignment = Enum.TextXAlignment.Right, Parent = head,
 	})
-	accentProp(valLbl, "TextColor3", accent)
 	local plot = Create("Frame", {
 		Position = UDim2.new(0, 0, 0, 30), Size = UDim2.new(1, 0, 1, -30), BackgroundTransparency = 1, Parent = card,
 	})
@@ -3081,6 +3091,7 @@ function Elements.BarChart(parent, accent, opts)
 	for i, v in ipairs(opts.points or {}) do if type(v) == "table" then labels[i] = v.Label or v.label end end
 	local hasLabels = next(labels) ~= nil
 	local card, valLbl, plot = chartShell(parent, accent, opts, hasLabels and 118 or 100)
+	local barColor = opts.color or CHART_ACCENT
 	local suffix, prefix = opts.suffix or "", opts.prefix or ""
 	local bars = {}
 	local function redraw(animate)
@@ -3096,9 +3107,8 @@ function Elements.BarChart(parent, accent, opts)
 			local barGrad = Create("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(178, 178, 178)) })
 			local bar = Create("Frame", {
 				AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new((i - 0.5) / n, 0, 1, -labelRoom),
-				Size = UDim2.new(0, bw, 0, animate and 0 or h), BackgroundColor3 = accent, ZIndex = 2, Parent = plot,
-			}, { corner(4), barGrad })
-			accentProp(bar, "BackgroundColor3", accent)
+				Size = UDim2.new(0, bw, 0, animate and 0 or h), BackgroundColor3 = barColor, ZIndex = 2, Parent = plot,
+			}, { corner(6), barGrad })
 			bars[#bars + 1] = bar
 			if hasLabels then
 				local lc = Create("TextLabel", {
@@ -3127,6 +3137,7 @@ function Elements.Chart(parent, accent, opts)
 	onAccent(function(c) accent = c end)
 	local vals = cleanNumbers(opts.points or opts.values or opts.data)
 	local card, valLbl, plot = chartShell(parent, accent, opts, 100)
+	local lineColor = opts.color or CHART_ACCENT
 	local suffix, prefix = opts.suffix or "", opts.prefix or ""
 	local filled = opts.filled ~= false
 	local dots = opts.dots ~= false
@@ -3152,17 +3163,15 @@ function Elements.Chart(parent, accent, opts)
 			if filled then
 				local col = Create("Frame", {
 					AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset((x1 + x2) / 2, h),
-					Size = UDim2.fromOffset(math.max(len, 2), h - (y1 + y2) / 2), BackgroundColor3 = accent,
+					Size = UDim2.fromOffset(math.max(len, 2), h - (y1 + y2) / 2), BackgroundColor3 = lineColor,
 					BackgroundTransparency = 0.85, Rotation = 0, ZIndex = 1, Parent = clip,
 				}, { Create("UIGradient", { Rotation = 90, Transparency = NumberSequence.new(0.2, 0.95) }) })
-				accentProp(col, "BackgroundColor3", accent)
 				parts[#parts + 1] = col
 			end
 			local seg = Create("Frame", {
 				AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset((x1 + x2) / 2, (y1 + y2) / 2),
-				Size = UDim2.fromOffset(len + 2, 3), BackgroundColor3 = accent, Rotation = ang, ZIndex = 3, Parent = clip,
+				Size = UDim2.fromOffset(len + 2, 3), BackgroundColor3 = lineColor, Rotation = ang, ZIndex = 3, Parent = clip,
 			}, { corner(2) })
-			accentProp(seg, "BackgroundColor3", accent)
 			parts[#parts + 1] = seg
 		end
 		if dots then
@@ -3193,7 +3202,7 @@ function Elements.StackedChart(parent, accent, opts)
 	opts = opts or {}
 	onAccent(function(c) accent = c end)
 	local series = opts.series or { "A", "B", "C" }
-	local palette = opts.colors or { accent, Color3.fromRGB(90, 200, 255), Color3.fromRGB(255, 170, 70), Color3.fromRGB(120, 230, 140) }
+	local palette = opts.colors or CHART_PALETTE
 	local rows = opts.rows or {}
 	local card, valLbl, plot = chartShell(parent, accent, opts, 34 * math.max(#rows, 1) + 24)
 	-- legend
@@ -3455,7 +3464,7 @@ function Elements.FAQ(parent, accent, opts)
 	for idx, it in ipairs(items) do
 		local q = it.question or it.Question or it[1] or "Question"
 		local a = it.answer or it.Answer or it[2] or ""
-		local card = Create("Frame", { Size = UDim2.new(1, 0, 0, 38), BackgroundColor3 = THEME.Element, ClipsDescendants = true, LayoutOrder = idx, Parent = wrap }, { corner(8), stroke(THEME.ElementStroke, 1, 0.4) })
+		local card = Create("Frame", { Size = UDim2.new(1, 0, 0, 38), BackgroundColor3 = THEME.Element, ClipsDescendants = true, LayoutOrder = idx, Parent = wrap }, { corner(12), stroke(THEME.ElementStroke, 1, 0.3), Create("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(216, 216, 216)), Transparency = NumberSequence.new(0.9) }) })
 		tagSearch(card, q .. " " .. a)
 		local head = Create("TextButton", { Size = UDim2.new(1, 0, 0, 38), BackgroundTransparency = 1, AutoButtonColor = false, Text = "", Parent = card }, { padXY(ROW_PAD, 0) })
 		Create("TextLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(1, -24, 0, 16), BackgroundTransparency = 1, Font = FONT_MED, Text = tostring(q), TextColor3 = THEME.Text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = head })

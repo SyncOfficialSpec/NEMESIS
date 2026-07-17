@@ -540,8 +540,10 @@ TI.NOTIFY = TweenInfo.new(0.22, Enum.EasingStyle.Quint, Enum.EasingDirection.Out
 local REDUCED_TI = TweenInfo.new(0.01, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local reducedMotion = false
 
-local function tween(inst, props, info)
-	local t = TweenService:Create(inst, reducedMotion and REDUCED_TI or (info or TI.SLIDE), props)
+local function tween(inst, props, info, exact)
+	-- exact skips the reduced-motion governor: some tweens ARE the information
+	-- (a notification drain bar) and must keep their real duration
+	local t = TweenService:Create(inst, (reducedMotion and not exact) and REDUCED_TI or (info or TI.SLIDE), props)
 	t:Play()
 	return t
 end
@@ -828,6 +830,36 @@ local function dropShadow(parent, artName, transparency)
 	})
 end
 
+-- Shadow as a SIBLING that mirrors the target: needed when the target clips
+-- its children (CanvasGroup, ClipsDescendants) so a child shadow would vanish.
+-- Call after the target is parented.
+local function siblingShadow(target, artName, transparency)
+	if not target.Parent then return nil end
+	local holder = Create("Frame", {
+		Name = "Shadow",
+		AnchorPoint = target.AnchorPoint,
+		Position = target.Position,
+		Size = target.Size,
+		BackgroundTransparency = 1,
+		Visible = target.Visible,
+		ZIndex = math.max((target.ZIndex or 1) - 1, 0),
+		Parent = target.Parent,
+	})
+	local img = dropShadow(holder, artName, transparency)
+	if not img then holder:Destroy(); return nil end
+	pcall(function()
+		for _, prop in ipairs({ "Position", "Size", "AnchorPoint", "Visible" }) do
+			target:GetPropertyChangedSignal(prop):Connect(function()
+				holder[prop] = target[prop]
+			end)
+		end
+		target.AncestryChanged:Connect(function()
+			if not target.Parent then holder:Destroy() end
+		end)
+	end)
+	return holder
+end
+
 -- Mobile / scale
 local IS_MOBILE = false
 pcall(function()
@@ -1089,7 +1121,7 @@ function NEMESIS.Notify(opts)
 		tween(progress, { BackgroundTransparency = 0 }, Q(0.18))
 
 		local duration = tonumber(opts.duration) or 4
-		tween(progress, { Size = UDim2.new(0, 0, 1, 0) }, TweenInfo.new(duration, Enum.EasingStyle.Linear))
+		tween(progress, { Size = UDim2.new(0, 0, 1, 0) }, TweenInfo.new(duration, Enum.EasingStyle.Linear), true)
 		task.wait(duration)
 
 		tween(card, { BackgroundTransparency = 1 }, Q(0.16))
@@ -1313,6 +1345,7 @@ end
 -- (single or multi). options use the same accent-dot + slide style as dropdowns.
 function Elements.Listbox(parent, accent, opts)
 	opts = opts or {}
+	onAccent(function(c) accent = c end)
 	local options = opts.options or {}
 	local multi = opts.multi and true or false
 	local selected = {}
@@ -1461,6 +1494,7 @@ end
 
 function Elements.Button(parent, accent, opts)
 	opts = opts or {}
+	onAccent(function(c) accent = c end)
 	local row = newRow(parent, opts.desc and 58 or ROW_H)
 	local click = Create("TextButton", {
 		BackgroundTransparency = 1,
@@ -1508,6 +1542,7 @@ end
 
 function Elements.Toggle(parent, accent, opts)
 	opts = opts or {}
+	onAccent(function(c) accent = c end)
 	local state = opts.default and true or false
 	local row = newRow(parent, opts.desc and 50 or ROW_H)
 	rowText(row, opts.text, opts.desc, 0, 32)
@@ -1613,6 +1648,7 @@ end
 
 function Elements.Slider(parent, accent, opts)
 	opts = opts or {}
+	onAccent(function(c) accent = c end)
 	local min = tonumber(opts.min) or 0
 	local max = tonumber(opts.max) or 100
 	local increment = tonumber(opts.increment) or 1
@@ -1768,6 +1804,7 @@ end
 
 function Elements.Dropdown(parent, accent, opts)
 	opts = opts or {}
+	onAccent(function(c) accent = c end)
 	local options = opts.options or {}
 	local multi = opts.multi and true or false
 	local selected = {}
@@ -1968,7 +2005,7 @@ function Elements.Dropdown(parent, accent, opts)
 	end
 	local function track()
 		local fp, fs = field.AbsolutePosition, field.AbsoluteSize
-		local s = fs.Y / 28
+		local s = fs.Y / 26
 		if s <= 0 then s = 1 end
 		panelScale.Scale = s
 		local logicalH = math.clamp(#options * (OPT_H + 3) + 9, OPT_H + 12, PANEL_MAXH)
@@ -2042,6 +2079,7 @@ function Elements.Dropdown(parent, accent, opts)
 end
 function Elements.Input(parent, accent, opts)
 	opts = opts or {}
+	onAccent(function(c) accent = c end)
 	local row = newRow(parent, ROW_H)
 	rowText(row, opts.text, opts.desc, FIELD_FRAC, 16)
 	-- starts small, grows with the text up to a cap, then clips
@@ -2125,6 +2163,7 @@ end
 
 function Elements.Keybind(parent, accent, opts)
 	opts = opts or {}
+	onAccent(function(c) accent = c end)
 	local mode = opts.mode or "Toggle"
 	local key = opts.default
 	local row = newRow(parent, ROW_H)
@@ -2199,6 +2238,7 @@ end
 -- Color picker (full pop-out panel: SV square, hue, alpha, HEX)
 function Elements.ColorPicker(parent, accent, opts)
 	opts = opts or {}
+	onAccent(function(c) accent = c end)
 	-- two colour slots: slot 1 is the colour (single mode) / first gradient colour,
 	-- slot 2 is the second gradient colour. each holds h,s,v + alpha.
 	local function slotFrom(color, a)
@@ -2326,7 +2366,7 @@ function Elements.ColorPicker(parent, accent, opts)
 		}, {
 			corner(5), stroke(THEME.Stroke, 1, 0.15), panelScale,
 		})
-		dropShadow(panel, "cal3_shadow_pop.png")
+		siblingShadow(panel, "cal3_shadow_pop.png")
 		cpScale = panelScale
 		-- absorb taps on empty panel areas so they don't fall through to the backdrop
 		Create("TextButton", { Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, AutoButtonColor = false, Text = "", ZIndex = 1, Parent = panel })
@@ -2410,7 +2450,7 @@ function Elements.ColorPicker(parent, accent, opts)
 		end
 
 		local hue = Create("Frame", { Size = UDim2.new(1, 0, 0, 10), LayoutOrder = 4, Parent = content }, { corner(2), Create("UIGradient", { Color = hueSequence() }) })
-		hueDot = Create("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(cur().h, 0, 0.5, 0), Size = UDim2.new(0, 10, 0, 14), BackgroundColor3 = THEME.Knob, ZIndex = 52, Parent = hue }, { corner(3), stroke(Color3.fromRGB(10, 11, 13), 1, 0.35) })
+		hueDot = Create("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(cur().h, 0, 0.5, 0), Size = UDim2.new(0, 10, 0, 14), BackgroundColor3 = THEME.Knob, ZIndex = 52, Parent = hue }, { corner(3), stroke(Color3.fromRGB(10, 11, 14), 1, 0.35) })
 		bindBarDrag(hue, function(rel) cur().h = rel; syncUI(); commit() end)
 
 		local alphaWell = Create("Frame", { Size = UDim2.new(1, 0, 0, 10), BackgroundTransparency = 1, LayoutOrder = 5, Parent = content })
@@ -2422,7 +2462,7 @@ function Elements.ColorPicker(parent, accent, opts)
 			}, { corner(2) })
 		end
 		alphaBar = Create("Frame", { Size = UDim2.new(1, 0, 1, 0), BackgroundColor3 = slotColor(active), ZIndex = 51, Parent = alphaWell }, { corner(2), Create("UIGradient", { Transparency = numSeq(0, 1) }) })
-		alphaDot = Create("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(1 - cur().alpha, 0, 0.5, 0), Size = UDim2.new(0, 10, 0, 14), BackgroundColor3 = THEME.Knob, ZIndex = 52, Parent = alphaBar }, { corner(3), stroke(Color3.fromRGB(10, 11, 13), 1, 0.35) })
+		alphaDot = Create("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(1 - cur().alpha, 0, 0.5, 0), Size = UDim2.new(0, 10, 0, 14), BackgroundColor3 = THEME.Knob, ZIndex = 52, Parent = alphaBar }, { corner(3), stroke(Color3.fromRGB(10, 11, 14), 1, 0.35) })
 		bindBarDrag(alphaBar, function(rel) cur().alpha = 1 - rel; syncUI(); commit() end)
 
 		-- preset palette + saved colours (one grid; presets first, then saved, then +)
@@ -2744,7 +2784,7 @@ local function keyGate(kopts, windowTitle)
 		ZIndex = 60000,
 		Parent = screenGui,
 	}, { corner(6), stroke(THEME.Stroke, 1, 0.1), padXY(18, 16) })
-	dropShadow(card, "cal3_shadow_win.png")
+	siblingShadow(card, "cal3_shadow_win.png")
 	makeDraggable(card, card)
 
 	Create("TextLabel", {
@@ -2842,10 +2882,14 @@ local function keyGate(kopts, windowTitle)
 		else
 			tween(fieldStroke, { Color = DANGER, Transparency = 0 }, TI.FAST)
 			local L = TweenInfo.new(0.045, Enum.EasingStyle.Linear)
-			tween(card, { Position = UDim2.new(0.5, 4, 0.5, 0) }, L)
-			task.delay(0.05, function() tween(card, { Position = UDim2.new(0.5, -4, 0.5, 0) }, L) end)
-			task.delay(0.10, function() tween(card, { Position = UDim2.new(0.5, 2, 0.5, 0) }, L) end)
-			task.delay(0.15, function() tween(card, { Position = UDim2.new(0.5, 0, 0.5, 0) }, L) end)
+			local base = card.Position
+			local function at(dx)
+				return UDim2.new(base.X.Scale, base.X.Offset + dx, base.Y.Scale, base.Y.Offset)
+			end
+			tween(card, { Position = at(4) }, L)
+			task.delay(0.05, function() tween(card, { Position = at(-4) }, L) end)
+			task.delay(0.10, function() tween(card, { Position = at(2) }, L) end)
+			task.delay(0.15, function() tween(card, { Position = at(0) }, L) end)
 			task.delay(0.5, function()
 				tween(fieldStroke, { Color = THEME.ElementStroke, Transparency = 0.2 }, TI.EXP)
 			end)
@@ -3778,7 +3822,7 @@ function NEMESIS.Window(opts)
 				ZIndex = 50001,
 				Parent = layer,
 			}, { corner(5), stroke(THEME.Stroke, 1, 0.15), padXY(6, 6) })
-			dropShadow(panel, "cal3_shadow_pop.png")
+			siblingShadow(panel, "cal3_shadow_pop.png")
 			_ddCurrent = { close = closePanel }
 			tween(panel, { Size = UDim2.new(0, 190, 0, fullH) }, TI.EXP)
 

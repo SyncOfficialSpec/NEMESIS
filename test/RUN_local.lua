@@ -2492,6 +2492,8 @@ function Elements.ColorPicker(parent, accent, opts)
 		Size = UDim2.new(0, 34, 0, 18), BackgroundColor3 = slotColor(1),
 		Text = "", AutoButtonColor = false, Parent = row,
 	}, { corner(3), stroke(THEME.ElementStroke, 1, 0.2) })
+	-- in Multi mode the row swatch previews the whole gradient, not a flat colour
+	local sw1Grad = Create("UIGradient", { Enabled = false, Parent = sw1 })
 	local sw2 = Create("TextButton", {
 		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -24, 0.5, 0),
 		Size = UDim2.new(0, 20, 0, 18), BackgroundColor3 = slotColor(2),
@@ -2521,6 +2523,7 @@ function Elements.ColorPicker(parent, accent, opts)
 	local function commit()
 		sw1.BackgroundColor3 = slotColor(1)
 		sw2.BackgroundColor3 = slotColor(2)
+		if mode == "Multi" then sw1Grad.Enabled = true; sw1Grad.Color = multiSequence() else sw1Grad.Enabled = false end
 		local value, al
 		if mode == "Multi" then
 			value = multiSequence()
@@ -2647,6 +2650,8 @@ function Elements.ColorPicker(parent, accent, opts)
 		modeSeg.Position = UDim2.new(1, 0, 0.5, 0)
 		modeSeg.Parent = head
 		setModeVisual(MODES[mode])
+		-- GradientPicker locks to Multi: hide the mode switch so it cannot collapse to a flat colour
+		if opts.lockMode then modeSeg.Visible = false end
 
 		-- slot selector (Double only): First / Second
 		local slotSeg
@@ -3647,10 +3652,10 @@ function Elements.SegmentedPicker(parent, accent, opts)
 	local options = opts.options or opts.Options or { "A", "B" }
 	local n = #options
 	local row = newRow(parent, opts.desc and 50 or ROW_H)
-	rowText(row, opts.text or opts.name or "Picker", opts.desc, 0, 0, opts.icon)
+	rowText(row, opts.text or opts.name or "Picker", opts.desc, 0.55, 10, opts.icon)
 	local track = Create("Frame", {
 		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0.55, 0, 0, 24),
-		BackgroundColor3 = THEME.Element, Parent = row,
+		BackgroundColor3 = THEME.Element, ClipsDescendants = true, Parent = row,
 	}, { corner(7), stroke(THEME.ElementStroke, 1, 0.4) })
 	local thumb = Create("Frame", { Size = UDim2.new(1 / n, -6, 1, -6), Position = UDim2.new(0, 3, 0, 3), BackgroundColor3 = accent, BackgroundTransparency = 0.12, ZIndex = 1, Parent = track }, { corner(5) })
 	accentProp(thumb, "BackgroundColor3", accent)
@@ -3660,11 +3665,12 @@ function Elements.SegmentedPicker(parent, accent, opts)
 	local control = {}
 	local function paint(animate)
 		local info = animate and TI.EXPAND or TweenInfo.new(0)
+		control.CurrentOption = options[sel]
 		tween(thumb, { Position = UDim2.new((sel - 1) / n, 3, 0, 3) }, info)
 		for i, b in ipairs(btns) do tween(b, { TextColor3 = i == sel and accentTextColor(accent) or THEME.SubText }, TI.FAST) end
 	end
 	for i, o in ipairs(options) do
-		local b = Create("TextButton", { Size = UDim2.new(1 / n, 0, 1, 0), Position = UDim2.new((i - 1) / n, 0, 0, 0), BackgroundTransparency = 1, AutoButtonColor = false, Font = FONT_MED, Text = tostring(o), TextColor3 = THEME.SubText, TextSize = 12, ZIndex = 2, Parent = track })
+		local b = Create("TextButton", { Size = UDim2.new(1 / n, 0, 1, 0), Position = UDim2.new((i - 1) / n, 0, 0, 0), BackgroundTransparency = 1, AutoButtonColor = false, Font = FONT_MED, Text = tostring(o), TextColor3 = THEME.SubText, TextSize = 12, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 2, Parent = track })
 		btns[i] = b
 		b.MouseButton1Click:Connect(function() sel = i; paint(true); if opts.flag then NEMESIS.Flags[opts.flag] = options[sel] end if type(opts.callback) == "function" then pcall(opts.callback, options[sel]) end end)
 	end
@@ -3673,6 +3679,7 @@ function Elements.SegmentedPicker(parent, accent, opts)
 	control.CurrentOption = options[sel]
 	paint(false)
 	if opts.flag then NEMESIS.Flags[opts.flag] = options[sel] end
+	bindFlag(opts.flag, control, "segmented")
 	return control
 end
 
@@ -3680,7 +3687,14 @@ end
 function Elements.GradientPicker(parent, accent, opts)
 	opts = opts or {}
 	opts.mode = "Multi"
-	if opts.color and typeof(opts.color) == "ColorSequence" then opts.stops = opts.stops end
+	opts.lockMode = true
+	-- seed the stops from a ColorSequence if the caller passed one as opts.color
+	if opts.color and typeof(opts.color) == "ColorSequence" and not opts.stops then
+		opts.stops = {}
+		for _, kp in ipairs(opts.color.Keypoints) do
+			opts.stops[#opts.stops + 1] = { pos = kp.Time, color = kp.Value }
+		end
+	end
 	return Elements.ColorPicker(parent, accent, opts)
 end
 

@@ -1719,6 +1719,18 @@ function Elements.Dropdown(parent, accent, opts)
 	opts = opts or {}
 	onAccent(function(c) accent = c end)
 	local options = opts.options or {}
+	-- optionFont: render each option's label in the font it names, so a font
+	-- picker previews every choice in its own typeface. true = use Enum.Font[value];
+	-- or pass a function(value) -> Font/Enum.Font for custom mapping.
+	local optionFont = opts.optionFont
+	local function fontForOption(v)
+		if not optionFont then return nil end
+		if type(optionFont) == "function" then
+			local ok, f = pcall(optionFont, v); return ok and f or nil
+		end
+		local ok, f = pcall(function() return Enum.Font[tostring(v)] end)
+		return ok and f or nil
+	end
 	local multi = opts.multi and true or false
 	local selected = {}
 	if multi and type(opts.default) == "table" then
@@ -1878,6 +1890,13 @@ function Elements.Dropdown(parent, accent, opts)
 				ZIndex = 50004,
 				Parent = ob,
 			})
+			local of = fontForOption(v)
+			if of then
+				pcall(function() olabel.Font = of end)
+				-- pin this label to its own font so a live menu-font swap can't
+				-- overwrite the per-option preview
+				pcall(function() olabel:SetAttribute("NemesisKeepFont", true) end)
+			end
 			local function apply(animate, visible)
 				local on = multi and selected[v] or (single == v)
 				local info = animate and TI.SYDE_OPT or TweenInfo.new(0)
@@ -4251,12 +4270,18 @@ function NEMESIS.Window(opts)
 		pcall(function()
 			for _, inst in ipairs(screenGui:GetDescendants()) do
 				if inst:IsA("TextLabel") or inst:IsA("TextButton") or inst:IsA("TextBox") then
-					pcall(function()
-						local cur = inst.FontFace
-						local weight = cur and cur.Weight or Enum.FontWeight.Medium
-						local style = cur and cur.Style or Enum.FontStyle.Normal
-						inst.FontFace = Font.new(family, weight, style)
-					end)
+					-- labels that preview a specific font (the font picker rows) keep
+					-- their own typeface so the swap never flattens the list
+					local keep = false
+					pcall(function() keep = inst:GetAttribute("NemesisKeepFont") == true end)
+					if not keep then
+						pcall(function()
+							local cur = inst.FontFace
+							local weight = cur and cur.Weight or Enum.FontWeight.Medium
+							local style = cur and cur.Style or Enum.FontStyle.Normal
+							inst.FontFace = Font.new(family, weight, style)
+						end)
+					end
 				end
 			end
 		end)
@@ -5192,6 +5217,7 @@ function NEMESIS.Window(opts)
 			table.sort(fontOptions)
 		end)
 		themeSec.Dropdown({ text = "Font", icon = "type", options = fontOptions, default = "Inter",
+			optionFont = true,   -- show each font name rendered in its own typeface
 			callback = function(v) Win.SetFont(v) end })
 		themeSec.Toggle({ text = "Rainbow accent", icon = "sparkles", default = false, desc = "Cycle the accent through every hue.",
 			callback = function(on) Win.SetRainbow(on) end })

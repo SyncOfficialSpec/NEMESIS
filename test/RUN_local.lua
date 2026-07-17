@@ -2657,9 +2657,11 @@ function Elements.ColorPicker(parent, accent, opts)
 		-- Multi rail: preview gradient + draggable stop handles (click empty to add,
 		-- right-click a handle to remove). Visible only in Multi mode.
 		local railRow = Create("Frame", { Size = UDim2.new(1, 0, 0, mode == "Multi" and 40 or 0), BackgroundTransparency = 1, Visible = mode == "Multi", LayoutOrder = 2, ClipsDescendants = true, Parent = content })
-		local preview = Create("Frame", { Size = UDim2.new(1, 0, 0, 16), BackgroundColor3 = Color3.new(1, 1, 1), Parent = railRow }, { corner(5), stroke(THEME.ElementStroke, 1, 0.5) })
+		-- inset both the preview and the handle rail by 7px so the end stops (pos 0
+		-- and 1) sit fully inside the panel instead of being clipped at the edges
+		local preview = Create("Frame", { Size = UDim2.new(1, -14, 0, 16), Position = UDim2.new(0, 7, 0, 0), BackgroundColor3 = Color3.new(1, 1, 1), Parent = railRow }, { corner(5), stroke(THEME.ElementStroke, 1, 0.5) })
 		local previewGrad = Create("UIGradient", { Parent = preview })
-		local rail = Create("TextButton", { Size = UDim2.new(1, 0, 0, 18), Position = UDim2.new(0, 0, 0, 20), BackgroundTransparency = 1, AutoButtonColor = false, Text = "", Parent = railRow })
+		local rail = Create("TextButton", { Size = UDim2.new(1, -14, 0, 18), Position = UDim2.new(0, 7, 0, 20), BackgroundTransparency = 1, AutoButtonColor = false, Text = "", Parent = railRow })
 		local handleFrames = {}
 		local refreshRail
 		local function stopHandleColor(i) return Color3.fromHSV(stops[i].h, stops[i].s, stops[i].v) end

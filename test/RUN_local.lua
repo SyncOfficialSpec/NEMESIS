@@ -3805,11 +3805,11 @@ function NEMESIS.Window(opts)
 		if tab ~= activeTab then return end
 		for _, p in ipairs(tab.pages) do p.body.Visible = (p == page) end
 		if animate ~= false then
-			-- Syde-style page reveal: the whole page settles up from a small
-			-- offset over 0.45s Exponential, and the section cards cascade in via
-			-- a per-card UIScale pop (works alongside the UIListLayout)
-			page.body.Position = UDim2.new(0, 0, 0, 14)
-			tween(page.body, { Position = UDim2.new(0, 0, 0, 0) }, TI.SYDE_REFLOW)
+			-- Syde-style page reveal: the section cards cascade in via a per-card
+			-- UIScale pop (works alongside the UIListLayout). The body itself is NOT
+			-- shifted, otherwise sliding the whole ScrollingFrame opens a visible
+			-- empty gap under the breadcrumb for the length of the tween.
+			page.body.Position = UDim2.new(0, 0, 0, 0)
 			pcall(function()
 				local i = 0
 				for _, col in ipairs(page.columnsHolder:GetChildren()) do

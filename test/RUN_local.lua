@@ -2557,8 +2557,8 @@ function Elements.ColorPicker(parent, accent, opts)
 			}, { corner(2) })
 		end
 		alphaBar = Create("Frame", { Size = UDim2.new(1, 0, 1, 0), BackgroundColor3 = slotColor(active), ZIndex = 51, Parent = alphaWell }, { corner(2), Create("UIGradient", { Transparency = numSeq(0, 1) }) })
-		alphaDot = Create("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(1 - cur().alpha, 0, 0.5, 0), Size = UDim2.new(0, 10, 0, 14), BackgroundColor3 = THEME.Knob, ZIndex = 52, Parent = alphaBar }, { corner(3), stroke(Color3.fromRGB(10, 11, 14), 1, 0.35) })
-		bindBarDrag(alphaBar, function(rel) cur().alpha = 1 - rel; syncUI(); commit() end)
+		alphaDot = Create("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(1 - (cur().alpha or 0), 0, 0.5, 0), Size = UDim2.new(0, 10, 0, 14), BackgroundColor3 = THEME.Knob, ZIndex = 52, Parent = alphaBar }, { corner(3), stroke(Color3.fromRGB(10, 11, 14), 1, 0.35) })
+		bindBarDrag(alphaBar, function(rel) if mode ~= "Multi" then cur().alpha = 1 - rel; syncUI(); commit() end end)
 
 		-- preset palette + saved colours (one grid; presets first, then saved, then +)
 		local PRESETS = {

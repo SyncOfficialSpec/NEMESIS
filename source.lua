@@ -4862,10 +4862,10 @@ function NEMESIS.Window(opts)
 		Name = "Icon",
 		AnchorPoint = Vector2.new(1, 1),
 		Position = UDim2.new(1, 0, 1, 0),
-		Size = UDim2.new(0, 24, 0, 24),
+		Size = UDim2.new(0, 30, 0, 30),
 		BackgroundTransparency = 1,
 		Image = gripArt or "",
-		ImageColor3 = Color3.fromRGB(198, 204, 216),
+		ImageColor3 = Color3.fromRGB(228, 231, 240),
 		ImageTransparency = gripArt and 0 or 1,
 		ZIndex = 8,
 		Parent = resizeGrip,
@@ -4921,8 +4921,8 @@ function NEMESIS.Window(opts)
 		local function stretchIcon(duration)
 			local n = normResize()
 			tween(resizeIcon, {
-				Size = UDim2.new(0, 24 + n.X * 26, 0, 24 + n.Y * 26),
-				ImageColor3 = Color3.fromRGB(198, 204, 216),
+				Size = UDim2.new(0, 30 + n.X * 26, 0, 30 + n.Y * 26),
+				ImageColor3 = Color3.fromRGB(228, 231, 240),
 			}, TweenInfo.new(duration or 0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out))
 		end
 		local function pressIcon()
@@ -4933,8 +4933,8 @@ function NEMESIS.Window(opts)
 		end
 		local function resetIcon()
 			tween(resizeIcon, {
-				Size = UDim2.new(0, 24, 0, 24),
-				ImageColor3 = Color3.fromRGB(198, 204, 216),
+				Size = UDim2.new(0, 30, 0, 30),
+				ImageColor3 = Color3.fromRGB(228, 231, 240),
 			}, TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out))
 		end
 		local function stopLoop()

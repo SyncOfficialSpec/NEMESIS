@@ -3080,6 +3080,19 @@ function NEMESIS.Window(opts)
 		corner(RADIUS),
 		stroke(THEME.Stroke, 1, 0),
 	})
+	-- optional background image (set in Settings): sits above the window fill but
+	-- below every panel, so cards read over it. Tinted + opacity adjustable.
+	local bgImage = Create("ImageLabel", {
+		Name = "BackgroundImage",
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundTransparency = 1,
+		Image = "",
+		ImageTransparency = 1,
+		ScaleType = Enum.ScaleType.Crop,
+		Visible = false,
+		ZIndex = 0,
+		Parent = root,
+	}, { corner(RADIUS) })
 	-- the shadow lives outside the clipped window, as a sibling that follows it
 	local rootShadowHolder = Create("Frame", {
 		Name = "WindowShadow",
@@ -4175,6 +4188,73 @@ function NEMESIS.Window(opts)
 		return true
 	end
 
+	-- Win.SetFont(fontName or nil): swap the whole menu's font family live. Each
+	-- text instance keeps its own weight/style; nil restores Inter.
+	local fontBgOverride = nil
+	function Win.SetFont(fontName)
+		local family = INTER
+		if type(fontName) == "string" and fontName ~= "" and fontName ~= "Auto" and fontName ~= "Inter" then
+			local ok, enumFont = pcall(function() return Enum.Font[fontName] end)
+			if ok and enumFont then
+				local ok2, f = pcall(function() return Font.fromEnum(enumFont) end)
+				if ok2 and f and f.Family then family = f.Family end
+			end
+		end
+		fontBgOverride = family
+		pcall(function()
+			for _, inst in ipairs(screenGui:GetDescendants()) do
+				if inst:IsA("TextLabel") or inst:IsA("TextButton") or inst:IsA("TextBox") then
+					pcall(function()
+						local cur = inst.FontFace
+						local weight = cur and cur.Weight or Enum.FontWeight.Medium
+						local style = cur and cur.Style or Enum.FontStyle.Normal
+						inst.FontFace = Font.new(family, weight, style)
+					end)
+				end
+			end
+		end)
+		return true
+	end
+
+	-- Win.SetBackgroundImage(assetId or url or nil, opacity 0..1)
+	function Win.SetBackgroundImage(asset, opacity)
+		if asset == nil or asset == "" or asset == 0 then
+			bgImage.Visible = false
+			bgImage.Image = ""
+			return
+		end
+		local img = tostring(asset)
+		if string.match(img, "^%d+$") then img = "rbxassetid://" .. img end
+		bgImage.Image = img
+		bgImage.Visible = true
+		bgImage.ImageTransparency = 1 - math.clamp(tonumber(opacity) or 0.3, 0, 1)
+	end
+	function Win.SetBackgroundOpacity(opacity)
+		bgImage.ImageTransparency = 1 - math.clamp(tonumber(opacity) or 0.3, 0, 1)
+	end
+
+	-- Win.SetColor(themeKey, Color3): override any single palette colour live and
+	-- keep it for future elements (used by the Settings colour pickers)
+	function Win.SetColor(key, color)
+		if type(key) ~= "string" or typeof(color) ~= "Color3" then return false end
+		local old = THEME[key]
+		if typeof(old) ~= "Color3" then return false end
+		local oldHex = hexOf(old)
+		THEME[key] = color
+		pcall(function()
+			for _, inst in ipairs(screenGui:GetDescendants()) do
+				for _, prop in ipairs(THEME_COLOR_PROPS) do
+					pcall(function()
+						if typeof(inst[prop]) == "Color3" and hexOf(inst[prop]) == oldHex then
+							inst[prop] = color
+						end
+					end)
+				end
+			end
+		end)
+		return true
+	end
+
 	-- small live setters
 	function Win.SetTitle(t) wordmark.Text = string.upper(tostring(t or "NEMESIS")) end
 	function Win.SetGame(t) gameLabel.Text = tostring(t or "") end
@@ -4845,6 +4925,159 @@ function NEMESIS.Window(opts)
 			pcall(function() applyPageVisual(activeTab, activeTab.activePage, false) end)
 			pcall(function() setCrumb(activeTab, activeTab.activePage) end)
 		end
+	end
+
+	-- Built-in Settings tab (gear icon). Reuses the element API so everything
+	-- here is a normal, saveable control. Skip with Window({ settings = false }).
+	local function buildSettings()
+		local S = Win.Tab("Settings", "settings")
+
+		-- Appearance
+		local appG = S.Group("APPEARANCE")
+		local look = appG.Page("Look", { icon = "palette" })
+		local themeSec = look.Section("THEME")
+		themeSec.Dropdown({
+			text = "Menu theme", icon = "sun-moon",
+			options = { "Dark", "Midnight", "Abyss", "Light" }, default = "Dark",
+			callback = function(v) Win.SetTheme(v) end,
+		})
+		themeSec.ColorPicker({
+			text = "Accent color", icon = "droplet", default = accent,
+			callback = function(c) if typeof(c) == "Color3" then Win.SetAccent(c) end end,
+		})
+		-- every Roblox font, live swap
+		local fontOptions = { "Inter" }
+		pcall(function()
+			for _, f in ipairs(Enum.Font:GetEnumItems()) do
+				if f.Name ~= "Unknown" and f.Name ~= "Inter" then fontOptions[#fontOptions + 1] = f.Name end
+			end
+			table.sort(fontOptions)
+		end)
+		themeSec.Dropdown({
+			text = "Font", icon = "type", options = fontOptions, default = "Inter",
+			callback = function(v) Win.SetFont(v) end,
+		})
+
+		local colorSec = look.Section("MENU COLORS")
+		colorSec.Label("Recolor the menu surfaces. Each picker has Single / Double / Multi; Single is used for a flat recolor.")
+		colorSec.ColorPicker({ text = "Background", icon = "square", default = THEME.Background,
+			callback = function(c) if typeof(c) == "Color3" then Win.SetColor("Background", c) end end })
+		colorSec.ColorPicker({ text = "Elements", icon = "box", default = THEME.Element,
+			callback = function(c) if typeof(c) == "Color3" then Win.SetColor("Element", c) end end })
+		colorSec.ColorPicker({ text = "Text", icon = "type", default = THEME.Text,
+			callback = function(c) if typeof(c) == "Color3" then Win.SetColor("Text", c) end end })
+		colorSec.ColorPicker({ text = "Icons / subtext", icon = "image", default = THEME.SubText,
+			callback = function(c) if typeof(c) == "Color3" then Win.SetColor("SubText", c) end end })
+
+		-- Logo
+		local logoSec = look.Section("LOGO")
+		logoSec.ColorPicker({ text = "Logo color", icon = "pen-tool", default = logoColor,
+			callback = function(c) if typeof(c) == "Color3" then Win.SetLogoColor(c) end end })
+		local logoIdInput = logoSec.Input({ text = "Logo image id", icon = "image", placeholder = "rbxassetid or number" })
+		logoSec.Button({ text = "Apply logo image", button = "Apply", icon = "check", callback = function()
+			local id = tostring(logoIdInput.Get() or ""):gsub("%s+", "")
+			if id ~= "" and logoImage then
+				local img = string.match(id, "^%d+$") and ("rbxassetid://" .. id) or id
+				pcall(function() logoImage.Image = img end)
+				NEMESIS.Notify({ title = "Logo", content = "Applied.", duration = 2, icon = "check" })
+			end
+		end })
+
+		-- Background image
+		local bgP = appG.Page("Background", { icon = "image" })
+		local bgSec = bgP.Section("BACKGROUND IMAGE")
+		bgSec.Label("Show any image behind the menu. Paste a Roblox asset id and submit, then adjust the opacity.")
+		local bgInput = bgSec.Input({ text = "Image id", icon = "image", placeholder = "e.g. 13094912294" })
+		local bgOpacity = 0.3
+		bgSec.Button({ text = "Apply background", button = "Apply", icon = "check", callback = function()
+			local id = tostring(bgInput.Get() or ""):gsub("%s+", "")
+			if id ~= "" then
+				Win.SetBackgroundImage(id, bgOpacity)
+				NEMESIS.Notify({ title = "Background", content = "Applied.", duration = 2, icon = "image" })
+			end
+		end })
+		bgSec.Slider({ text = "Opacity", icon = "eye", min = 0, max = 100, default = 30, suffix = "%", flag = "nem_bg_opacity",
+			callback = function(v) bgOpacity = v / 100; Win.SetBackgroundOpacity(bgOpacity) end })
+		bgSec.Button({ text = "Clear background", button = "Clear", icon = "x", callback = function()
+			Win.SetBackgroundImage(nil)
+		end })
+
+		-- AI assistant (free, no key needed; keys optional for smarter replies)
+		local aiG = S.Group("ASSISTANT")
+		local aiP = aiG.Page("AI", { icon = "bot" })
+		local aiSec = aiP.Section("ASK")
+		aiSec.Label("Ask anything. Uses a free built-in AI. Add your own key below for faster, smarter replies.")
+		local aiReply = aiSec.Paragraph({ title = "Reply", content = "Ask a question to get started." })
+		local aiInput = aiSec.Input({ text = "Question", icon = "message-circle", placeholder = "type then press Ask" })
+		local aiBusy = false
+		aiSec.Button({ text = "Ask AI", button = "Ask", icon = "send", callback = function()
+			local q = tostring(aiInput.Get() or ""):gsub("^%s+", ""):gsub("%s+$", "")
+			if q == "" or aiBusy then return end
+			aiBusy = true
+			aiReply.SetTitle("Thinking...")
+			aiReply.Set("...")
+			task.spawn(function()
+				local reply
+				pcall(function()
+					local sys = "You are a concise assistant inside a Roblox script menu. Answer briefly, under 80 words."
+					local url = "https://text.pollinations.ai/" .. game:GetService("HttpService"):UrlEncode(sys .. "\nUser: " .. q .. "\nAssistant:") .. "?referrer=nemesis"
+					reply = game:HttpGet(url)
+				end)
+				aiBusy = false
+				if reply and #reply > 0 then
+					aiReply.SetTitle("Reply")
+					aiReply.Set(reply:gsub("^%s+", ""):gsub("%s+$", ""))
+				else
+					aiReply.SetTitle("Reply")
+					aiReply.Set("The free AI is busy right now. Try again in a moment.")
+				end
+			end)
+		end })
+		local keySec = aiP.Section("YOUR API KEYS (OPTIONAL)")
+		keySec.Label("Groq (gsk_...), OpenRouter (sk-or-...) and Google (AIza...) have free tiers.")
+		local keyInput = keySec.Input({ text = "Add API key", icon = "key-round", placeholder = "paste key" })
+		keySec.Button({ text = "Save key", button = "Save", icon = "plus", callback = function()
+			local k = tostring(keyInput.Get() or ""):gsub("%s+", "")
+			if #k >= 8 then
+				NEMESIS.AIKeys = NEMESIS.AIKeys or {}
+				table.insert(NEMESIS.AIKeys, k)
+				keyInput.Set("")
+				NEMESIS.Notify({ title = "AI key", content = "Saved.", duration = 2, icon = "check" })
+			end
+		end })
+
+		-- Interface + session
+		local sysG = S.Group("SYSTEM")
+		local ifP = sysG.Page("Interface", { icon = "sliders-horizontal" })
+		local kSec = ifP.Section("CONTROLS")
+		kSec.Keybind({ text = "Toggle menu", icon = "eye", default = "RightShift", desc = "Key that hides / shows the menu." })
+		local sessSec = ifP.Section("SESSION")
+		sessSec.Label("Game  " .. tostring(game.PlaceId))
+		local fpsRow = sessSec.Label("FPS  ...")
+		local upRow = sessSec.Label("Uptime  0s")
+		-- driven off Heartbeat (never busy-loops; the accumulator is the clock),
+		-- same pattern as the footer FPS so it is stub-safe
+		pcall(function()
+			local frames, acc, uptime = 0, 0, 0
+			RunService.Heartbeat:Connect(function(dt)
+				dt = tonumber(dt) or 0
+				frames = frames + 1
+				acc = acc + dt
+				uptime = uptime + dt
+				if acc >= 1 then
+					fpsRow.Set("FPS  " .. tostring(math.floor(frames / acc + 0.5)))
+					local secs = math.floor(uptime)
+					upRow.Set("Uptime  " .. (secs >= 60 and (math.floor(secs / 60) .. "m " .. (secs % 60) .. "s") or (secs .. "s")))
+					frames, acc = 0, 0
+				end
+			end)
+		end)
+		local aboutSec = ifP.Section("ABOUT")
+		aboutSec.Paragraph({ title = "NEMESIS " .. NEMESIS.Version, content = "UI library for Roblox executors." })
+		aboutSec.Button({ text = "Unload menu", button = "Unload", icon = "trash-2", callback = function() Win.Destroy() end })
+	end
+	if opts.settings ~= false then
+		pcall(buildSettings)
 	end
 
 	Win.Instance = root

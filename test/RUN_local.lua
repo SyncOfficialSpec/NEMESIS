@@ -3121,6 +3121,30 @@ function NEMESIS.Window(opts)
 		Parent = screenGui,
 	}, { Create("UIScale", { Scale = scale }) })
 	dropShadow(rootShadowHolder, 0.35)
+	-- accent glow: the same soft shadow art, tinted to the accent and spread a bit
+	-- wider, so the whole window casts a coloured halo (Syde "Glow"). Off by default;
+	-- toggled from Settings. Recolours live with the accent.
+	local glowImg
+	do
+		local art = loadArt(RF_SHADOW.name)
+		if art then
+			glowImg = Create("ImageLabel", {
+				Name = "AccentGlow",
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.new(0.5, 0, 0.5, 0),
+				Size = UDim2.new(1, RF_SHADOW.pad * 2 + 26, 1, RF_SHADOW.pad * 2 + 26),
+				BackgroundTransparency = 1,
+				Image = art,
+				ImageColor3 = accent,
+				ImageTransparency = 1,   -- hidden until SetGlow(true)
+				ScaleType = Enum.ScaleType.Slice,
+				SliceCenter = RF_SHADOW.slice,
+				ZIndex = 0,
+				Parent = rootShadowHolder,
+			})
+			accentProp(glowImg, "ImageColor3", accent)
+		end
+	end
 	pcall(function()
 		root:GetPropertyChangedSignal("Position"):Connect(function() rootShadowHolder.Position = root.Position end)
 		root:GetPropertyChangedSignal("Size"):Connect(function() rootShadowHolder.Size = root.Size end)
@@ -4370,6 +4394,13 @@ function NEMESIS.Window(opts)
 	-- drag handler can read it.
 	function Win.SetLockToScreen(on) lockToScreen = on and true or false end
 
+	-- Win.SetGlow(bool): the accent-coloured halo around the whole window (Syde
+	-- "Glow"). Fades in/out; recolours automatically with the accent.
+	function Win.SetGlow(on)
+		if not glowImg then return end
+		tween(glowImg, { ImageTransparency = on and 0.15 or 1 }, TI.EXPAND)
+	end
+
 	-- Win.ResetLook(): restore the menu's original default appearance
 	local origAccent = opts.accent or Color3.fromRGB(140, 90, 255)
 	local origLogo = opts.logoColor or THEME.Text
@@ -4385,6 +4416,7 @@ function NEMESIS.Window(opts)
 		Win.SetBlur(false)
 		Win.SetScale(1)
 		Win.SetLockToScreen(false)
+		Win.SetGlow(false)
 	end
 
 	-- small live setters
@@ -5179,6 +5211,9 @@ function NEMESIS.Window(opts)
 		feelSec.Slider({ text = "UI scale", icon = "maximize", min = 60, max = 140, default = 100, suffix = "%",
 			desc = "Shrink or grow the whole menu.",
 			callback = function(v) Win.SetScale(v / 100) end })
+		feelSec.Toggle({ text = "Window glow", icon = "sparkles", default = false,
+			desc = "Cast an accent-coloured halo around the menu.",
+			callback = function(on) Win.SetGlow(on) end })
 		feelSec.Toggle({ text = "Background blur", icon = "droplet", default = false,
 			desc = "Frost the game behind the menu.",
 			callback = function(on) Win.SetBlur(on) end })

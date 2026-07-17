@@ -93,7 +93,8 @@ local s_co = CO.Section("COLOR PICKERS")
 s_co.ColorPicker({ text = "Solid color", default = Color3.fromRGB(255, 0, 80), transparency = 0, flag = "sc_c_solid",
 	callback = function(color, alpha) notify("Color", "alpha = " .. tostring(alpha), 1.5) end })
 s_co.ColorPicker({ text = "With transparency", default = Color3.fromRGB(0, 200, 255), transparency = 0.3, flag = "sc_c_alpha" })
-s_co.ColorPicker({ text = "Gradient color", gradient = true, default = Color3.fromRGB(255, 0, 0), gradientDefault = Color3.fromRGB(0, 0, 255), flag = "sc_c_grad" })
+s_co.ColorPicker({ text = "Double color", gradient = true, default = Color3.fromRGB(255, 0, 0), gradientDefault = Color3.fromRGB(0, 0, 255), flag = "sc_c_grad" })
+s_co.ColorPicker({ text = "Multi color", multi = true, colors = { Color3.fromRGB(255, 80, 80), Color3.fromRGB(255, 220, 60), Color3.fromRGB(80, 220, 255) }, flag = "sc_c_multi" })
 s_co.Label("Right-click a swatch to copy its hex. In gradient mode you get two swatches; right-click a saved swatch to remove it.")
 s_co.Divider({ text = "MENU THEME" })
 s_co.ColorPicker({ text = "Menu accent (live)", default = Color3.fromRGB(140, 90, 255), flag = "sc_accent",

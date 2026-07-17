@@ -3683,8 +3683,9 @@ function NEMESIS.Window(opts)
 		Parent = pagesHost,
 	}, { corner(RADIUS), Create("UIGradient", { Rotation = 90, Transparency = numSeq(1, 0) }) })
 
-	-- open animation
-	root.Size = UDim2.new(0, W, 0, 0)
+	-- open animation (Syde-style): the window unfolds from a smaller centred box
+	-- to full size on a smooth Quint curve (the shadow holder mirrors the size)
+	root.Size = UDim2.new(0, math.floor(W * 0.82), 0, math.floor(H * 0.82))
 	tween(root, { Size = UDim2.new(0, W, 0, H) }, TI.OPEN)
 
 	-- Navigation state

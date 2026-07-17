@@ -5211,6 +5211,7 @@ function NEMESIS.Window(opts)
 		local A = makeOverlayPanel("AI Assistant", "bot")
 		openAIPanel = A.open
 		A.setSize(400, 500)
+		A.body.Visible = false   -- the AI panel uses a custom chat layout, not sections
 		local card = A.card
 
 		local httpReq = (syn and syn.request) or (type(request) == "function" and request) or (http and http.request) or (http_request)

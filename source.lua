@@ -3495,7 +3495,7 @@ function NEMESIS.Window(opts)
 	-- open funcs are filled in once the panels are built)
 	local openSettingsPanel, openAIPanel
 	local gearBtn = topbarIcon("settings", "\u{2699}", -80, 16)
-	local aiBtn = topbarIcon("sparkles", "\u{2728}", -112, 16)
+	local aiBtn = topbarIcon("bot", "\u{2728}", -112, 16)
 	gearBtn.MouseButton1Click:Connect(function() if openSettingsPanel then openSettingsPanel() end end)
 	aiBtn.MouseButton1Click:Connect(function() if openAIPanel then openAIPanel() end end)
 
@@ -5302,7 +5302,7 @@ function NEMESIS.Window(opts)
 
 	-- AI assistant panel (bot icon). Free built-in AI; optional keys for smarter.
 	local function buildAI()
-		local A = makeOverlayPanel("AI Assistant", "sparkles")
+		local A = makeOverlayPanel("AI Assistant", "bot")
 		openAIPanel = A.open
 		local askSec = A.Section("ASK")
 		askSec.Label("Ask anything. Uses a free built-in AI. Add your own key below for smarter replies.")

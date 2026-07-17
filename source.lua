@@ -97,8 +97,8 @@ end
 -- versioned path: bump the filename (URL + on-disk cache) whenever the logo
 -- changes, so neither the GitHub CDN nor the executor serves a stale image
 -- grayscale logo so ImageColor3 can tint it to any hue at runtime
-local LOGO_URL = "https://raw.githubusercontent.com/SyncOfficialSpec/NEMESIS/main/assets/nemesis_logo_v4.png"
-local LOGO_FILE = "nemesis_logo_v4.png"
+local LOGO_URL = "https://raw.githubusercontent.com/SyncOfficialSpec/NEMESIS/main/assets/nemesis_wordmark_v1.png"
+local LOGO_FILE = "nemesis_wordmark_v1.png"
 local brandLogoCache = nil -- nil = untried, false = failed, string = rbxasset id
 
 local function customAssetFn()
@@ -431,25 +431,6 @@ NEMESIS.Themes = {
 		ToggleOff = Color3.fromRGB(42, 42, 50),
 		Knob = Color3.fromRGB(244, 244, 247),
 		Good = Color3.fromRGB(92, 220, 138),
-	},
-	Light = {
-		Background = Color3.fromRGB(235, 236, 239),
-		Sidebar = Color3.fromRGB(244, 245, 247),
-		Topbar = Color3.fromRGB(244, 245, 247),
-		SidebarActive = Color3.fromRGB(222, 224, 232),
-		SidebarHover = Color3.fromRGB(233, 234, 238),
-		Group = Color3.fromRGB(248, 248, 250),
-		Element = Color3.fromRGB(240, 240, 244),
-		ElementHover = Color3.fromRGB(230, 231, 237),
-		Stroke = Color3.fromRGB(210, 212, 220),
-		ElementStroke = Color3.fromRGB(198, 201, 212),
-		RowDivider = Color3.fromRGB(222, 224, 231),
-		Text = Color3.fromRGB(26, 28, 34),
-		SubText = Color3.fromRGB(108, 112, 124),
-		Faint = Color3.fromRGB(148, 152, 164),
-		ToggleOff = Color3.fromRGB(200, 203, 212),
-		Knob = Color3.fromRGB(255, 255, 255),
-		Good = Color3.fromRGB(36, 170, 90),
 	},
 }
 
@@ -3162,83 +3143,42 @@ function NEMESIS.Window(opts)
 	local logoSpec = (opts.logo ~= nil) and resolveIcon(opts.logo) or nil
 	local brandAsset = (opts.logo == nil) and loadBrandLogo() or nil
 
-	local logoImage -- ImageLabel of the logo mark, if any (used by Win.SetLogoColor)
-	if brandAsset then
-		-- square N mark (grayscale, tinted by logoColor)
+	-- brand: the NEMESIS wordmark image (its own purple/white colours, so it is
+	-- not tinted). Falls back to a bold "NEMESIS" text if the image cannot load.
+	local WORDMARK_H, WORDMARK_W = 22, 148   -- 6.72:1 aspect
+	local logoImage
+	local wordmark  -- kept for Win.SetTitle compatibility (text fallback)
+	if brandAsset or logoSpec then
 		logoImage = Create("ImageLabel", {
-			Position = UDim2.new(0, 14, 0.5, 0),
+			Position = UDim2.new(0, 16, 0.5, 0),
 			AnchorPoint = Vector2.new(0, 0.5),
-			Size = UDim2.new(0, 28, 0, 28),
+			Size = UDim2.new(0, WORDMARK_W, 0, WORDMARK_H),
 			BackgroundTransparency = 1,
-			Image = brandAsset,
-			ImageColor3 = logoColor,
+			Image = brandAsset or "",
+			ImageColor3 = Color3.new(1, 1, 1),
 			ScaleType = Enum.ScaleType.Fit,
 			Parent = topbar,
 		})
-	elseif logoSpec then
-		logoImage = Create("ImageLabel", {
-			Position = UDim2.new(0, 14, 0.5, 0),
-			AnchorPoint = Vector2.new(0, 0.5),
-			Size = UDim2.new(0, 26, 0, 26),
-			BackgroundTransparency = 1,
-			Parent = topbar,
-		})
-		applyIcon(logoImage, logoSpec)
+		if not brandAsset and logoSpec then applyIcon(logoImage, logoSpec) end
 	else
-		local tile = Create("Frame", {
-			Position = UDim2.new(0, 14, 0.5, 0),
+		wordmark = Create("TextLabel", {
+			Position = UDim2.new(0, 16, 0.5, 0),
 			AnchorPoint = Vector2.new(0, 0.5),
-			Size = UDim2.new(0, 26, 0, 26),
-			BackgroundColor3 = accent,
-			Parent = topbar,
-		}, {
-			corner(6),
-			stroke(Color3.fromRGB(185, 155, 255), 1, 0.25),
-			Create("UIGradient", {
-				Rotation = 90,
-				Color = ColorSequence.new(Color3.fromRGB(168, 124, 255), Color3.fromRGB(118, 70, 234)),
-			}),
-		})
-		Create("TextLabel", {
-			Size = UDim2.new(1, 0, 1, 0),
+			Size = UDim2.new(0, 120, 1, 0),
 			BackgroundTransparency = 1,
 			Font = FONT_BOLD,
-			Text = "N",
+			Text = string.upper(tostring(opts.title or "NEMESIS")),
 			TextColor3 = THEME.Text,
-			TextSize = 21,
-			Parent = tile,
+			TextSize = 17,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Parent = topbar,
 		})
 	end
-
-	-- optional gradient tint on the logo image: logoGradient = { Color3, Color3 }
-	local logoGrad
-	if logoImage then
-		logoGrad = Create("UIGradient", { Rotation = 90, Enabled = false, Parent = logoImage })
-		local g = opts.logoGradient
-		if type(g) == "table" and g[1] and g[2] then
-			logoGrad.Color = ColorSequence.new(g[1], g[2])
-			logoGrad.Enabled = true
-			logoImage.ImageColor3 = Color3.new(1, 1, 1)
-		end
-	end
-
-	-- wordmark beside the logo, then a machined tick separating brand from tabs
-	local wordmark = Create("TextLabel", {
-		Position = UDim2.new(0, 50, 0.5, 0),
-		AnchorPoint = Vector2.new(0, 0.5),
-		Size = UDim2.new(0, 100, 1, 0),
-		BackgroundTransparency = 1,
-		Font = FONT_BOLD,
-		Text = string.upper(tostring(opts.title or "NEMESIS")),
-		TextColor3 = THEME.Text,
-		TextSize = 15,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-		Parent = topbar,
-	})
+	local logoGrad  -- kept for Win.SetLogoGradient compatibility
+	-- a machined tick separating the brand from the tabs
 	Create("Frame", {
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 158, 0.5, 0),
+		Position = UDim2.new(0, 16 + WORDMARK_W + 14, 0.5, 0),
 		Size = UDim2.new(0, 1, 0, 16),
 		BackgroundColor3 = THEME.Stroke,
 		BorderSizePixel = 0,
@@ -3260,8 +3200,8 @@ function NEMESIS.Window(opts)
 	-- inside it stay centred and reflow automatically as the window resizes
 	local tabArea = Create("Frame", {
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 172, 0.5, 0),
-		Size = UDim2.new(1, -(172 + 176), 1, 0),
+		Position = UDim2.new(0, 190, 0.5, 0),
+		Size = UDim2.new(1, -(190 + 176), 1, 0),
 		BackgroundTransparency = 1,
 		Parent = topbar,
 	}, {
@@ -4400,7 +4340,7 @@ function NEMESIS.Window(opts)
 	end
 
 	-- small live setters
-	function Win.SetTitle(t) wordmark.Text = string.upper(tostring(t or "NEMESIS")) end
+	function Win.SetTitle(t) if wordmark then wordmark.Text = string.upper(tostring(t or "NEMESIS")) end end
 	function Win.SetGame(t) gameLabel.Text = tostring(t or "") end
 	function Win.SetStatus(t) statusLabel.Text = tostring(t or "") end
 
@@ -5119,7 +5059,6 @@ function NEMESIS.Window(opts)
 			if _overlayCurrent == ov then _overlayCurrent = nil end
 			tween(card, { GroupTransparency = 1 }, TI.FAST)
 			tween(pScale, { Scale = 0.94 }, TI.FAST)
-			tween(backdrop, { BackgroundTransparency = 1 }, TI.FAST)
 			task.delay(0.18, function() if not ov.opened then card.Visible = false; backdrop.Visible = false end end)
 		end
 		function ov.open()
@@ -5139,7 +5078,7 @@ function NEMESIS.Window(opts)
 			-- Syde open: grow+fade
 			tween(card, { GroupTransparency = 0, Position = UDim2.new(0.5, 0, 0.5, 0) }, TI.EXPAND)
 			tween(pScale, { Scale = 1 }, TI.EXPAND)
-			tween(backdrop, { BackgroundTransparency = 0.4 }, TI.EXPAND)
+			backdrop.BackgroundTransparency = 1  -- never dull the screen; just click-to-close
 		end
 		function ov.toggle() if ov.opened then ov.close() else ov.open() end end
 		backdrop.MouseButton1Click:Connect(ov.close)
@@ -5149,6 +5088,12 @@ function NEMESIS.Window(opts)
 
 		-- section factory over the scrolling body (reuses makeSection)
 		function ov.Section(title) return makeSection(body, accent, title) end
+		ov.card = card       -- for custom layouts (AI chat)
+		ov.body = body
+		ov.setSize = function(w, h)
+			card.AutomaticSize = Enum.AutomaticSize.None
+			card.Size = UDim2.new(0, w, 0, h)
+		end
 		return ov
 	end
 
@@ -5160,7 +5105,7 @@ function NEMESIS.Window(opts)
 
 		local themeSec = S.Section("THEME")
 		themeSec.Dropdown({ text = "Menu theme", icon = "sun-moon",
-			options = { "Dark", "Midnight", "Abyss", "Light" }, default = "Dark",
+			options = { "Dark", "Midnight", "Abyss" }, default = "Dark",
 			callback = function(v) Win.SetTheme(v) end })
 		themeSec.ColorPicker({ text = "Accent color", icon = "droplet", default = accent,
 			callback = function(c) if typeof(c) == "Color3" then Win.SetAccent(c) end end })
@@ -5258,48 +5203,137 @@ function NEMESIS.Window(opts)
 	end
 
 	-- AI assistant panel (bot icon). Free built-in AI; optional keys for smarter.
+	-- AI Assistant: a real chat (Gen3 style) with a scrolling conversation, an
+	-- input row, and a Google Gemini key. Uses the executor's own HTTP (syn.request
+	-- / request) for keyed calls and falls back to the free pollinations AI when no
+	-- key is set. Errors surface as an assistant bubble, never a popup.
 	local function buildAI()
 		local A = makeOverlayPanel("AI Assistant", "bot")
 		openAIPanel = A.open
-		local askSec = A.Section("ASK")
-		askSec.Label("Ask anything. Uses a free built-in AI. Add your own key below for smarter replies.")
-		local aiReply = askSec.Paragraph({ title = "Reply", content = "Ask a question to get started." })
-		local aiInput = askSec.Input({ text = "Question", icon = "message-circle", placeholder = "type then press Ask" })
-		local aiBusy = false
-		askSec.Button({ text = "Ask AI", button = "Ask", icon = "send", callback = function()
-			local q = tostring(aiInput.Get() or ""):gsub("^%s+", ""):gsub("%s+$", "")
-			if q == "" or aiBusy then return end
-			aiBusy = true
-			aiReply.SetTitle("Thinking...")
-			aiReply.Set("...")
-			task.spawn(function()
-				local reply
-				pcall(function()
-					local sys = "You are a concise assistant inside a Roblox script menu. Answer briefly, under 80 words."
-					local url = "https://text.pollinations.ai/" .. game:GetService("HttpService"):UrlEncode(sys .. "\nUser: " .. q .. "\nAssistant:") .. "?referrer=nemesis"
-					reply = game:HttpGet(url)
-				end)
-				aiBusy = false
-				aiReply.SetTitle("Reply")
-				if reply and #reply > 0 then
-					aiReply.Set(reply:gsub("^%s+", ""):gsub("%s+$", ""))
-				else
-					aiReply.Set("The free AI is busy right now. Try again in a moment.")
-				end
-			end)
-		end })
-		local keySec = A.Section("YOUR API KEYS (OPTIONAL)")
-		keySec.Label("Groq (gsk_...), OpenRouter (sk-or-...) and Google (AIza...) have free tiers.")
-		local keyInput = keySec.Input({ text = "Add API key", icon = "key-round", placeholder = "paste key" })
-		keySec.Button({ text = "Save key", button = "Save", icon = "plus", callback = function()
-			local k = tostring(keyInput.Get() or ""):gsub("%s+", "")
-			if #k >= 8 then
-				NEMESIS.AIKeys = NEMESIS.AIKeys or {}
-				table.insert(NEMESIS.AIKeys, k)
-				keyInput.Set("")
-				NEMESIS.Notify({ title = "AI key", content = "Saved.", duration = 2, icon = "check" })
+		A.setSize(400, 500)
+		local card = A.card
+
+		local httpReq = (syn and syn.request) or (type(request) == "function" and request) or (http and http.request) or (http_request)
+		local HttpService = game:GetService("HttpService")
+		local geminiKey = tostring(NEMESIS.AIKey or "")
+		local geminiModel = "gemini-2.0-flash"
+		local history = {}   -- Gemini format: { role="user"/"model", parts={{text=...}} }
+		local busy = false
+
+		-- top strip: a compact key field + model, above the messages
+		local keyBox = Create("TextBox", {
+			Position = UDim2.new(0, 12, 0, 52), Size = UDim2.new(1, -24, 0, 30),
+			BackgroundColor3 = THEME.Element, ClearTextOnFocus = false,
+			Font = FONT_MONO, PlaceholderText = "Paste your Google Gemini API key (optional)",
+			PlaceholderColor3 = THEME.Faint, Text = geminiKey, TextColor3 = THEME.Text, TextSize = 12,
+			TextXAlignment = Enum.TextXAlignment.Left, ClipsDescendants = true, ZIndex = 40002, Parent = card,
+		}, { corner(6), stroke(THEME.ElementStroke, 1, 0.4), padXY(10, 0) })
+		keyBox.FocusLost:Connect(function()
+			geminiKey = tostring(keyBox.Text or ""):gsub("^%s+", ""):gsub("%s+$", "")
+			NEMESIS.AIKey = geminiKey
+		end)
+
+		-- messages (scrolling conversation)
+		local messages = Create("ScrollingFrame", {
+			Position = UDim2.new(0, 0, 0, 90), Size = UDim2.new(1, 0, 1, -142), BackgroundTransparency = 1, BorderSizePixel = 0,
+			ScrollBarThickness = 3, ScrollBarImageColor3 = THEME.Faint, ScrollBarImageTransparency = 0.4,
+			CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y,
+			ScrollingDirection = Enum.ScrollingDirection.Y, ZIndex = 40002, Parent = card,
+		}, {
+			Create("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Center }),
+			Create("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12), PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8) }),
+		})
+		local msgOrder = 0
+		local function addBubble(who, text)
+			msgOrder = msgOrder + 1
+			local isUser = (who == "user")
+			local wrap = Create("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = msgOrder, ZIndex = 40002, Parent = messages })
+			local bubble = Create("TextLabel", {
+				AnchorPoint = Vector2.new(isUser and 1 or 0, 0),
+				Position = UDim2.new(isUser and 1 or 0, 0, 0, 0),
+				Size = UDim2.new(0, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.XY,
+				BackgroundColor3 = isUser and accent or THEME.Element,
+				Font = FONT, Text = tostring(text), TextColor3 = isUser and accentTextColor(accent) or THEME.Text,
+				TextSize = 13, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left,
+				ZIndex = 40003, Parent = wrap,
+			}, { corner(9), Create("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10), PaddingTop = UDim.new(0, 7), PaddingBottom = UDim.new(0, 7) }), Create("UISizeConstraint", { MaxSize = Vector2.new(300, math.huge) }) })
+			if isUser then accentProp(bubble, "BackgroundColor3", accent) end
+			task.defer(function() pcall(function() messages.CanvasPosition = Vector2.new(0, messages.AbsoluteCanvasSize.Y) end) end)
+			return bubble
+		end
+		addBubble("model", "Hi! I'm your assistant. Ask me anything. Add a Gemini key above for smarter replies, or leave it blank to use the free AI.")
+
+		-- input row (textbox + send)
+		local inputRow = Create("Frame", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -10), Size = UDim2.new(1, -24, 0, 38), BackgroundTransparency = 1, ZIndex = 40002, Parent = card })
+		local inField = Create("Frame", { Size = UDim2.new(1, -46, 1, 0), BackgroundColor3 = THEME.Element, ZIndex = 40002, Parent = inputRow }, { corner(9), stroke(THEME.ElementStroke, 1, 0.4) })
+		local inBox = Create("TextBox", {
+			Size = UDim2.new(1, -20, 1, 0), Position = UDim2.new(0, 12, 0, 0), BackgroundTransparency = 1, ClearTextOnFocus = false,
+			Font = FONT, PlaceholderText = "Message...", PlaceholderColor3 = THEME.Faint, Text = "",
+			TextColor3 = THEME.Text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 40003, Parent = inField,
+		})
+		local sendBtn = Create("TextButton", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 38, 0, 38), BackgroundColor3 = accent, AutoButtonColor = false, Text = "", ZIndex = 40002, Parent = inputRow }, { corner(9) })
+		accentProp(sendBtn, "BackgroundColor3", accent)
+		local sendIcon = Create("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, 16, 0, 16), BackgroundTransparency = 1, ImageColor3 = accentTextColor(accent), ZIndex = 40003, Parent = sendBtn })
+		applyIcon(sendIcon, resolveIcon("send"))
+
+		-- the request: Gemini when a key is set, free pollinations otherwise
+		local function askGemini(prompt)
+			if not httpReq then return nil, "This executor has no HTTP request function." end
+			local sys = "You are a concise, friendly assistant inside a Roblox script menu. Keep answers brief and helpful. Do not use markdown ** or *."
+			local msgs = {}
+			for _, m in ipairs(history) do msgs[#msgs + 1] = m end
+			msgs[#msgs + 1] = { role = "user", parts = { { text = prompt } } }
+			local body = HttpService:JSONEncode({ contents = msgs, systemInstruction = { parts = { { text = sys } } } })
+			local url = "https://generativelanguage.googleapis.com/v1beta/models/" .. geminiModel .. ":generateContent?key=" .. geminiKey
+			local ok, res = pcall(httpReq, { Url = url, Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = body })
+			if not ok or not res then return nil, "Request failed. Check your connection." end
+			if res.StatusCode == 429 then return nil, "Rate limited (429). Wait a moment and try again." end
+			local dok, decoded = pcall(function() return HttpService:JSONDecode(res.Body) end)
+			if dok and decoded and decoded.candidates and decoded.candidates[1] then
+				local txt = decoded.candidates[1].content.parts[1].text
+				history[#history + 1] = { role = "user", parts = { { text = prompt } } }
+				history[#history + 1] = { role = "model", parts = { { text = txt } } }
+				if #history > 20 then table.remove(history, 1); table.remove(history, 1) end
+				return (txt:gsub("^%s+", ""):gsub("%s+$", ""))
+			elseif dok and decoded and decoded.error then
+				return nil, "Gemini: " .. tostring(decoded.error.message)
 			end
-		end })
+			return nil, "Could not read the AI's reply."
+		end
+		local function askFree(prompt)
+			local reply
+			local ok = pcall(function()
+				local convo = {}
+				for _, m in ipairs(history) do convo[#convo + 1] = (m.role == "user" and "User: " or "AI: ") .. m.parts[1].text end
+				convo[#convo + 1] = "User: " .. prompt
+				local url = "https://text.pollinations.ai/" .. HttpService:UrlEncode("You are a concise Roblox menu assistant. " .. table.concat(convo, "\n") .. "\nAI:") .. "?referrer=nemesis"
+				reply = game:HttpGet(url)
+			end)
+			if ok and reply and #reply > 0 then
+				history[#history + 1] = { role = "user", parts = { { text = prompt } } }
+				history[#history + 1] = { role = "model", parts = { { text = reply } } }
+				if #history > 20 then table.remove(history, 1); table.remove(history, 1) end
+				return (reply:gsub("^%s+", ""):gsub("%s+$", ""))
+			end
+			return nil, "The free AI is busy. Try again, or add a Gemini key for reliable replies."
+		end
+
+		local function send()
+			local q = tostring(inBox.Text or ""):gsub("^%s+", ""):gsub("%s+$", "")
+			if q == "" or busy then return end
+			inBox.Text = ""
+			addBubble("user", q)
+			busy = true
+			local thinking = addBubble("model", "...")
+			task.spawn(function()
+				local reply, err
+				if geminiKey ~= "" then reply, err = askGemini(q) else reply, err = askFree(q) end
+				busy = false
+				if thinking then thinking.Text = reply or err or "Something went wrong." end
+			end)
+		end
+		sendBtn.MouseButton1Click:Connect(send)
+		inBox.FocusLost:Connect(function(enter) if enter then send() end end)
 	end
 
 	if opts.settings ~= false then

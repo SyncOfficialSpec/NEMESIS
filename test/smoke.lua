@@ -183,9 +183,9 @@ Win.DeleteConfig("smoketest")
 check(Win.GetAutoload() == nil, "deleting the autoload config clears the marker")
 
 -- theme switching: window recolours live, palette merges into future builds
-check(Win.SetTheme("Light") == true, "SetTheme accepts a preset name")
-local light = NEMESIS.Themes.Light
-check(math.abs(Win.Instance.BackgroundColor3.R - light.Background.R) < 1e-6, "window recoloured to the Light palette")
+check(Win.SetTheme("Midnight") == true, "SetTheme accepts a preset name")
+local midnight = NEMESIS.Themes.Midnight
+check(math.abs(Win.Instance.BackgroundColor3.R - midnight.Background.R) < 1e-6, "window recoloured to the Midnight palette")
 check(Win.SetTheme("Dark") == true, "SetTheme back to Dark")
 
 -- key system: a saved key file unlocks with no prompt (and no blocking)

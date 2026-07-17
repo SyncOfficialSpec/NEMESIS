@@ -1754,6 +1754,7 @@ end
 
 -- ===== shared dropdown overlay (neverlose-style floating panels) =====
 local _ddCurrent = nil   -- handle of the currently open dropdown (one at a time)
+local _overlayCurrent = nil  -- currently open top-level overlay (settings / AI)
 local function closeOpenDropdown()
 	if _ddCurrent then _ddCurrent.close() end
 end
@@ -3308,7 +3309,7 @@ function NEMESIS.Window(opts)
 	local tabArea = Create("Frame", {
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.new(0, 172, 0.5, 0),
-		Size = UDim2.new(1, -(172 + 112), 1, 0),
+		Size = UDim2.new(1, -(172 + 176), 1, 0),
 		BackgroundTransparency = 1,
 		Parent = topbar,
 	}, {
@@ -3495,8 +3496,16 @@ function NEMESIS.Window(opts)
 	local closeBtn = topbarIcon("x", "\u{2715}", -16, 16, DANGER)
 	local minBtn, setMinIcon = topbarIcon("minus", "\u{2013}", -48, 18)
 
+	-- gear opens the settings panel, bot opens the AI panel (forward-declared
+	-- open funcs are filled in once the panels are built)
+	local openSettingsPanel, openAIPanel
+	local gearBtn = topbarIcon("settings", "\u{2699}", -80, 16)
+	local aiBtn = topbarIcon("sparkles", "\u{2728}", -112, 16)
+	gearBtn.MouseButton1Click:Connect(function() if openSettingsPanel then openSettingsPanel() end end)
+	aiBtn.MouseButton1Click:Connect(function() if openAIPanel then openAIPanel() end end)
+
 	-- search is a small icon; clicking it opens the search bar over the tabs
-	local searchBtn = topbarIcon("search", "\u{1F50E}", -82, 16)
+	local searchBtn = topbarIcon("search", "\u{1F50E}", -144, 16)
 
 	-- the search bar that animates in over the tab area
 	local searchBar = Create("Frame", {
@@ -4424,6 +4433,20 @@ function NEMESIS.Window(opts)
 		watermark.Visible = true
 	end
 
+	-- Win.ResetLook(): restore the menu's original default appearance
+	local origAccent = opts.accent or Color3.fromRGB(140, 90, 255)
+	local origLogo = opts.logoColor or THEME.Text
+	function Win.ResetLook()
+		Win.SetRainbow(false)
+		Win.SetTheme("Dark")
+		Win.SetAccent(origAccent)
+		Win.SetFont(nil)
+		Win.SetTransparency(0)
+		Win.SetBackgroundImage(nil)
+		Win.SetLogoColor(origLogo)
+		Win.SetWatermark(false)
+	end
+
 	-- small live setters
 	function Win.SetTitle(t) wordmark.Text = string.upper(tostring(t or "NEMESIS")) end
 	function Win.SetGame(t) gameLabel.Text = tostring(t or "") end
@@ -5096,25 +5119,99 @@ function NEMESIS.Window(opts)
 		end
 	end
 
-	-- Built-in Settings tab (gear icon). Reuses the element API so everything
-	-- here is a normal, saveable control. Skip with Window({ settings = false }).
-	local function buildSettings()
-		local S = Win.Tab("Settings", "settings")
+	-- A floating overlay panel (settings / AI): a centred card with a header and
+	-- a scrolling body that hosts normal sections. Opens/closes with a Syde-style
+	-- scale + fade. Returns { body (a section host factory), open, close, toggle }.
+	local function makeOverlayPanel(titleText, headerIcon)
+		local backdrop = Create("TextButton", {
+			Name = "OverlayBackdrop", Size = UDim2.new(1, 0, 1, 0), BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+			BackgroundTransparency = 1, AutoButtonColor = false, Text = "", Visible = false, ZIndex = 40000, Parent = screenGui,
+		})
+		local pScale = Create("UIScale", { Scale = 1 })
+		local card = Create("CanvasGroup", {
+			Name = "OverlayPanel", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0),
+			Size = UDim2.new(0, 400, 0, 468), BackgroundColor3 = THEME.Group,
+			GroupTransparency = 1, Visible = false, ZIndex = 40001, Parent = screenGui,
+		}, { corner(14), stroke(THEME.Stroke, 1, 0.3), pScale })
+		siblingShadow(card)
+		makeDraggable(card, card)
 
-		-- Appearance
-		local appG = S.Group("APPEARANCE")
-		local look = appG.Page("Look", { icon = "palette" })
-		local themeSec = look.Section("THEME")
-		themeSec.Dropdown({
-			text = "Menu theme", icon = "sun-moon",
+		local header = Create("Frame", { Size = UDim2.new(1, 0, 0, 44), BackgroundTransparency = 1, ZIndex = 40002, Parent = card }, { padXY(16, 0) })
+		local hx = 0
+		local hspec = resolveIcon(headerIcon)
+		if hspec then
+			local img = Create("ImageLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(0, 18, 0, 18), BackgroundTransparency = 1, ImageColor3 = accent, Parent = header })
+			applyIcon(img, hspec); accentProp(img, "ImageColor3", accent); hx = 26
+		end
+		Create("TextLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, hx, 0.5, 0), Size = UDim2.new(1, -hx - 30, 1, 0),
+			BackgroundTransparency = 1, Font = FONT_SEMI, Text = titleText, TextColor3 = THEME.Text, TextSize = 15,
+			TextXAlignment = Enum.TextXAlignment.Left, Parent = header })
+		local closeX = Create("TextButton", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 24, 0, 24),
+			BackgroundTransparency = 1, Font = FONT, Text = "\u{2715}", TextColor3 = THEME.SubText, TextSize = 14, Parent = header })
+		Create("Frame", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 12, 0, 44), Size = UDim2.new(1, -24, 0, 1),
+			BackgroundColor3 = THEME.Stroke, BackgroundTransparency = 0.3, BorderSizePixel = 0, ZIndex = 40002, Parent = card })
+
+		local body = Create("ScrollingFrame", {
+			Position = UDim2.new(0, 0, 0, 46), Size = UDim2.new(1, 0, 1, -46), BackgroundTransparency = 1, BorderSizePixel = 0,
+			ScrollBarThickness = 3, ScrollBarImageColor3 = THEME.Faint, ScrollBarImageTransparency = 0.4,
+			CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y, ZIndex = 40002, Parent = card,
+		}, {
+			Create("UIListLayout", { Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder }),
+			Create("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12), PaddingTop = UDim.new(0, 12), PaddingBottom = UDim.new(0, 14) }),
+		})
+
+		local ov = { opened = false }
+		function ov.close()
+			if not ov.opened then return end
+			ov.opened = false
+			if _overlayCurrent == ov then _overlayCurrent = nil end
+			tween(card, { GroupTransparency = 1 }, TI.FAST)
+			tween(pScale, { Scale = 0.94 }, TI.FAST)
+			tween(backdrop, { BackgroundTransparency = 1 }, TI.FAST)
+			task.delay(0.18, function() if not ov.opened then card.Visible = false; backdrop.Visible = false end end)
+		end
+		function ov.open()
+			if ov.opened then return end
+			-- close any other top-level overlay (settings/AI) but NOT the inner
+			-- dropdown/picker layer, so controls inside this panel still work
+			if _overlayCurrent and _overlayCurrent ~= ov then _overlayCurrent.close() end
+			closeOpenDropdown()
+			_overlayCurrent = ov
+			ov.opened = true
+			card.Position = UDim2.new(0.5, 0, 0.5, 10)
+			card.GroupTransparency = 1
+			pScale.Scale = 0.92
+			backdrop.BackgroundTransparency = 1
+			backdrop.Visible = true
+			card.Visible = true
+			-- Syde open: grow+fade
+			tween(card, { GroupTransparency = 0, Position = UDim2.new(0.5, 0, 0.5, 0) }, TI.EXPAND)
+			tween(pScale, { Scale = 1 }, TI.EXPAND)
+			tween(backdrop, { BackgroundTransparency = 0.4 }, TI.EXPAND)
+		end
+		function ov.toggle() if ov.opened then ov.close() else ov.open() end end
+		backdrop.MouseButton1Click:Connect(ov.close)
+		closeX.MouseButton1Click:Connect(ov.close)
+		closeX.MouseEnter:Connect(function() tween(closeX, { TextColor3 = DANGER }, TI.HOVER) end)
+		closeX.MouseLeave:Connect(function() tween(closeX, { TextColor3 = THEME.SubText }, TI.HOVEROFF) end)
+
+		-- section factory over the scrolling body (reuses makeSection)
+		function ov.Section(title) return makeSection(body, accent, title) end
+		return ov
+	end
+
+	-- Built-in Settings panel (gear icon). Reuses the element API so every control
+	-- is a normal, saveable one. Skip with Window({ settings = false }).
+	local function buildSettings()
+		local S = makeOverlayPanel("Settings", "settings")
+		openSettingsPanel = S.open
+
+		local themeSec = S.Section("THEME")
+		themeSec.Dropdown({ text = "Menu theme", icon = "sun-moon",
 			options = { "Dark", "Midnight", "Abyss", "Light" }, default = "Dark",
-			callback = function(v) Win.SetTheme(v) end,
-		})
-		themeSec.ColorPicker({
-			text = "Accent color", icon = "droplet", default = accent,
-			callback = function(c) if typeof(c) == "Color3" then Win.SetAccent(c) end end,
-		})
-		-- every Roblox font, live swap
+			callback = function(v) Win.SetTheme(v) end })
+		themeSec.ColorPicker({ text = "Accent color", icon = "droplet", default = accent,
+			callback = function(c) if typeof(c) == "Color3" then Win.SetAccent(c) end end })
 		local fontOptions = { "Inter" }
 		pcall(function()
 			for _, f in ipairs(Enum.Font:GetEnumItems()) do
@@ -5122,15 +5219,12 @@ function NEMESIS.Window(opts)
 			end
 			table.sort(fontOptions)
 		end)
-		themeSec.Dropdown({
-			text = "Font", icon = "type", options = fontOptions, default = "Inter",
-			callback = function(v) Win.SetFont(v) end,
-		})
+		themeSec.Dropdown({ text = "Font", icon = "type", options = fontOptions, default = "Inter",
+			callback = function(v) Win.SetFont(v) end })
 		themeSec.Toggle({ text = "Rainbow accent", icon = "sparkles", default = false, desc = "Cycle the accent through every hue.",
 			callback = function(on) Win.SetRainbow(on) end })
 
-		-- Feel: window transparency, master animations switch, watermark, lock
-		local feelSec = look.Section("FEEL")
+		local feelSec = S.Section("FEEL")
 		feelSec.Slider({ text = "Window transparency", icon = "square", min = 0, max = 90, default = 0, suffix = "%",
 			callback = function(v) Win.SetTransparency(v / 100) end })
 		feelSec.Toggle({ text = "Animations", icon = "zap", default = true, desc = "Turn off for instant, motion-free UI.",
@@ -5138,8 +5232,8 @@ function NEMESIS.Window(opts)
 		feelSec.Toggle({ text = "Watermark", icon = "tag", default = false, desc = "A small draggable badge on screen.",
 			callback = function(on) Win.SetWatermark(on, opts.title or "NEMESIS") end })
 
-		local colorSec = look.Section("MENU COLORS")
-		colorSec.Label("Recolor the menu surfaces. Each picker has Single / Double / Multi; Single is used for a flat recolor.")
+		local colorSec = S.Section("MENU COLORS")
+		colorSec.Label("Recolor the menu surfaces. Each picker has Single / Double / Multi.")
 		colorSec.ColorPicker({ text = "Background", icon = "square", default = THEME.Background,
 			callback = function(c) if typeof(c) == "Color3" then Win.SetColor("Background", c) end end })
 		colorSec.ColorPicker({ text = "Elements", icon = "box", default = THEME.Element,
@@ -5149,8 +5243,7 @@ function NEMESIS.Window(opts)
 		colorSec.ColorPicker({ text = "Icons / subtext", icon = "image", default = THEME.SubText,
 			callback = function(c) if typeof(c) == "Color3" then Win.SetColor("SubText", c) end end })
 
-		-- Logo
-		local logoSec = look.Section("LOGO")
+		local logoSec = S.Section("LOGO")
 		logoSec.ColorPicker({ text = "Logo color", icon = "pen-tool", default = logoColor,
 			callback = function(c) if typeof(c) == "Color3" then Win.SetLogoColor(c) end end })
 		local logoIdInput = logoSec.Input({ text = "Logo image id", icon = "image", placeholder = "rbxassetid or number" })
@@ -5163,10 +5256,8 @@ function NEMESIS.Window(opts)
 			end
 		end })
 
-		-- Background image
-		local bgP = appG.Page("Background", { icon = "image" })
-		local bgSec = bgP.Section("BACKGROUND IMAGE")
-		bgSec.Label("Show any image behind the menu. Paste a Roblox asset id and submit, then adjust the opacity.")
+		local bgSec = S.Section("BACKGROUND IMAGE")
+		bgSec.Label("Show any image behind the menu. Paste an asset id, submit, then set the opacity.")
 		local bgInput = bgSec.Input({ text = "Image id", icon = "image", placeholder = "e.g. 13094912294" })
 		local bgOpacity = 0.3
 		bgSec.Button({ text = "Apply background", button = "Apply", icon = "check", callback = function()
@@ -5182,15 +5273,48 @@ function NEMESIS.Window(opts)
 			Win.SetBackgroundImage(nil)
 		end })
 
-		-- AI assistant (free, no key needed; keys optional for smarter replies)
-		local aiG = S.Group("ASSISTANT")
-		local aiP = aiG.Page("AI", { icon = "bot" })
-		local aiSec = aiP.Section("ASK")
-		aiSec.Label("Ask anything. Uses a free built-in AI. Add your own key below for faster, smarter replies.")
-		local aiReply = aiSec.Paragraph({ title = "Reply", content = "Ask a question to get started." })
-		local aiInput = aiSec.Input({ text = "Question", icon = "message-circle", placeholder = "type then press Ask" })
+		local kSec = S.Section("CONTROLS")
+		kSec.Keybind({ text = "Toggle menu", icon = "eye", default = "RightShift", desc = "Key that hides / shows the menu." })
+		local sessSec = S.Section("SESSION")
+		sessSec.Label("Game  " .. tostring(game.PlaceId))
+		local fpsRow = sessSec.Label("FPS  ...")
+		local upRow = sessSec.Label("Uptime  0s")
+		pcall(function()
+			local frames, acc, uptime = 0, 0, 0
+			RunService.Heartbeat:Connect(function(dt)
+				dt = tonumber(dt) or 0
+				frames = frames + 1; acc = acc + dt; uptime = uptime + dt
+				if acc >= 1 then
+					fpsRow.Set("FPS  " .. tostring(math.floor(frames / acc + 0.5)))
+					local secs = math.floor(uptime)
+					upRow.Set("Uptime  " .. (secs >= 60 and (math.floor(secs / 60) .. "m " .. (secs % 60) .. "s") or (secs .. "s")))
+					frames, acc = 0, 0
+				end
+			end)
+		end)
+
+		local resetSec = S.Section("RESET")
+		resetSec.Label("Put the menu back to its default look (theme, accent, font, colours, transparency, background).")
+		resetSec.Button({ text = "Reset to default", button = "Reset", icon = "rotate-ccw", callback = function()
+			if Win.ResetLook then Win.ResetLook() end
+			NEMESIS.Notify({ title = "Reset", content = "Menu restored to default.", duration = 2, icon = "rotate-ccw" })
+		end })
+
+		local aboutSec = S.Section("ABOUT")
+		aboutSec.Paragraph({ title = "NEMESIS " .. NEMESIS.Version, content = "UI library for Roblox executors." })
+		aboutSec.Button({ text = "Unload menu", button = "Unload", icon = "trash-2", callback = function() Win.Destroy() end })
+	end
+
+	-- AI assistant panel (bot icon). Free built-in AI; optional keys for smarter.
+	local function buildAI()
+		local A = makeOverlayPanel("AI Assistant", "sparkles")
+		openAIPanel = A.open
+		local askSec = A.Section("ASK")
+		askSec.Label("Ask anything. Uses a free built-in AI. Add your own key below for smarter replies.")
+		local aiReply = askSec.Paragraph({ title = "Reply", content = "Ask a question to get started." })
+		local aiInput = askSec.Input({ text = "Question", icon = "message-circle", placeholder = "type then press Ask" })
 		local aiBusy = false
-		aiSec.Button({ text = "Ask AI", button = "Ask", icon = "send", callback = function()
+		askSec.Button({ text = "Ask AI", button = "Ask", icon = "send", callback = function()
 			local q = tostring(aiInput.Get() or ""):gsub("^%s+", ""):gsub("%s+$", "")
 			if q == "" or aiBusy then return end
 			aiBusy = true
@@ -5204,16 +5328,15 @@ function NEMESIS.Window(opts)
 					reply = game:HttpGet(url)
 				end)
 				aiBusy = false
+				aiReply.SetTitle("Reply")
 				if reply and #reply > 0 then
-					aiReply.SetTitle("Reply")
 					aiReply.Set(reply:gsub("^%s+", ""):gsub("%s+$", ""))
 				else
-					aiReply.SetTitle("Reply")
 					aiReply.Set("The free AI is busy right now. Try again in a moment.")
 				end
 			end)
 		end })
-		local keySec = aiP.Section("YOUR API KEYS (OPTIONAL)")
+		local keySec = A.Section("YOUR API KEYS (OPTIONAL)")
 		keySec.Label("Groq (gsk_...), OpenRouter (sk-or-...) and Google (AIza...) have free tiers.")
 		local keyInput = keySec.Input({ text = "Add API key", icon = "key-round", placeholder = "paste key" })
 		keySec.Button({ text = "Save key", button = "Save", icon = "plus", callback = function()
@@ -5225,39 +5348,11 @@ function NEMESIS.Window(opts)
 				NEMESIS.Notify({ title = "AI key", content = "Saved.", duration = 2, icon = "check" })
 			end
 		end })
-
-		-- Interface + session
-		local sysG = S.Group("SYSTEM")
-		local ifP = sysG.Page("Interface", { icon = "sliders-horizontal" })
-		local kSec = ifP.Section("CONTROLS")
-		kSec.Keybind({ text = "Toggle menu", icon = "eye", default = "RightShift", desc = "Key that hides / shows the menu." })
-		local sessSec = ifP.Section("SESSION")
-		sessSec.Label("Game  " .. tostring(game.PlaceId))
-		local fpsRow = sessSec.Label("FPS  ...")
-		local upRow = sessSec.Label("Uptime  0s")
-		-- driven off Heartbeat (never busy-loops; the accumulator is the clock),
-		-- same pattern as the footer FPS so it is stub-safe
-		pcall(function()
-			local frames, acc, uptime = 0, 0, 0
-			RunService.Heartbeat:Connect(function(dt)
-				dt = tonumber(dt) or 0
-				frames = frames + 1
-				acc = acc + dt
-				uptime = uptime + dt
-				if acc >= 1 then
-					fpsRow.Set("FPS  " .. tostring(math.floor(frames / acc + 0.5)))
-					local secs = math.floor(uptime)
-					upRow.Set("Uptime  " .. (secs >= 60 and (math.floor(secs / 60) .. "m " .. (secs % 60) .. "s") or (secs .. "s")))
-					frames, acc = 0, 0
-				end
-			end)
-		end)
-		local aboutSec = ifP.Section("ABOUT")
-		aboutSec.Paragraph({ title = "NEMESIS " .. NEMESIS.Version, content = "UI library for Roblox executors." })
-		aboutSec.Button({ text = "Unload menu", button = "Unload", icon = "trash-2", callback = function() Win.Destroy() end })
 	end
+
 	if opts.settings ~= false then
 		pcall(buildSettings)
+		pcall(buildAI)
 	end
 
 	Win.Instance = root

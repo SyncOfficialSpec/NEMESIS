@@ -3912,29 +3912,21 @@ function NEMESIS.Window(opts)
 		applyPageVisual(tab, page, animate ~= false)
 		if tab ~= activeTab then return end
 		for _, p in ipairs(tab.pages) do p.body.Visible = (p == page) end
-		if animate ~= false then
-			-- Syde-style page reveal: the section cards cascade in via a per-card
-			-- UIScale pop (works alongside the UIListLayout). The body itself is NOT
-			-- shifted, otherwise sliding the whole ScrollingFrame opens a visible
-			-- empty gap under the breadcrumb for the length of the tween.
-			page.body.Position = UDim2.new(0, 0, 0, 0)
-			pcall(function()
-				local i = 0
-				for _, col in ipairs(page.columnsHolder:GetChildren()) do
-					if col:IsA("Frame") then
-						for _, card in ipairs(col:GetChildren()) do
-							if card:IsA("Frame") then
-								local sc = card:FindFirstChildOfClass("UIScale")
-								if not sc then sc = Create("UIScale", { Scale = 1, Parent = card }) end
-								sc.Scale = 0.94
-								task.delay(i * 0.03, function() tween(sc, { Scale = 1 }, TI.SYDE_REFLOW) end)
-								i = i + 1
-							end
-						end
+		-- the content is shown at full size with no per-card scale/slide: resizing
+		-- the cards on every tab switch read as a jarring "everything grows" jump.
+		-- The sliding dock indicator carries the switch; any left-over UIScale from
+		-- an earlier build is snapped back to 1 so nothing stays shrunk.
+		page.body.Position = UDim2.new(0, 0, 0, 0)
+		pcall(function()
+			for _, col in ipairs(page.columnsHolder:GetChildren()) do
+				if col:IsA("Frame") then
+					for _, card in ipairs(col:GetChildren()) do
+						local sc = card:IsA("Frame") and card:FindFirstChildOfClass("UIScale")
+						if sc then sc.Scale = 1 end
 					end
 				end
-			end)
-		end
+			end
+		end)
 		bindFades(page.body)
 		setCrumb(tab, page)
 		runSearch(searchBox.Text)

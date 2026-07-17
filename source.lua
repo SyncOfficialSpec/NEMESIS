@@ -4881,13 +4881,9 @@ function NEMESIS.Window(opts)
 		-- an earlier build is snapped back to 1 so nothing stays shrunk.
 		page.body.Position = UDim2.new(0, 0, 0, 0)
 		pcall(function()
-			for _, col in ipairs(page.columnsHolder:GetChildren()) do
-				if col:IsA("Frame") then
-					for _, card in ipairs(col:GetChildren()) do
-						local sc = card:IsA("Frame") and card:FindFirstChildOfClass("UIScale")
-						if sc then sc.Scale = 1 end
-					end
-				end
+			for _, card in ipairs(page.columnsHolder:GetChildren()) do
+				local sc = card:IsA("Frame") and card:FindFirstChildOfClass("UIScale")
+				if sc then sc.Scale = 1 end
 			end
 		end)
 		bindFades(page.body)
@@ -5714,52 +5710,62 @@ function NEMESIS.Window(opts)
 			})
 			smoothScroll(pageBody)
 
-			-- panels laid out across N columns (the one-pager grid)
-			local ncols = math.clamp(math.floor(popts.columns or windowColumns), 1, 3)
-			local COL_GAP = 10
-			local colOff = math.floor(COL_GAP * (ncols - 1) / ncols + 0.5)
+			-- Responsive masonry: panels are positioned manually so they can smoothly
+			-- reflow (switch columns) when the window is resized. The column count
+			-- adapts to the width; each panel eases to its new slot on every change.
+			local GAP = 10
+			local MINCOLW = 300   -- narrower than this and a column is dropped
+			local maxCols = math.clamp(math.floor(popts.columns or windowColumns), 1, 3)
 			local columnsHolder = Create("Frame", {
 				Size = UDim2.new(1, 0, 0, 0),
-				AutomaticSize = Enum.AutomaticSize.Y,
 				BackgroundTransparency = 1,
 				Parent = pageBody,
-			}, {
-				Create("UIListLayout", {
-					FillDirection = Enum.FillDirection.Horizontal,
-					Padding = UDim.new(0, COL_GAP),
-					SortOrder = Enum.SortOrder.LayoutOrder,
-					VerticalAlignment = Enum.VerticalAlignment.Top,
-				}),
 			})
-			local pageCols, colCount = {}, {}
-			for i = 1, ncols do
-				pageCols[i] = Create("Frame", {
-					Size = UDim2.new(1 / ncols, -colOff, 0, 0),
-					AutomaticSize = Enum.AutomaticSize.Y,
-					BackgroundTransparency = 1,
-					LayoutOrder = i,
-					Parent = columnsHolder,
-				}, {
-					Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 10) }),
-				})
-				colCount[i] = 0
-			end
-			-- pick a column: explicit (column/side) or auto = fewest sections, ties left
-			local function pickColumn(sopts)
-				local idx
-				if sopts and type(sopts.column) == "number" then
-					idx = math.clamp(math.floor(sopts.column), 1, ncols)
-				elseif sopts and sopts.side == "left" then
-					idx = 1
-				elseif sopts and sopts.side == "right" then
-					idx = math.min(2, ncols)
-				else
-					idx = 1
-					for i = 2, ncols do if colCount[i] < colCount[idx] then idx = i end end
+			local sections = {}   -- ordered panel cards
+			local heights = {}    -- card -> cached local (pre-scale) height
+			local relayoutQueued = false
+			local function uiScale() local s = 1; pcall(function() s = rootScale.Scale end); return (s and s > 0) and s or 1 end
+			local function relayout(animate)
+				local sc = uiScale()
+				local localW = (columnsHolder.AbsoluteSize.X > 0 and columnsHolder.AbsoluteSize.X or 300) / sc
+				local cols = math.clamp(math.min(math.max(1, math.floor(localW / MINCOLW)), maxCols), 1, maxCols)
+				local colW = (localW - (cols - 1) * GAP) / cols
+				local colH = {}
+				for i = 1, cols do colH[i] = 0 end
+				for _, card in ipairs(sections) do
+					if card.Parent then
+						local ci = 1
+						for i = 2, cols do if colH[i] < colH[ci] then ci = i end end
+						card.Size = UDim2.new(0, colW, 0, 0)
+						local target = UDim2.fromOffset((ci - 1) * (colW + GAP), colH[ci])
+						if animate then tween(card, { Position = target }, TI.SYDE_REFLOW) else card.Position = target end
+						colH[ci] = colH[ci] + (heights[card] or (card.AbsoluteSize.Y / sc)) + GAP
+					end
 				end
-				colCount[idx] = colCount[idx] + 1
-				return pageCols[idx]
+				local maxH = 0
+				for i = 1, cols do maxH = math.max(maxH, colH[i]) end
+				columnsHolder.Size = UDim2.new(1, 0, 0, math.max(maxH - GAP, 0))
 			end
+			local function queueRelayout(animate)
+				if relayoutQueued then return end
+				relayoutQueued = true
+				task.defer(function() relayoutQueued = false; if columnsHolder.Parent then pcall(relayout, animate) end end)
+			end
+			columnsHolder:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() queueRelayout(true) end)
+			columnsHolder.ChildAdded:Connect(function(c)
+				if not c:IsA("Frame") then return end
+				c.AnchorPoint = Vector2.new(0, 0)
+				c.AutomaticSize = Enum.AutomaticSize.Y
+				sections[#sections + 1] = c
+				heights[c] = c.AbsoluteSize.Y / uiScale()
+				c:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+					local h = c.AbsoluteSize.Y / uiScale()
+					if math.abs((heights[c] or 0) - h) > 0.5 then heights[c] = h; queueRelayout(true) end
+				end)
+				queueRelayout(false)
+			end)
+			-- every panel now lands in one shared holder; the masonry places it
+			local function pickColumn() return columnsHolder end
 
 			local page = {
 				name = tostring(pname or "Page"),

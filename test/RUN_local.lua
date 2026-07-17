@@ -4867,11 +4867,11 @@ function NEMESIS.Window(opts)
 		Name = "Icon",
 		AnchorPoint = Vector2.new(1, 1),
 		Position = UDim2.new(1, 0, 1, 0),
-		Size = UDim2.new(0, 30, 0, 30),
+		Size = UDim2.new(0, 22, 0, 22),
 		BackgroundTransparency = 1,
 		Image = "rbxassetid://86527207319523",
 		ImageColor3 = Color3.fromRGB(228, 231, 240),
-		ImageTransparency = 0,
+		ImageTransparency = 0.45,   -- idle: small + faded until hovered
 		ScaleType = Enum.ScaleType.Slice,
 		SliceCenter = Rect.new(51, 52, 51, 52),
 		SliceScale = 0.5,
@@ -4911,22 +4911,29 @@ function NEMESIS.Window(opts)
 			local relY = ((mouse.Y - insetY) - pos.Y) / math.max(sz.Y, 1)
 			return Vector2.new(1 - math.clamp(relX, 0, 1), 1 - math.clamp(relY, 0, 1))
 		end
+		-- hover: full size + full opacity, stretched toward the cursor
 		local function stretchIcon(duration)
 			local n = normResize()
 			tween(resizeIcon, {
 				Size = UDim2.new(0, 30 + n.X * 26, 0, 30 + n.Y * 26),
+				ImageTransparency = 0,
 				ImageColor3 = Color3.fromRGB(228, 231, 240),
 			}, TweenInfo.new(duration or 0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out))
 		end
-		local function pressIcon()
+		-- while dragging to resize: keep stretching toward the cursor, accent tint
+		local function pressIcon(duration)
+			local n = normResize()
 			tween(resizeIcon, {
-				Size = UDim2.new(0, 28, 0, 28),
+				Size = UDim2.new(0, 30 + n.X * 30, 0, 30 + n.Y * 30),
+				ImageTransparency = 0,
 				ImageColor3 = accent,
-			}, TweenInfo.new(0.12, Enum.EasingStyle.Quint, Enum.EasingDirection.Out))
+			}, TweenInfo.new(duration or 0.1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out))
 		end
+		-- idle: small and a little faded so it sits quietly until used
 		local function resetIcon()
 			tween(resizeIcon, {
-				Size = UDim2.new(0, 30, 0, 30),
+				Size = UDim2.new(0, 22, 0, 22),
+				ImageTransparency = 0.45,
 				ImageColor3 = Color3.fromRGB(228, 231, 240),
 			}, TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out))
 		end
@@ -4988,6 +4995,8 @@ function NEMESIS.Window(opts)
 				-- *2: window is centre-anchored, so the corner tracks the cursor
 				targetW = math.clamp(startW + (delta.X / scale) * 2, minW, maxW)
 				targetH = math.clamp(startH + (delta.Y / scale) * 2, minH, maxH)
+				-- the grip stretches toward the cursor as you drag
+				pressIcon()
 			end
 		end)
 		UserInputService.InputEnded:Connect(function(input)

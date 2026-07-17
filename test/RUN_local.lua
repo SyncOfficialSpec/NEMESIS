@@ -146,14 +146,18 @@ local ICONS_BASE = "https://raw.githubusercontent.com/SyncOfficialSpec/NEMESIS/m
 local ICONS_VER = "v1"
 local ICON_PX = 48
 
-local iconIndex = nil -- nil = not tried, false = failed, table = loaded
-local iconSheets = {} -- sheet number -> rbxasset id (false = failed)
+-- table = loaded. A single failed fetch used to be cached as a permanent
+-- failure, which made EVERY icon fall back to a glyph for the whole session
+-- after one HTTP hiccup - so instead we retry a bounded number of times.
+local iconIndex = nil
+local iconIndexTries = 0
+local iconSheets = {}      -- sheet number -> rbxasset id string (once loaded)
+local iconSheetTries = {}  -- sheet number -> attempts so far
 
 local function loadIconIndex()
-	if iconIndex ~= nil then
-		return iconIndex or nil
-	end
-	iconIndex = false
+	if type(iconIndex) == "table" then return iconIndex end
+	if iconIndexTries >= 8 then return nil end   -- give up only after real retries
+	iconIndexTries = iconIndexTries + 1
 	if type(loadstring) == "function" then
 		pcall(function()
 			local src = game:HttpGet(ICONS_BASE .. "index_" .. ICONS_VER .. ".lua")
@@ -166,14 +170,14 @@ local function loadIconIndex()
 			end
 		end)
 	end
-	return iconIndex or nil
+	return type(iconIndex) == "table" and iconIndex or nil
 end
 
 local function loadIconSheet(n)
-	if iconSheets[n] ~= nil then
-		return iconSheets[n] or nil
-	end
-	iconSheets[n] = false
+	if type(iconSheets[n]) == "string" then return iconSheets[n] end
+	iconSheetTries[n] = iconSheetTries[n] or 0
+	if iconSheetTries[n] >= 6 then return nil end
+	iconSheetTries[n] = iconSheetTries[n] + 1
 	local getAsset = customAssetFn()
 	if not getAsset or type(writefile) ~= "function" then return nil end
 	pcall(function()
@@ -191,7 +195,7 @@ local function loadIconSheet(n)
 			if type(id) == "string" and id ~= "" then iconSheets[n] = id end
 		end
 	end)
-	return iconSheets[n] or nil
+	return type(iconSheets[n]) == "string" and iconSheets[n] or nil
 end
 
 -- Baked art (shadows, glow filaments, checkerboard, cursor ring, grip ticks).
@@ -366,6 +370,40 @@ local function padXY(x, y)
 	})
 end
 
+-- A chevron that ALWAYS renders as a real icon: the atlas "chevron-*" sprite when
+-- it resolves, a clean drawn vector caret otherwise. Never a unicode/tofu glyph.
+-- Returns the rotatable element; the caller sets AnchorPoint/Position.
+local function iconChevron(parent, px, color, name)
+	local spec = resolveIcon(name or "chevron-up")
+	if spec then
+		local img = Create("ImageLabel", { Size = UDim2.new(0, px, 0, px), BackgroundTransparency = 1, ImageColor3 = color, Parent = parent })
+		applyIcon(img, spec)
+		return img
+	end
+	local holder = Create("Frame", { Size = UDim2.new(0, px, 0, px), BackgroundTransparency = 1, Parent = parent })
+	local arm = px * 0.42
+	local th = math.max(1.5, px / 9)
+	Create("Frame", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(0.5, 1, 0.5, 1), Size = UDim2.new(0, arm, 0, th), BackgroundColor3 = color, BorderSizePixel = 0, Rotation = 45, Parent = holder }, { corner(99) })
+	Create("Frame", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0.5, -1, 0.5, 1), Size = UDim2.new(0, arm, 0, th), BackgroundColor3 = color, BorderSizePixel = 0, Rotation = -45, Parent = holder }, { corner(99) })
+	return holder
+end
+
+-- An X that always renders: the atlas "x" sprite, or a drawn cross. Never a glyph.
+local function iconX(parent, px, color)
+	local spec = resolveIcon("x")
+	if spec then
+		local img = Create("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, px, 0, px), BackgroundTransparency = 1, ImageColor3 = color, Parent = parent })
+		applyIcon(img, spec)
+		return img
+	end
+	local holder = Create("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, px, 0, px), BackgroundTransparency = 1, Parent = parent })
+	local arm = px * 0.72
+	local th = math.max(1.5, px / 8)
+	Create("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, arm, 0, th), BackgroundColor3 = color, BorderSizePixel = 0, Rotation = 45, Parent = holder }, { corner(99) })
+	Create("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, arm, 0, th), BackgroundColor3 = color, BorderSizePixel = 0, Rotation = -45, Parent = holder }, { corner(99) })
+	return holder
+end
+
 local function tagSearch(frame, text)
 	pcall(function()
 		frame:SetAttribute("NemesisSearch", tostring(text or ""))
@@ -536,6 +574,14 @@ local function tween(inst, props, info, exact)
 	local t = TweenService:Create(inst, (reducedMotion and not exact) and REDUCED_TI or (info or TI.SLIDE), props)
 	t:Play()
 	return t
+end
+
+-- recolor an icon returned by iconChevron/iconX, whether it's an atlas ImageLabel
+-- or a drawn-vector holder (recolours its line frames)
+local function recolorIcon(el, c, info)
+	if el:IsA("ImageLabel") then tween(el, { ImageColor3 = c }, info)
+	elseif el:IsA("TextLabel") then tween(el, { TextColor3 = c }, info)
+	else for _, ch in ipairs(el:GetChildren()) do if ch:IsA("Frame") then tween(ch, { BackgroundColor3 = c }, info) end end end
 end
 
 -- Minimal JSON (own encoder/decoder so configs work on any executor without
@@ -3381,39 +3427,6 @@ function Elements.RippleButton(parent, accent, opts)
 	return control
 end
 
--- FlipButton: two-faced button that flips between a front and back label on hover.
-function Elements.FlipButton(parent, accent, opts)
-	opts = opts or {}
-	onAccent(function(c) accent = c end)
-	local row = newRow(parent, ROW_H)
-	local card = Create("TextButton", {
-		Size = UDim2.new(1, ROW_PAD * 2, 1, 0), Position = UDim2.new(0, -ROW_PAD, 0, 0),
-		BackgroundColor3 = THEME.Element, AutoButtonColor = false, Text = "", ClipsDescendants = true, Parent = row,
-	}, { corner(8), stroke(THEME.ElementStroke, 1, 0.4) })
-	local function face(text, y)
-		return Create("TextLabel", {
-			Position = UDim2.new(0, ROW_PAD, y, 0), Size = UDim2.new(1, -ROW_PAD * 2, 1, 0), BackgroundTransparency = 1,
-			Font = FONT_MED, Text = tostring(text), TextColor3 = THEME.Text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, Parent = card,
-		})
-	end
-	local front = face(opts.front or opts.text or "Hover me", 0)
-	local back = face(opts.back or "Confirm?", -1)
-	accentProp(back, "TextColor3", accent)
-	card.MouseEnter:Connect(function()
-		tween(front, { Position = UDim2.new(0, ROW_PAD, 1, 0) }, TI.EXPAND)
-		tween(back, { Position = UDim2.new(0, ROW_PAD, 0, 0) }, TI.EXPAND)
-		tween(card, { BackgroundColor3 = THEME.ElementHover }, TI.HOVER)
-	end)
-	card.MouseLeave:Connect(function()
-		tween(front, { Position = UDim2.new(0, ROW_PAD, 0, 0) }, TI.EXPAND)
-		tween(back, { Position = UDim2.new(0, ROW_PAD, -1, 0) }, TI.EXPAND)
-		tween(card, { BackgroundColor3 = THEME.Element }, TI.HOVEROFF)
-	end)
-	card.MouseButton1Click:Connect(function() if type(opts.callback) == "function" then pcall(opts.callback) end end)
-	local control = {}
-	function control.Set(s) if type(s) == "table" then if s.Front then front.Text = s.Front end if s.Back then back.Text = s.Back end end end
-	return control
-end
 
 -- HoldButton: press and hold for Duration seconds; a fill sweeps and fires on complete.
 function Elements.HoldButton(parent, accent, opts)
@@ -3569,7 +3582,8 @@ function Elements.FAQ(parent, accent, opts)
 		tagSearch(card, q .. " " .. a)
 		local head = Create("TextButton", { Size = UDim2.new(1, 0, 0, 38), BackgroundTransparency = 1, AutoButtonColor = false, Text = "", Parent = card }, { padXY(ROW_PAD, 0) })
 		Create("TextLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(1, -24, 0, 16), BackgroundTransparency = 1, Font = FONT_MED, Text = tostring(q), TextColor3 = THEME.Text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = head })
-		local chev = Create("TextLabel", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 16, 1, 0), BackgroundTransparency = 1, Font = FONT_BOLD, Text = "\u{25B4}", TextColor3 = THEME.SubText, TextSize = 14, Rotation = 180, Parent = head })
+		local chev = iconChevron(head, 14, THEME.SubText, "chevron-down")
+		chev.AnchorPoint = Vector2.new(1, 0.5); chev.Position = UDim2.new(1, 0, 0.5, 0); chev.Rotation = 180
 		local ans = Create("TextLabel", { Position = UDim2.new(0, ROW_PAD, 0, 38), Size = UDim2.new(1, -ROW_PAD * 2, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, Font = FONT, Text = tostring(a), TextColor3 = THEME.SubText, TextSize = 12, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, Parent = card })
 		local open = false
 		local function setOpen(o)
@@ -3825,31 +3839,9 @@ function makeSection(host, accent, title, startClosed)
 			TextXAlignment = Enum.TextXAlignment.Left,
 			Parent = header,
 		})
-		local chev
-		local chevSpec = resolveIcon("chevron-up")
-		if chevSpec then
-			chev = Create("ImageLabel", {
-				BackgroundTransparency = 1,
-				AnchorPoint = Vector2.new(1, 0.5),
-				Position = UDim2.new(1, 0, 0.5, 0),
-				Size = UDim2.new(0, 14, 0, 14),
-				ImageColor3 = THEME.Faint,
-				Parent = header,
-			})
-			applyIcon(chev, chevSpec)
-		else
-			chev = Create("TextLabel", {
-				BackgroundTransparency = 1,
-				AnchorPoint = Vector2.new(1, 0.5),
-				Position = UDim2.new(1, 0, 0.5, 0),
-				Size = UDim2.new(0, 16, 1, 0),
-				Font = FONT_BOLD,
-				Text = "\u{25B4}",
-				TextColor3 = THEME.SubText,
-				TextSize = 16,
-				Parent = header,
-			})
-		end
+		local chev = iconChevron(header, 15, THEME.SubText, "chevron-down")
+		chev.AnchorPoint = Vector2.new(1, 0.5)
+		chev.Position = UDim2.new(1, 0, 0.5, 0)
 		local open = true
 		sectionSetOpen = function(want, animate)
 			open = want
@@ -3906,7 +3898,6 @@ function makeSection(host, accent, title, startClosed)
 	host.LineChart = bind("Chart")
 	host.StackedChart = bind("StackedChart")
 	host.RippleButton = bind("RippleButton")
-	host.FlipButton = bind("FlipButton")
 	host.HoldButton = bind("HoldButton")
 	host.ShimmerLabel = bind("ShimmerLabel")
 	host.ScrollHint = bind("ScrollHint")
@@ -4044,13 +4035,12 @@ local function keyGate(kopts, windowTitle)
 		Position = UDim2.new(1, 4, 0, -2),
 		Size = UDim2.new(0, 24, 0, 24),
 		BackgroundTransparency = 1,
-		Font = FONT,
-		Text = "\u{2715}",
-		TextColor3 = THEME.SubText,
-		TextSize = 14,
+		AutoButtonColor = false,
+		Text = "",
 		ZIndex = 60002,
 		Parent = card,
 	})
+	do local ci = iconX(closeBtn, 13, THEME.SubText); ci.ZIndex = 60003 end
 
 	local function finish(ok)
 		if result ~= nil then return end
@@ -6291,7 +6281,8 @@ function NEMESIS.Window(opts)
 			BackgroundTransparency = 1, Font = FONT_SEMI, Text = titleText, TextColor3 = THEME.Text, TextSize = 15,
 			TextXAlignment = Enum.TextXAlignment.Left, Parent = header })
 		local closeX = Create("TextButton", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 24, 0, 24),
-			BackgroundTransparency = 1, Font = FONT, Text = "\u{2715}", TextColor3 = THEME.SubText, TextSize = 14, Parent = header })
+			BackgroundTransparency = 1, AutoButtonColor = false, Text = "", Parent = header })
+		local closeIcon = iconX(closeX, 13, THEME.SubText)
 		Create("Frame", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 12, 0, 44), Size = UDim2.new(1, -24, 0, 1),
 			BackgroundColor3 = THEME.Stroke, BackgroundTransparency = 0.3, BorderSizePixel = 0, ZIndex = 40002, Parent = card })
 
@@ -6335,8 +6326,8 @@ function NEMESIS.Window(opts)
 		function ov.toggle() if ov.opened then ov.close() else ov.open() end end
 		backdrop.MouseButton1Click:Connect(ov.close)
 		closeX.MouseButton1Click:Connect(ov.close)
-		closeX.MouseEnter:Connect(function() tween(closeX, { TextColor3 = DANGER }, TI.HOVER) end)
-		closeX.MouseLeave:Connect(function() tween(closeX, { TextColor3 = THEME.SubText }, TI.HOVEROFF) end)
+		closeX.MouseEnter:Connect(function() recolorIcon(closeIcon, DANGER, TI.HOVER) end)
+		closeX.MouseLeave:Connect(function() recolorIcon(closeIcon, THEME.SubText, TI.HOVEROFF) end)
 
 		-- section factory over the scrolling body (reuses makeSection)
 		function ov.Section(title) return makeSection(body, accent, title) end
@@ -6772,7 +6763,6 @@ s_data.StackedChart({ text = "Split", series = { "Hit", "Miss" }, rows = { { Nam
 local s_wbtn = WG.Section("BUTTONS")
 s_wbtn.RippleButton({ text = "Ripple button", callback = function() notify("Ripple", "clicked", 1.5) end })
 s_wbtn.CopyButton({ text = "Copy my id", copy = "1234567890" })
-s_wbtn.FlipButton({ front = "Hover to reveal", back = "Click to confirm", callback = function() notify("Flip", "confirmed", 1.5) end })
 s_wbtn.HoldButton({ text = "Hold to unload", duration = 1.5, callback = function() notify("Hold", "completed", 1.5) end })
 s_wbtn.Checkbox({ text = "Checkbox style", default = true, flag = "wg_cbx" })
 

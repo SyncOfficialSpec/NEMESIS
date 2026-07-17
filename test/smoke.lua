@@ -120,7 +120,6 @@ check(type(gen.BarChart({ text = "Bars", points = { 3, 7, 2, 9 } }).Push) == "fu
 check(type(gen.Chart({ text = "Line", points = { 1, 4, 2, 6, 3 } }).Push) == "function", "Chart created")
 check(type(gen.StackedChart({ text = "Stack", series = { "A", "B" }, rows = { { Name = "R1", Values = { 3, 2 } } } }).Set) == "function", "StackedChart created")
 check(type(gen.RippleButton({ text = "Ripple", callback = function() end }).Fire) == "function", "RippleButton created")
-check(type(gen.FlipButton({ front = "A", back = "B" }).Set) == "function", "FlipButton created")
 check(type(gen.HoldButton({ text = "Hold", duration = 1, callback = function() end })) == "table", "HoldButton created")
 check(type(gen.ShimmerLabel({ text = "Shine" }).Set) == "function", "ShimmerLabel created")
 check(type(gen.ScrollHint({ text = "More" }).Set) == "function", "ScrollHint created")

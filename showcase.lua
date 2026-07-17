@@ -109,6 +109,48 @@ s_lb.Divider()
 s_lb.Listbox({ text = "Multi select", options = { "Head", "Neck", "Chest", "Stomach", "Pelvis", "Arms", "Legs" }, multi = true, default = { "Head", "Chest" }, rows = 4,
 	callback = function(list) notify("Listbox", table.concat(list, ", "), 2) end })
 
+-- New parity elements (charts, buttons, containers, pickers) -----------
+local WG = Basics.Page("Widgets", { icon = "layout-dashboard" })
+local s_data = WG.Section("DATA")
+s_data.Stat({ text = "Ping", value = "23 ms", icon = "activity" })
+local prog = s_data.ProgressBar({ text = "Loading", value = 35, max = 100, suffix = "%" })
+s_data.BarChart({ text = "Damage", points = { { Value = 4, Label = "Mon" }, { Value = 8, Label = "Tue" }, { Value = 3, Label = "Wed" }, { Value = 9, Label = "Thu" }, { Value = 6, Label = "Fri" } }, suffix = "" })
+s_data.Chart({ text = "FPS", points = { 40, 55, 48, 61, 59, 72, 64 }, filled = true })
+s_data.StackedChart({ text = "Split", series = { "Hit", "Miss" }, rows = { { Name = "AK", Values = { 7, 3 } }, { Name = "AWP", Values = { 9, 1 } } } })
+
+local s_wbtn = WG.Section("BUTTONS")
+s_wbtn.RippleButton({ text = "Ripple button", callback = function() notify("Ripple", "clicked", 1.5) end })
+s_wbtn.CopyButton({ text = "Copy my id", copy = "1234567890" })
+s_wbtn.FlipButton({ front = "Hover to reveal", back = "Click to confirm", callback = function() notify("Flip", "confirmed", 1.5) end })
+s_wbtn.HoldButton({ text = "Hold to unload", duration = 1.5, callback = function() notify("Hold", "completed", 1.5) end })
+s_wbtn.Checkbox({ text = "Checkbox style", default = true, flag = "wg_cbx" })
+
+local s_pick = WG.Section("PICKERS")
+s_pick.SegmentedPicker({ text = "Mode", options = { "Legit", "Rage", "Semi" }, default = "Rage", callback = function(v) notify("Mode", v, 1.2) end })
+s_pick.GradientPicker({ text = "ESP gradient", colors = { Color3.fromRGB(255, 60, 90), Color3.fromRGB(90, 120, 255) } })
+s_pick.Button({ text = "Confirm dialog", button = "Open", callback = function()
+	NEMESIS.Modal({ title = "Are you sure?", content = "This will reset all of your settings to default.", confirmText = "Reset", onConfirm = function() notify("Modal", "confirmed", 1.5) end })
+end })
+s_pick.Button({ text = "Toast", button = "Show", callback = function() NEMESIS.Toast({ content = "Saved to config", icon = "check", duration = 2.5 }) end })
+
+local s_deco = WG.Section("DECORATIVE")
+s_deco.ShimmerLabel({ text = "NEMESIS PREMIUM", bold = true })
+s_deco.Spacer({ height = 6 })
+local spoiler = s_deco.Spoiler({ text = "Spoiler: hidden options" })
+spoiler.Toggle({ text = "Secret toggle", default = false })
+spoiler.Slider({ text = "Secret slider", min = 0, max = 10, default = 5 })
+s_deco.FAQ({ items = {
+	{ question = "How do I bind a key?", answer = "Click a keybind pill, then press any key or mouse button." },
+	{ question = "Where are configs saved?", answer = "Under the executor workspace, as JSON per config name." },
+} })
+s_deco.Changelog({ title = "Changelog", version = "2.3", date = "today", entries = {
+	{ Tag = "Added", Text = "Charts, progress bars, segmented picker and more." },
+	{ Tag = "Fixed", Text = "Tab-switch resize jump and the settings-panel click-close." },
+	{ Tag = "Changed", Text = "Every animation now eases on Syde's exponential curve." },
+} })
+s_deco.PinnedList({ title = "Scripts", items = { { Name = "Aimbot" }, { Name = "ESP", Pinned = true }, { Name = "Triggerbot" } } })
+s_deco.ScrollHint({ text = "Scroll for more" })
+
 -- Standalone page (renders below the group, no group header) -----------
 local Info = Elements.Page("Info", { icon = "info" })
 local s_info = Info.Section("ABOUT")

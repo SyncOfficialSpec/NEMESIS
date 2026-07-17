@@ -1095,6 +1095,87 @@ function NEMESIS.Notify(opts)
 	end)
 end
 
+-- NEMESIS.Modal({ title, content, confirmText, cancelText, onConfirm, onCancel }):
+-- a centred confirm dialog over a dimming backdrop; grows + fades in.
+function NEMESIS.Modal(opts)
+	opts = opts or {}
+	local gui = ensureRoot()
+	local backdrop = Create("TextButton", {
+		Name = "ModalBackdrop", Size = UDim2.new(1, 0, 1, 0), BackgroundColor3 = Color3.new(0, 0, 0),
+		BackgroundTransparency = 1, AutoButtonColor = false, Text = "", ZIndex = 60000, Parent = gui,
+	})
+	local scale = Create("UIScale", { Scale = 0.92 })
+	local card = Create("CanvasGroup", {
+		Name = "Modal", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0),
+		Size = UDim2.new(0, 340, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundColor3 = THEME.Group,
+		GroupTransparency = 1, ZIndex = 60001, Parent = gui,
+	}, {
+		corner(14), stroke(THEME.Stroke, 1, 0.3), scale, padding(18),
+		Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 12) }),
+	})
+	siblingShadow(card)
+	Create("TextLabel", { Size = UDim2.new(1, 0, 0, 20), BackgroundTransparency = 1, Font = FONT_SEMI, Text = tostring(opts.title or "Confirm"), TextColor3 = THEME.Text, TextSize = 16, TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = 1, Parent = card })
+	Create("TextLabel", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, Font = FONT, Text = tostring(opts.content or opts.text or ""), TextColor3 = THEME.SubText, TextSize = 13, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = 2, Parent = card })
+	local btnRow = Create("Frame", { Size = UDim2.new(1, 0, 0, 34), BackgroundTransparency = 1, LayoutOrder = 3, Parent = card })
+	local closed = false
+	local function close()
+		if closed then return end; closed = true
+		tween(backdrop, { BackgroundTransparency = 1 }, TI.FAST)
+		tween(card, { GroupTransparency = 1 }, TI.FAST)
+		tween(scale, { Scale = 0.94 }, TI.FAST)
+		task.delay(0.22, function() if backdrop then backdrop:Destroy() end if card then card:Destroy() end end)
+	end
+	local function mkBtn(text, x, primary)
+		local b = Create("TextButton", {
+			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(x, x == 1 and 0 or -6, 0.5, 0), Size = UDim2.new(0, 96, 0, 30),
+			BackgroundColor3 = primary and THEME.Accent or THEME.Element, AutoButtonColor = false, Font = FONT_MED,
+			Text = tostring(text), TextColor3 = primary and accentTextColor(THEME.Accent) or THEME.Text, TextSize = 13, Parent = btnRow,
+		}, { corner(7), stroke(THEME.ElementStroke, 1, primary and 1 or 0.4) })
+		return b
+	end
+	local cancel = mkBtn(opts.cancelText or "Cancel", 0.5, false)
+	local confirm = mkBtn(opts.confirmText or "Confirm", 1, true)
+	confirm.MouseButton1Click:Connect(function() if type(opts.onConfirm) == "function" then pcall(opts.onConfirm) end close() end)
+	cancel.MouseButton1Click:Connect(function() if type(opts.onCancel) == "function" then pcall(opts.onCancel) end close() end)
+	backdrop.MouseButton1Click:Connect(function() if type(opts.onCancel) == "function" then pcall(opts.onCancel) end close() end)
+	tween(backdrop, { BackgroundTransparency = 0.45 }, TI.EXPAND)
+	tween(card, { GroupTransparency = 0 }, TI.EXPAND)
+	tween(scale, { Scale = 1 }, TI.EXPAND)
+	return { Close = close }
+end
+
+-- NEMESIS.Toast({ content, duration, icon }): a small top-centre chip that slides
+-- in and auto-dismisses. Lighter than Notify (which is the side card).
+local toastHolder, toasts
+function NEMESIS.Toast(opts)
+	opts = opts or {}
+	local gui = ensureRoot()
+	if not (toastHolder and toastHolder.Parent) then
+		toastHolder = Create("Frame", { Name = "Toasts", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 14), Size = UDim2.new(0, 300, 1, 0), BackgroundTransparency = 1, ZIndex = 59000, Parent = gui }, {
+			Create("UIListLayout", { HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Top, Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
+		})
+		toasts = 0
+	end
+	toasts = (toasts or 0) + 1
+	local scale = Create("UIScale", { Scale = 0.9 })
+	local chip = Create("CanvasGroup", {
+		Size = UDim2.new(0, 0, 0, 32), AutomaticSize = Enum.AutomaticSize.X, BackgroundColor3 = THEME.Group,
+		GroupTransparency = 1, LayoutOrder = -toasts, Parent = toastHolder,
+	}, { corner(9), stroke(THEME.Stroke, 1, 0.4), scale, padXY(12, 0), Create("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8) }) })
+	siblingShadow(chip)
+	local spec = resolveIcon(opts.icon)
+	if spec then local img = Create("ImageLabel", { Size = UDim2.new(0, 16, 0, 16), BackgroundTransparency = 1, ImageColor3 = THEME.Accent, LayoutOrder = 1, Parent = chip }); applyIcon(img, spec) end
+	Create("TextLabel", { Size = UDim2.new(0, 0, 1, 0), AutomaticSize = Enum.AutomaticSize.X, BackgroundTransparency = 1, Font = FONT_MED, Text = tostring(opts.content or opts.text or ""), TextColor3 = THEME.Text, TextSize = 13, LayoutOrder = 2, Parent = chip })
+	tween(chip, { GroupTransparency = 0 }, TI.EXPAND)
+	tween(scale, { Scale = 1 }, TI.EXPAND)
+	task.delay(tonumber(opts.duration) or 2.5, function()
+		if not chip then return end
+		tween(chip, { GroupTransparency = 1 }, TI.FAST)
+		tween(scale, { Scale = 0.9 }, TI.FAST)
+		task.delay(0.25, function() if chip then chip:Destroy() end end)
+	end)
+end
+
 
 -- Inline row scaffold (label on the left, control on the right)
 -- Rows live inside a Section's body, separated by spacing only (no divider lines).
@@ -1228,6 +1309,7 @@ end
 
 -- Element factories: (parent, accent, opts) -> control { Set, Get }
 local Elements = {}
+local makeSection   -- forward declaration so nesting elements can host their own sections
 
 function Elements.Label(parent, accent, text)
 	-- text inside a subtle rounded card
@@ -2833,8 +2915,688 @@ function Elements.ColorPicker(parent, accent, opts)
 	return control
 end
 
+-- ===== extra elements (chart / progress / decorative / container primitives) =====
+
+-- Spacer: blank vertical gap for breathing room. opts.height (px) or a number.
+function Elements.Spacer(parent, accent, opts)
+	local h = (type(opts) == "number" and opts) or (type(opts) == "table" and tonumber(opts.height)) or 10
+	local row = Create("Frame", { Size = UDim2.new(1, 0, 0, h), BackgroundTransparency = 1, Parent = parent })
+	return { Instance = row }
+end
+
+-- ProgressBar: a labelled bar that fills to a value. opts { text, value(0..1 or
+-- 0..100), min, max, suffix, icon }. Returns Set(v)/Get(). Fill eases in.
+function Elements.ProgressBar(parent, accent, opts)
+	opts = opts or {}
+	onAccent(function(c) accent = c end)
+	local min = tonumber(opts.min) or 0
+	local max = tonumber(opts.max) or (opts.value and opts.value > 1 and 100 or 1)
+	local span = (max - min) == 0 and 1 or (max - min)
+	local value = math.clamp(tonumber(opts.value) or min, min, max)
+	local row = newRow(parent, opts.desc and 50 or ROW_H)
+	rowText(row, opts.text or "Progress", opts.desc, 0.42, 44, opts.icon)
+	local pct = Create("TextLabel", {
+		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 44, 1, 0),
+		BackgroundTransparency = 1, Font = FONT_MONO, Text = "0" .. (opts.suffix or "%"),
+		TextColor3 = THEME.SubText, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Right, Parent = row,
+	})
+	local bar = Create("Frame", {
+		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -52, 0.5, 0), Size = UDim2.new(0.42, 0, 0, 5),
+		BackgroundColor3 = THEME.ToggleOff, Parent = row,
+	}, { corner(3) })
+	local fillGrad = Create("UIGradient", {})
+	local fill = Create("Frame", { Size = UDim2.new(0, 0, 1, 0), BackgroundColor3 = accent, Parent = bar }, { corner(3), fillGrad })
+	accentProp(fill, "BackgroundColor3", accent); accentGrad(fillGrad, accent)
+	local control = {}
+	function control.Set(v, animate)
+		value = math.clamp(tonumber(v) or min, min, max)
+		local frac = (value - min) / span
+		pct.Text = (max <= 1 and tostring(math.floor(frac * 100 + 0.5)) or tostring(math.floor(value + 0.5))) .. (opts.suffix or "%")
+		tween(fill, { Size = UDim2.new(frac, 0, 1, 0) }, animate == false and TweenInfo.new(0) or TI.SYDE_SIZE)
+		if opts.flag then NEMESIS.Flags[opts.flag] = value end
+	end
+	function control.Get() return value end
+	control.Set(value)
+	return control
+end
+
+-- Stat: a compact metric readout, label on the left + a big accent value right.
+-- opts { text/label, value, icon }. Returns Set(v).
+function Elements.Stat(parent, accent, opts)
+	opts = opts or {}
+	onAccent(function(c) accent = c end)
+	local row = newRow(parent, ROW_H)
+	rowText(row, opts.text or opts.label or "Stat", opts.desc, 0.4, 12, opts.icon)
+	local val = Create("TextLabel", {
+		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0.5, 0, 1, 0),
+		BackgroundTransparency = 1, Font = FONT_BOLD, Text = tostring(opts.value or "0"),
+		TextColor3 = accent, TextSize = 16, TextXAlignment = Enum.TextXAlignment.Right,
+		TextTruncate = Enum.TextTruncate.AtEnd, Parent = row,
+	})
+	accentProp(val, "TextColor3", accent)
+	local control = {}
+	function control.Set(v) val.Text = tostring(v) end
+	function control.Get() return val.Text end
+	return control
+end
+
+-- Checkbox: a left-aligned square check with the label to its right (a lighter
+-- alternative to Toggle). opts { text, default, callback, flag }.
+function Elements.Checkbox(parent, accent, opts)
+	opts = opts or {}
+	onAccent(function(c) accent = c end)
+	local hitbox = accent
+	onHitbox(function(c) hitbox = c end)
+	local state = opts.default and true or false
+	local row = newRow(parent, ROW_H)
+	local box = Create("Frame", {
+		AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(0, 18, 0, 18),
+		BackgroundColor3 = THEME.ToggleOff, Parent = row,
+	}, { corner(5), stroke(THEME.ElementStroke, 1, 0.35) })
+	local checkSpec = resolveIcon("check")
+	local check = checkSpec and Create("ImageLabel", {
+		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, 12, 0, 12),
+		BackgroundTransparency = 1, ImageColor3 = accentTextColor(accent), ImageTransparency = 1, ZIndex = 2, Parent = box,
+	})
+	if check then applyIcon(check, checkSpec); onHitbox(function(c) check.ImageColor3 = accentTextColor(c) end) end
+	Create("TextLabel", {
+		Position = UDim2.new(0, 28, 0, 0), Size = UDim2.new(1, -28, 1, 0), BackgroundTransparency = 1,
+		Font = FONT_MED, Text = tostring(opts.text or "Checkbox"), TextColor3 = THEME.Text, TextSize = 13,
+		TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = row,
+	})
+	tagSearch(row, opts.text)
+	local control = {}
+	local function render(animate)
+		local info = animate and TI.SYDE or TweenInfo.new(0)
+		tween(box, { BackgroundColor3 = state and hitbox or THEME.ToggleOff }, info)
+		if check then tween(check, { ImageTransparency = state and 0 or 1 }, info) end
+	end
+	function control.Set(v, fire)
+		state = v and true or false
+		render(true)
+		if opts.flag then NEMESIS.Flags[opts.flag] = state end
+		if fire ~= false and type(opts.callback) == "function" then pcall(opts.callback, state) end
+	end
+	function control.Get() return state end
+	local click = Create("TextButton", { Size = UDim2.new(1, ROW_PAD * 2, 1, 0), Position = UDim2.new(0, -ROW_PAD, 0, 0), BackgroundTransparency = 1, Text = "", Parent = row })
+	click.MouseButton1Click:Connect(function() control.Set(not state) end)
+	render(false)
+	if opts.flag then NEMESIS.Flags[opts.flag] = state end
+	bindFlag(opts.flag, control, "toggle")
+	return control
+end
+
+-- CopyButton: a button that copies opts.copy to the clipboard on click and toasts.
+-- opts { text, button, copy, icon }.
+function Elements.CopyButton(parent, accent, opts)
+	opts = opts or {}
+	local text = opts.copy or opts.value or ""
+	local b = Elements.Button(parent, accent, {
+		text = opts.text or "Copy", button = opts.button or "Copy", icon = opts.icon or "copy", desc = opts.desc,
+		callback = function()
+			if setClipboard(tostring(text)) then
+				NEMESIS.Notify({ title = "Copied", content = "Copied to clipboard.", duration = 2, icon = "copy" })
+			end
+		end,
+	})
+	b.SetCopy = function(v) text = tostring(v) end
+	return b
+end
+
+-- shared card + header for the chart family: a full-width card with a title on
+-- the left and a live value readout on the right, and a clipped plot area below.
+local function chartShell(parent, accent, opts, plotHeight)
+	local card = Create("Frame", {
+		Size = UDim2.new(1, -ROW_PAD * 2, 0, 44 + plotHeight),
+		Position = UDim2.new(0, ROW_PAD, 0, 0),
+		BackgroundColor3 = THEME.Element, ClipsDescendants = true, Parent = parent,
+	}, { corner(10), stroke(THEME.ElementStroke, 1, 0.4), padding(12) })
+	tagSearch(card, opts.text or opts.name or "Chart")
+	local head = Create("Frame", { Size = UDim2.new(1, 0, 0, 20), BackgroundTransparency = 1, Parent = card })
+	Create("TextLabel", {
+		Size = UDim2.new(0.6, 0, 1, 0), BackgroundTransparency = 1, Font = FONT_SEMI,
+		Text = tostring(opts.text or opts.name or "Chart"), TextColor3 = THEME.Text, TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = head,
+	})
+	local valLbl = Create("TextLabel", {
+		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.new(0.4, 0, 1, 0),
+		BackgroundTransparency = 1, Font = FONT_BOLD, Text = "", TextColor3 = accent, TextSize = 16,
+		TextXAlignment = Enum.TextXAlignment.Right, Parent = head,
+	})
+	accentProp(valLbl, "TextColor3", accent)
+	local plot = Create("Frame", {
+		Position = UDim2.new(0, 0, 0, 30), Size = UDim2.new(1, 0, 1, -30), BackgroundTransparency = 1, Parent = card,
+	})
+	return card, valLbl, plot
+end
+
+local function cleanNumbers(pts)
+	local out = {}
+	for _, v in ipairs(pts or {}) do local n = tonumber(type(v) == "table" and (v.Value or v.value or v[1]) or v); if n then out[#out + 1] = n end end
+	if #out == 0 then out = { 0 } end
+	return out
+end
+
+-- BarChart: vertical bars for a small series; bars spring up staggered.
+function Elements.BarChart(parent, accent, opts)
+	opts = opts or {}
+	onAccent(function(c) accent = c end)
+	local vals = cleanNumbers(opts.points or opts.values or opts.data)
+	local labels = {}
+	for i, v in ipairs(opts.points or {}) do if type(v) == "table" then labels[i] = v.Label or v.label end end
+	local hasLabels = next(labels) ~= nil
+	local card, valLbl, plot = chartShell(parent, accent, opts, hasLabels and 118 or 100)
+	local suffix, prefix = opts.suffix or "", opts.prefix or ""
+	local bars = {}
+	local function redraw(animate)
+		for _, b in ipairs(bars) do b:Destroy() end; bars = {}
+		local maxv = 0.0001; for _, v in ipairs(vals) do maxv = math.max(maxv, v) end
+		local n = #vals; local pw = 0
+		pcall(function() pw = plot.AbsoluteSize.X end); if pw <= 0 then pw = 300 end
+		local slot = pw / n
+		local bw = math.clamp(math.floor(slot * 0.66), 6, 44)
+		local labelRoom = hasLabels and 16 or 0
+		for i, v in ipairs(vals) do
+			local h = math.max(3, v / maxv * (plot.AbsoluteSize.Y - 8 - labelRoom))
+			local barGrad = Create("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(178, 178, 178)) })
+			local bar = Create("Frame", {
+				AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new((i - 0.5) / n, 0, 1, -labelRoom),
+				Size = UDim2.new(0, bw, 0, animate and 0 or h), BackgroundColor3 = accent, ZIndex = 2, Parent = plot,
+			}, { corner(4), barGrad })
+			accentProp(bar, "BackgroundColor3", accent)
+			bars[#bars + 1] = bar
+			if hasLabels then
+				local lc = Create("TextLabel", {
+					AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new((i - 0.5) / n, 0, 1, 0), Size = UDim2.new(0, slot, 0, 12),
+					BackgroundTransparency = 1, Font = FONT, Text = tostring(labels[i] or ""), TextColor3 = THEME.SubText, TextSize = 10,
+					TextTruncate = Enum.TextTruncate.AtEnd, Parent = plot,
+				})
+				bars[#bars + 1] = lc
+			end
+			if animate then task.delay(0.04 + (i - 1) * 0.05, function() if bar.Parent then tween(bar, { Size = UDim2.new(0, bw, 0, h) }, TI.SYDE_SIZE) end end) end
+		end
+		valLbl.Text = prefix .. tostring(vals[#vals] or 0) .. suffix
+	end
+	local chart = {}
+	function chart.Set(s) if s then if s.Points then vals = cleanNumbers(s.Points) end if s.text or s.Name then end end redraw(true) end
+	function chart.Push(v) vals[#vals + 1] = tonumber(v) or 0; if #vals > (opts.maxPoints or 16) then table.remove(vals, 1) end redraw(true) end
+	function chart.Replay() redraw(true) end
+	task.defer(function() redraw(true) end)
+	return chart
+end
+
+-- Chart: a line / area sparkline. The line is drawn as thin rotated segments
+-- between points; optional dots and a gradient area fill. Wipes in on reveal.
+function Elements.Chart(parent, accent, opts)
+	opts = opts or {}
+	onAccent(function(c) accent = c end)
+	local vals = cleanNumbers(opts.points or opts.values or opts.data)
+	local card, valLbl, plot = chartShell(parent, accent, opts, 100)
+	local suffix, prefix = opts.suffix or "", opts.prefix or ""
+	local filled = opts.filled ~= false
+	local dots = opts.dots ~= false
+	local clip = Create("Frame", { Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, ClipsDescendants = true, Parent = plot })
+	local parts = {}
+	local function redraw(animate)
+		for _, p in ipairs(parts) do p:Destroy() end; parts = {}
+		local w, h = 0, 0
+		pcall(function() w = plot.AbsoluteSize.X; h = plot.AbsoluteSize.Y end)
+		if w <= 0 then w = 300 end; if h <= 0 then h = 90 end
+		local n = #vals
+		local mn, mx = math.huge, -math.huge
+		for _, v in ipairs(vals) do mn = math.min(mn, v); mx = math.max(mx, v) end
+		if mx <= mn then mx = mn + 1 end
+		local pad = 10
+		local function px(i) return (n == 1) and w / 2 or ((i - 1) / (n - 1)) * (w - pad * 2) + pad end
+		local function py(v) return h - pad - ((v - mn) / (mx - mn)) * (h - pad * 2) end
+		for i = 1, n - 1 do
+			local x1, y1, x2, y2 = px(i), py(vals[i]), px(i + 1), py(vals[i + 1])
+			local dx, dy = x2 - x1, y2 - y1
+			local len = math.sqrt(dx * dx + dy * dy)
+			local ang = math.deg(math.atan2(dy, dx))
+			if filled then
+				local col = Create("Frame", {
+					AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset((x1 + x2) / 2, h),
+					Size = UDim2.fromOffset(math.max(len, 2), h - (y1 + y2) / 2), BackgroundColor3 = accent,
+					BackgroundTransparency = 0.85, Rotation = 0, ZIndex = 1, Parent = clip,
+				}, { Create("UIGradient", { Rotation = 90, Transparency = NumberSequence.new(0.2, 0.95) }) })
+				accentProp(col, "BackgroundColor3", accent)
+				parts[#parts + 1] = col
+			end
+			local seg = Create("Frame", {
+				AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset((x1 + x2) / 2, (y1 + y2) / 2),
+				Size = UDim2.fromOffset(len + 2, 3), BackgroundColor3 = accent, Rotation = ang, ZIndex = 3, Parent = clip,
+			}, { corner(2) })
+			accentProp(seg, "BackgroundColor3", accent)
+			parts[#parts + 1] = seg
+		end
+		if dots then
+			for i = 1, n do
+				local d = Create("Frame", {
+					AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(px(i), py(vals[i])),
+					Size = UDim2.fromOffset(8, 8), BackgroundColor3 = THEME.Knob, ZIndex = 4, Parent = clip,
+				}, { corner(4) })
+				parts[#parts + 1] = d
+			end
+		end
+		valLbl.Text = prefix .. tostring(vals[#vals] or 0) .. suffix
+		if animate then
+			clip.Size = UDim2.new(0, 0, 1, 0)
+			tween(clip, { Size = UDim2.new(1, 0, 1, 0) }, TweenInfo.new(0.7, Enum.EasingStyle.Quart, Enum.EasingDirection.Out))
+		end
+	end
+	local chart = {}
+	function chart.Set(s) if s and s.Points then vals = cleanNumbers(s.Points) end redraw(true) end
+	function chart.Push(v) vals[#vals + 1] = tonumber(v) or 0; if #vals > (opts.maxPoints or 24) then table.remove(vals, 1) end redraw(true) end
+	function chart.Replay() redraw(true) end
+	task.defer(function() redraw(true) end)
+	return chart
+end
+
+-- StackedChart: horizontal 100%-stacked rows with a legend. Rows fill in staggered.
+function Elements.StackedChart(parent, accent, opts)
+	opts = opts or {}
+	onAccent(function(c) accent = c end)
+	local series = opts.series or { "A", "B", "C" }
+	local palette = opts.colors or { accent, Color3.fromRGB(90, 200, 255), Color3.fromRGB(255, 170, 70), Color3.fromRGB(120, 230, 140) }
+	local rows = opts.rows or {}
+	local card, valLbl, plot = chartShell(parent, accent, opts, 34 * math.max(#rows, 1) + 24)
+	-- legend
+	local legend = Create("Frame", { Size = UDim2.new(1, 0, 0, 16), BackgroundTransparency = 1, Parent = plot }, {
+		Create("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 12), VerticalAlignment = Enum.VerticalAlignment.Center }),
+	})
+	for i, s in ipairs(series) do
+		local item = Create("Frame", { Size = UDim2.new(0, 0, 1, 0), AutomaticSize = Enum.AutomaticSize.X, BackgroundTransparency = 1, LayoutOrder = i, Parent = legend })
+		Create("Frame", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(0, 9, 0, 9), BackgroundColor3 = palette[i] or accent, Parent = item }, { corner(3) })
+		Create("TextLabel", { Position = UDim2.new(0, 14, 0, 0), Size = UDim2.new(0, 0, 1, 0), AutomaticSize = Enum.AutomaticSize.X, BackgroundTransparency = 1, Font = FONT, Text = tostring(s), TextColor3 = THEME.SubText, TextSize = 11, Parent = item })
+	end
+	local body = Create("Frame", { Position = UDim2.new(0, 0, 0, 22), Size = UDim2.new(1, 0, 1, -22), BackgroundTransparency = 1, Parent = plot })
+	local function redraw(animate)
+		for _, c in ipairs(body:GetChildren()) do c:Destroy() end
+		for ri, r in ipairs(rows) do
+			local rowVals = r.Values or r.values or r
+			local total = 0; for _, v in ipairs(rowVals) do total = total + (tonumber(v) or 0) end
+			if total <= 0 then total = 1 end
+			local rowFrame = Create("Frame", { Position = UDim2.new(0, 0, 0, (ri - 1) * 34), Size = UDim2.new(1, 0, 0, 28), BackgroundTransparency = 1, Parent = body })
+			Create("TextLabel", { Size = UDim2.new(0, 76, 1, 0), BackgroundTransparency = 1, Font = FONT, Text = tostring(r.Name or r.name or ("Row " .. ri)), TextColor3 = THEME.Text, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = rowFrame })
+			local track = Create("Frame", { Position = UDim2.new(0, 84, 0.5, -8), Size = UDim2.new(1, -84, 0, 16), BackgroundColor3 = THEME.ToggleOff, ClipsDescendants = true, Parent = rowFrame }, { corner(4) })
+			local stack = Create("Frame", { Size = UDim2.new(animate and 0 or 1, 0, 1, 0), BackgroundTransparency = 1, Parent = track }, {
+				Create("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, SortOrder = Enum.SortOrder.LayoutOrder }),
+			})
+			for si, v in ipairs(rowVals) do
+				Create("Frame", { Size = UDim2.new((tonumber(v) or 0) / total, 0, 1, 0), BackgroundColor3 = palette[si] or accent, BorderSizePixel = 0, LayoutOrder = si, Parent = stack })
+			end
+			if animate then task.delay(0.05 + (ri - 1) * 0.09, function() if stack.Parent then tween(stack, { Size = UDim2.new(1, 0, 1, 0) }, TI.SYDE_SIZE) end end) end
+		end
+	end
+	local chart = {}
+	function chart.Set(s) if s and s.Rows then rows = s.Rows end redraw(true) end
+	function chart.Replay() redraw(true) end
+	task.defer(function() redraw(true) end)
+	return chart
+end
+
+-- RippleButton: an action row that emits an expanding ripple from the click point.
+function Elements.RippleButton(parent, accent, opts)
+	opts = opts or {}
+	onAccent(function(c) accent = c end)
+	local row = newRow(parent, opts.desc and 50 or ROW_H)
+	rowText(row, opts.text or "Action", opts.desc, 0, 0, opts.icon)
+	local surface = Create("TextButton", {
+		Size = UDim2.new(1, ROW_PAD * 2, 1, 0), Position = UDim2.new(0, -ROW_PAD, 0, 0),
+		BackgroundColor3 = THEME.Element, BackgroundTransparency = 1, AutoButtonColor = false, Text = "",
+		ClipsDescendants = true, Parent = row,
+	}, { corner(8) })
+	surface.MouseEnter:Connect(function() tween(surface, { BackgroundTransparency = 0.85 }, TI.HOVER) end)
+	surface.MouseLeave:Connect(function() tween(surface, { BackgroundTransparency = 1 }, TI.HOVEROFF) end)
+	surface.InputBegan:Connect(function(input)
+		if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+		local lx = input.Position.X - surface.AbsolutePosition.X
+		local ly = input.Position.Y - surface.AbsolutePosition.Y
+		local ripple = Create("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(lx, ly), Size = UDim2.fromOffset(0, 0),
+			BackgroundColor3 = accent, BackgroundTransparency = 0.5, ZIndex = 5, Parent = surface,
+		}, { corner(200) })
+		local far = math.max(surface.AbsoluteSize.X, surface.AbsoluteSize.Y) * 2
+		tween(ripple, { Size = UDim2.fromOffset(far, far), BackgroundTransparency = 1 }, TweenInfo.new(0.55, Enum.EasingStyle.Quad, Enum.EasingDirection.Out))
+		task.delay(0.6, function() if ripple then ripple:Destroy() end end)
+	end)
+	surface.MouseButton1Click:Connect(function() if type(opts.callback) == "function" then pcall(opts.callback) end end)
+	local control = {}
+	function control.Fire() if type(opts.callback) == "function" then pcall(opts.callback) end end
+	return control
+end
+
+-- FlipButton: two-faced button that flips between a front and back label on hover.
+function Elements.FlipButton(parent, accent, opts)
+	opts = opts or {}
+	onAccent(function(c) accent = c end)
+	local row = newRow(parent, ROW_H)
+	local card = Create("TextButton", {
+		Size = UDim2.new(1, ROW_PAD * 2, 1, 0), Position = UDim2.new(0, -ROW_PAD, 0, 0),
+		BackgroundColor3 = THEME.Element, AutoButtonColor = false, Text = "", ClipsDescendants = true, Parent = row,
+	}, { corner(8), stroke(THEME.ElementStroke, 1, 0.4) })
+	local function face(text, y)
+		return Create("TextLabel", {
+			Position = UDim2.new(0, ROW_PAD, y, 0), Size = UDim2.new(1, -ROW_PAD * 2, 1, 0), BackgroundTransparency = 1,
+			Font = FONT_MED, Text = tostring(text), TextColor3 = THEME.Text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, Parent = card,
+		})
+	end
+	local front = face(opts.front or opts.text or "Hover me", 0)
+	local back = face(opts.back or "Confirm?", -1)
+	accentProp(back, "TextColor3", accent)
+	card.MouseEnter:Connect(function()
+		tween(front, { Position = UDim2.new(0, ROW_PAD, 1, 0) }, TI.EXPAND)
+		tween(back, { Position = UDim2.new(0, ROW_PAD, 0, 0) }, TI.EXPAND)
+		tween(card, { BackgroundColor3 = THEME.ElementHover }, TI.HOVER)
+	end)
+	card.MouseLeave:Connect(function()
+		tween(front, { Position = UDim2.new(0, ROW_PAD, 0, 0) }, TI.EXPAND)
+		tween(back, { Position = UDim2.new(0, ROW_PAD, -1, 0) }, TI.EXPAND)
+		tween(card, { BackgroundColor3 = THEME.Element }, TI.HOVEROFF)
+	end)
+	card.MouseButton1Click:Connect(function() if type(opts.callback) == "function" then pcall(opts.callback) end end)
+	local control = {}
+	function control.Set(s) if type(s) == "table" then if s.Front then front.Text = s.Front end if s.Back then back.Text = s.Back end end end
+	return control
+end
+
+-- HoldButton: press and hold for Duration seconds; a fill sweeps and fires on complete.
+function Elements.HoldButton(parent, accent, opts)
+	opts = opts or {}
+	onAccent(function(c) accent = c end)
+	local dur = math.clamp(tonumber(opts.duration) or 1.5, 0.2, 10)
+	local row = newRow(parent, opts.desc and 50 or ROW_H)
+	rowText(row, opts.text or "Hold to confirm", opts.desc, 0, 0, opts.icon)
+	local surface = Create("TextButton", {
+		Size = UDim2.new(1, ROW_PAD * 2, 1, 0), Position = UDim2.new(0, -ROW_PAD, 0, 0),
+		BackgroundColor3 = THEME.Element, BackgroundTransparency = 1, AutoButtonColor = false, Text = "",
+		ClipsDescendants = true, Parent = row,
+	}, { corner(8) })
+	local fillGrad = Create("UIGradient", {})
+	local fill = Create("Frame", { Size = UDim2.new(0, 0, 1, 0), BackgroundColor3 = accent, BackgroundTransparency = 0.6, ZIndex = 0, Parent = surface }, { fillGrad })
+	accentProp(fill, "BackgroundColor3", accent); accentGrad(fillGrad, accent)
+	local holding, tw = false, nil
+	local function cancel()
+		holding = false
+		if tw then tw:Cancel() end
+		tween(fill, { Size = UDim2.new(0, 0, 1, 0) }, TI.FAST)
+	end
+	surface.InputBegan:Connect(function(input)
+		if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+		holding = true
+		tw = tween(fill, { Size = UDim2.new(1, 0, 1, 0) }, TweenInfo.new(dur, Enum.EasingStyle.Linear))
+		task.delay(dur, function()
+			if holding then
+				holding = false
+				if type(opts.callback) == "function" then pcall(opts.callback) end
+				if opts.notify ~= false then NEMESIS.Notify({ title = opts.completionTitle or "Confirmed", content = opts.completionText or "Action confirmed.", duration = 2, icon = opts.completionIcon or "check" }) end
+				tween(fill, { Size = UDim2.new(0, 0, 1, 0) }, TI.HOVEROFF)
+			end
+		end)
+	end)
+	surface.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then cancel() end
+	end)
+	surface.MouseLeave:Connect(cancel)
+	local control = {}
+	function control.SetText(t) end
+	return control
+end
+
+-- ShimmerLabel: a heading whose text has a bright band that sweeps across it.
+function Elements.ShimmerLabel(parent, accent, opts)
+	opts = opts or {}
+	if type(opts) == "string" then opts = { text = opts } end
+	local row = Create("Frame", { Size = UDim2.new(1, -ROW_PAD * 2, 0, opts.height or 24), Position = UDim2.new(0, ROW_PAD, 0, 0), BackgroundTransparency = 1, Parent = parent })
+	local lbl = Create("TextLabel", {
+		Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Font = opts.bold and FONT_BOLD or FONT_SEMI,
+		Text = tostring(opts.text or "Shimmer"), TextColor3 = THEME.SubText, TextSize = opts.textSize or 14,
+		TextXAlignment = Enum.TextXAlignment.Left, Parent = row,
+	})
+	tagSearch(row, opts.text)
+	local grad = Create("UIGradient", {
+		Rotation = opts.rotation or 0, Parent = lbl,
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, THEME.SubText), ColorSequenceKeypoint.new(0.45, THEME.SubText),
+			ColorSequenceKeypoint.new(0.5, Color3.new(1, 1, 1)), ColorSequenceKeypoint.new(0.55, THEME.SubText),
+			ColorSequenceKeypoint.new(1, THEME.SubText),
+		}),
+	})
+	local speed = math.clamp(tonumber(opts.speed) or 1.6, 0.3, 6)
+	-- a single self-repeating tween (repeatCount -1) drives the sweep; no polling
+	-- loop, so it can't spin the CPU under a stub or a starved executor
+	local shimTw
+	local function startShimmer()
+		if shimTw then pcall(function() shimTw:Cancel() end) end
+		grad.Offset = Vector2.new(-1, 0)
+		shimTw = tween(grad, { Offset = Vector2.new(1, 0) }, TweenInfo.new(speed, Enum.EasingStyle.Linear, Enum.EasingDirection.Out, -1, false, 0.5))
+	end
+	startShimmer()
+	local control = {}
+	function control.Set(t) lbl.Text = tostring(t); tagSearch(row, t) end
+	function control.SetSpeed(s) speed = math.clamp(tonumber(s) or 1.6, 0.3, 6); startShimmer() end
+	return control
+end
+
+-- ScrollHint: a centered "scroll for more" label beside a bouncing down-arrow.
+function Elements.ScrollHint(parent, accent, opts)
+	opts = opts or {}
+	if type(opts) == "string" then opts = { text = opts } end
+	local row = Create("Frame", { Size = UDim2.new(1, 0, 0, 22), BackgroundTransparency = 1, Parent = parent })
+	local wrap = Create("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, 0, 1, 0), AutomaticSize = Enum.AutomaticSize.X, BackgroundTransparency = 1, Parent = row }, {
+		Create("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), VerticalAlignment = Enum.VerticalAlignment.Center }),
+	})
+	local lbl = Create("TextLabel", { Size = UDim2.new(0, 0, 1, 0), AutomaticSize = Enum.AutomaticSize.X, BackgroundTransparency = 1, Font = FONT, Text = tostring(opts.text or "Scroll for more"), TextColor3 = THEME.SubText, TextSize = 12, LayoutOrder = 1, Parent = wrap })
+	local arrowHolder = Create("Frame", { Size = UDim2.new(0, 14, 0, 14), BackgroundTransparency = 1, LayoutOrder = 2, Parent = wrap })
+	local spec = resolveIcon(opts.icon or "chevron-down")
+	local arrow = Create("ImageLabel", { Position = UDim2.new(0.5, 0, 0, 0), AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.new(0, 14, 0, 14), BackgroundTransparency = 1, ImageColor3 = THEME.SubText, Parent = arrowHolder })
+	if spec then applyIcon(arrow, spec) end
+	-- one reversing, infinitely-repeating tween: no polling loop
+	tween(arrow, { Position = UDim2.new(0.5, 0, 0, 6) }, TweenInfo.new(0.55, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true))
+	local control = {}
+	function control.Set(t) lbl.Text = tostring(t) end
+	return control
+end
+
+-- CursorTag: a card that shows a small pill following the mouse while hovered.
+function Elements.CursorTag(parent, accent, opts)
+	opts = opts or {}
+	local row = Create("Frame", { Size = UDim2.new(1, -ROW_PAD * 2, 0, opts.height or 46), Position = UDim2.new(0, ROW_PAD, 0, 0), BackgroundColor3 = THEME.Element, Parent = parent }, { corner(8), stroke(THEME.ElementStroke, 1, 0.4) })
+	local area = Create("TextButton", { Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, AutoButtonColor = false, Text = "", Parent = row })
+	Create("TextLabel", { Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Font = FONT, Text = tostring(opts.hint or "Hover here"), TextColor3 = THEME.SubText, TextSize = 12, Parent = row })
+	local screenGui = row:FindFirstAncestorWhichIsA("ScreenGui") or row:FindFirstAncestorWhichIsA("LayerCollector")
+	local chip = Create("TextLabel", {
+		AnchorPoint = Vector2.new(0, 1), Size = UDim2.new(0, 0, 0, 22), AutomaticSize = Enum.AutomaticSize.X,
+		BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 1, Font = FONT_MED, Text = tostring(opts.text or "Tag"),
+		TextColor3 = Color3.fromRGB(20, 20, 24), TextTransparency = 1, TextSize = 12, Visible = false, ZIndex = 60000,
+		Parent = screenGui or row,
+	}, { corner(6), padding(8) })
+	local enabled = opts.enabled ~= false
+	local moveConn
+	local function show() chip.Visible = true; tween(chip, { BackgroundTransparency = 0, TextTransparency = 0 }, TI.FAST) end
+	local function hide() tween(chip, { BackgroundTransparency = 1, TextTransparency = 1 }, TI.FAST); task.delay(0.16, function() if chip.BackgroundTransparency >= 0.99 then chip.Visible = false end end) end
+	area.MouseEnter:Connect(function()
+		if not enabled then return end
+		show()
+		moveConn = RunService.RenderStepped:Connect(function()
+			local m = UserInputService:GetMouseLocation()
+			chip.Position = UDim2.fromOffset(m.X + (opts.offset and opts.offset.X or 12), m.Y + (opts.offset and opts.offset.Y or -6))
+		end)
+	end)
+	area.MouseLeave:Connect(function() if moveConn then moveConn:Disconnect(); moveConn = nil end hide() end)
+	local control = {}
+	function control.Set(t) chip.Text = tostring(t) end
+	function control.SetEnabled(s) enabled = s and true or false; if not enabled and moveConn then moveConn:Disconnect(); moveConn = nil; hide() end end
+	return control
+end
+
+-- CollapsibleSection: a titled section that expands/collapses and hosts nested
+-- elements. Returns the section host (.Toggle/.Slider/... + .SetOpen).
+function Elements.CollapsibleSection(parent, accent, opts)
+	opts = opts or {}
+	if type(opts) == "string" then opts = { text = opts } end
+	return makeSection(parent, accent, opts.text or opts.title or "Section", opts.open == false)
+end
+
+-- Spoiler: a tap-to-reveal container that starts collapsed and hosts nested elements.
+function Elements.Spoiler(parent, accent, opts)
+	opts = opts or {}
+	if type(opts) == "string" then opts = { text = opts } end
+	local host = makeSection(parent, accent, opts.text or opts.title or "Spoiler", opts.revealed ~= true)
+	host.Reveal = function() host.SetOpen(true, true) end
+	host.Hide = function() host.SetOpen(false, true) end
+	return host
+end
+
+-- FAQ: an accordion of question/answer cards; opening one closes the others.
+function Elements.FAQ(parent, accent, opts)
+	opts = opts or {}
+	local items = opts.items or opts.Items or {}
+	local wrap = Create("Frame", { Size = UDim2.new(1, -ROW_PAD * 2, 0, 0), Position = UDim2.new(0, ROW_PAD, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, Parent = parent }, {
+		Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 6) }),
+	})
+	local api = { Items = {} }
+	for idx, it in ipairs(items) do
+		local q = it.question or it.Question or it[1] or "Question"
+		local a = it.answer or it.Answer or it[2] or ""
+		local card = Create("Frame", { Size = UDim2.new(1, 0, 0, 38), BackgroundColor3 = THEME.Element, ClipsDescendants = true, LayoutOrder = idx, Parent = wrap }, { corner(8), stroke(THEME.ElementStroke, 1, 0.4) })
+		tagSearch(card, q .. " " .. a)
+		local head = Create("TextButton", { Size = UDim2.new(1, 0, 0, 38), BackgroundTransparency = 1, AutoButtonColor = false, Text = "", Parent = card }, { padXY(ROW_PAD, 0) })
+		Create("TextLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(1, -24, 0, 16), BackgroundTransparency = 1, Font = FONT_MED, Text = tostring(q), TextColor3 = THEME.Text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = head })
+		local chev = Create("TextLabel", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 16, 1, 0), BackgroundTransparency = 1, Font = FONT_BOLD, Text = "\u{25B4}", TextColor3 = THEME.SubText, TextSize = 14, Rotation = 180, Parent = head })
+		local ans = Create("TextLabel", { Position = UDim2.new(0, ROW_PAD, 0, 38), Size = UDim2.new(1, -ROW_PAD * 2, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, Font = FONT, Text = tostring(a), TextColor3 = THEME.SubText, TextSize = 12, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, Parent = card })
+		local open = false
+		local function setOpen(o)
+			open = o
+			tween(chev, { Rotation = open and 0 or 180 }, TI.FAST)
+			local ah = 0; pcall(function() ah = ans.AbsoluteSize.Y end)
+			tween(card, { Size = UDim2.new(1, 0, 0, open and (38 + ah + 12) or 38) }, TI.EXPAND)
+		end
+		local rec = { Open = function() setOpen(true) end, Close = function() setOpen(false) end }
+		head.MouseButton1Click:Connect(function()
+			if not open then for _, r in ipairs(api.Items) do if r ~= rec then r.Close() end end end
+			setOpen(not open)
+		end)
+		api.Items[#api.Items + 1] = rec
+	end
+	return api
+end
+
+-- Changelog: a static titled card listing tagged change entries.
+function Elements.Changelog(parent, accent, opts)
+	opts = opts or {}
+	local card = Create("Frame", { Size = UDim2.new(1, -ROW_PAD * 2, 0, 0), Position = UDim2.new(0, ROW_PAD, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundColor3 = THEME.Element, Parent = parent }, {
+		corner(10), stroke(THEME.ElementStroke, 1, 0.4), padding(12),
+		Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 6) }),
+	})
+	local head = Create("Frame", { Size = UDim2.new(1, 0, 0, 20), BackgroundTransparency = 1, LayoutOrder = 1, Parent = card })
+	Create("TextLabel", { Size = UDim2.new(0.6, 0, 1, 0), BackgroundTransparency = 1, Font = FONT_BOLD, Text = tostring(opts.title or "Changelog"), TextColor3 = THEME.Text, TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, Parent = head })
+	Create("TextLabel", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.new(0.4, 0, 1, 0), BackgroundTransparency = 1, Font = FONT_MONO, Text = tostring((opts.version and ("v" .. opts.version) or "") .. (opts.date and ("  " .. opts.date) or "")), TextColor3 = THEME.SubText, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Right, Parent = head })
+	local tagColors = { added = Color3.fromRGB(90, 220, 140), fixed = Color3.fromRGB(90, 190, 255), changed = Color3.fromRGB(255, 190, 80), removed = Color3.fromRGB(255, 110, 110) }
+	for i, e in ipairs(opts.entries or opts.Entries or {}) do
+		local tag = (type(e) == "table" and (e.Type or e.Tag or e.type)) or nil
+		local txt = (type(e) == "table" and (e.Text or e.text or e[1])) or tostring(e)
+		local row = Create("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = i + 1, Parent = card })
+		local ix = 0
+		if tag then
+			local chip = Create("TextLabel", { Size = UDim2.new(0, 0, 0, 16), AutomaticSize = Enum.AutomaticSize.X, BackgroundColor3 = tagColors[string.lower(tostring(tag))] or accent, Font = FONT_SEMI, Text = " " .. string.upper(tostring(tag)) .. " ", TextColor3 = Color3.fromRGB(15, 15, 18), TextSize = 10, Parent = row }, { corner(3) })
+			ix = 6
+			chip:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() end)
+			ix = 60
+		end
+		Create("TextLabel", { Position = UDim2.new(0, tag and 66 or 0, 0, 0), Size = UDim2.new(1, tag and -66 or 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, Font = FONT, Text = tostring(txt), TextColor3 = THEME.SubText, TextSize = 12, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, Parent = row })
+	end
+	return { Instance = card }
+end
+
+-- SegmentedPicker: an iOS-style segmented control picking one of N options.
+function Elements.SegmentedPicker(parent, accent, opts)
+	opts = opts or {}
+	onAccent(function(c) accent = c end)
+	local options = opts.options or opts.Options or { "A", "B" }
+	local n = #options
+	local row = newRow(parent, opts.desc and 50 or ROW_H)
+	rowText(row, opts.text or opts.name or "Picker", opts.desc, 0, 0, opts.icon)
+	local track = Create("Frame", {
+		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0.55, 0, 0, 24),
+		BackgroundColor3 = THEME.Element, Parent = row,
+	}, { corner(7), stroke(THEME.ElementStroke, 1, 0.4) })
+	local thumb = Create("Frame", { Size = UDim2.new(1 / n, -6, 1, -6), Position = UDim2.new(0, 3, 0, 3), BackgroundColor3 = accent, BackgroundTransparency = 0.12, ZIndex = 1, Parent = track }, { corner(5) })
+	accentProp(thumb, "BackgroundColor3", accent)
+	local sel = 1
+	for i, o in ipairs(options) do if o == (opts.default or opts.CurrentOption) then sel = i end end
+	local btns = {}
+	local control = {}
+	local function paint(animate)
+		local info = animate and TI.EXPAND or TweenInfo.new(0)
+		tween(thumb, { Position = UDim2.new((sel - 1) / n, 3, 0, 3) }, info)
+		for i, b in ipairs(btns) do tween(b, { TextColor3 = i == sel and accentTextColor(accent) or THEME.SubText }, TI.FAST) end
+	end
+	for i, o in ipairs(options) do
+		local b = Create("TextButton", { Size = UDim2.new(1 / n, 0, 1, 0), Position = UDim2.new((i - 1) / n, 0, 0, 0), BackgroundTransparency = 1, AutoButtonColor = false, Font = FONT_MED, Text = tostring(o), TextColor3 = THEME.SubText, TextSize = 12, ZIndex = 2, Parent = track })
+		btns[i] = b
+		b.MouseButton1Click:Connect(function() sel = i; paint(true); if opts.flag then NEMESIS.Flags[opts.flag] = options[sel] end if type(opts.callback) == "function" then pcall(opts.callback, options[sel]) end end)
+	end
+	function control.Set(v) for i, o in ipairs(options) do if o == v then sel = i end end paint(true) end
+	function control.Get() return options[sel] end
+	control.CurrentOption = options[sel]
+	paint(false)
+	if opts.flag then NEMESIS.Flags[opts.flag] = options[sel] end
+	return control
+end
+
+-- GradientPicker: a colour picker locked to gradient (Multi-stop) mode.
+function Elements.GradientPicker(parent, accent, opts)
+	opts = opts or {}
+	opts.mode = "Multi"
+	if opts.color and typeof(opts.color) == "ColorSequence" then opts.stops = opts.stops end
+	return Elements.ColorPicker(parent, accent, opts)
+end
+
+-- PinnedList: a list of item rows each with a pin toggle; pinned items float up.
+function Elements.PinnedList(parent, accent, opts)
+	opts = opts or {}
+	onAccent(function(c) accent = c end)
+	Elements.Divider(parent, accent, { text = opts.title or "All Items" })
+	local wrap = Create("Frame", { Size = UDim2.new(1, -ROW_PAD * 2, 0, 0), Position = UDim2.new(0, ROW_PAD, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, Parent = parent }, {
+		Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 6) }),
+	})
+	local order = 0
+	local records = {}
+	local function reflow()
+		table.sort(records, function(a, b)
+			if a.pinned ~= b.pinned then return a.pinned end
+			return a.idx < b.idx
+		end)
+		for i, r in ipairs(records) do r.card.LayoutOrder = i end
+	end
+	for i, it in ipairs(opts.items or {}) do
+		order = order + 1
+		local card = Create("Frame", { Size = UDim2.new(1, 0, 0, 40), BackgroundColor3 = THEME.Element, LayoutOrder = order, Parent = wrap }, { corner(8), stroke(THEME.ElementStroke, 1, 0.4), padXY(ROW_PAD, 0) })
+		tagSearch(card, (it.Name or it.name or "Item") .. " " .. (it.Description or it.desc or ""))
+		Create("TextLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(1, -34, 1, 0), BackgroundTransparency = 1, Font = FONT_MED, Text = tostring(it.Name or it.name or "Item"), TextColor3 = THEME.Text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = card })
+		local pin = Create("TextButton", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 24, 0, 24), BackgroundTransparency = 1, AutoButtonColor = false, Text = "", Parent = card })
+		local pinIcon = Create("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, 15, 0, 15), BackgroundTransparency = 1, ImageColor3 = THEME.SubText, Parent = pin })
+		local spec = resolveIcon("pin"); if spec then applyIcon(pinIcon, spec) end
+		local rec = { card = card, idx = order, pinned = it.Pinned and true or false }
+		local function paint() pinIcon.ImageColor3 = rec.pinned and accent or THEME.SubText end
+		pin.MouseButton1Click:Connect(function()
+			rec.pinned = not rec.pinned; paint(); reflow()
+			if type(opts.callback) == "function" then pcall(opts.callback, it.Name or it.name, rec.pinned) end
+		end)
+		paint()
+		records[#records + 1] = rec
+	end
+	reflow()
+	local control = {}
+	function control.Pin(name, state) for _, r in ipairs(records) do end end
+	return control
+end
+
 -- Collapsible content section ("GENERAL", "HITBOX", …)
-local function makeSection(host, accent, title)
+function makeSection(host, accent, title, startClosed)
+	local sectionSetOpen   -- set below when the section has a collapsible header
 	local card = Create("Frame", {
 		BackgroundColor3 = THEME.Group,
 		Size = UDim2.new(1, 0, 0, 0),
@@ -2915,23 +3677,25 @@ local function makeSection(host, accent, title)
 			})
 		end
 		local open = true
-		header.MouseButton1Click:Connect(function()
-			open = not open
-			tween(chev, { Rotation = open and 0 or 180 }, TI.FAST)
+		sectionSetOpen = function(want, animate)
+			open = want
+			tween(chev, { Rotation = open and 0 or 180 }, animate == false and TweenInfo.new(0) or TI.FAST)
 			if open then
 				local target = 0
 				pcall(function() target = body.AbsoluteSize.Y end)
 				bodyWrap.AutomaticSize = Enum.AutomaticSize.None
-				tween(bodyWrap, { Size = UDim2.new(1, 0, 0, target) }, TI.EXPAND)
+				tween(bodyWrap, { Size = UDim2.new(1, 0, 0, target) }, animate == false and TweenInfo.new(0) or TI.EXPAND)
 				task.delay(0.28, function() if open then bodyWrap.AutomaticSize = Enum.AutomaticSize.Y end end)
 			else
 				local cur = 0
 				pcall(function() cur = bodyWrap.AbsoluteSize.Y end)
 				bodyWrap.AutomaticSize = Enum.AutomaticSize.None
 				bodyWrap.Size = UDim2.new(1, 0, 0, cur)
-				tween(bodyWrap, { Size = UDim2.new(1, 0, 0, 0) }, TI.EXPAND)
+				tween(bodyWrap, { Size = UDim2.new(1, 0, 0, 0) }, animate == false and TweenInfo.new(0) or TI.EXPAND)
 			end
-		end)
+		end
+		header.MouseButton1Click:Connect(function() sectionSetOpen(not open, true) end)
+		if startClosed then task.defer(function() sectionSetOpen(false, false) end) end
 	end
 
 	local host = {}
@@ -2957,6 +3721,30 @@ local function makeSection(host, accent, title)
 	end
 	host.Divider = bind("Divider")
 	host.Listbox = bind("Listbox")
+	-- extra elements
+	host.Spacer = bind("Spacer")
+	host.ProgressBar = bind("ProgressBar")
+	host.Stat = bind("Stat")
+	host.Checkbox = bind("Checkbox")
+	host.CopyButton = bind("CopyButton")
+	host.BarChart = bind("BarChart")
+	host.Chart = bind("Chart")
+	host.LineChart = bind("Chart")
+	host.StackedChart = bind("StackedChart")
+	host.RippleButton = bind("RippleButton")
+	host.FlipButton = bind("FlipButton")
+	host.HoldButton = bind("HoldButton")
+	host.ShimmerLabel = bind("ShimmerLabel")
+	host.ScrollHint = bind("ScrollHint")
+	host.CursorTag = bind("CursorTag")
+	host.CollapsibleSection = bind("CollapsibleSection")
+	host.Spoiler = bind("Spoiler")
+	host.FAQ = bind("FAQ")
+	host.Changelog = bind("Changelog")
+	host.SegmentedPicker = bind("SegmentedPicker")
+	host.GradientPicker = bind("GradientPicker")
+	host.PinnedList = bind("PinnedList")
+	host.SetOpen = function(o, animate) if sectionSetOpen then sectionSetOpen(o ~= false, animate) end end
 	return host
 end
 
@@ -5790,6 +6578,48 @@ s_lb.Listbox({ text = "Single select", options = { "Aimbot", "Triggerbot", "Back
 s_lb.Divider()
 s_lb.Listbox({ text = "Multi select", options = { "Head", "Neck", "Chest", "Stomach", "Pelvis", "Arms", "Legs" }, multi = true, default = { "Head", "Chest" }, rows = 4,
 	callback = function(list) notify("Listbox", table.concat(list, ", "), 2) end })
+
+-- New parity elements (charts, buttons, containers, pickers) -----------
+local WG = Basics.Page("Widgets", { icon = "layout-dashboard" })
+local s_data = WG.Section("DATA")
+s_data.Stat({ text = "Ping", value = "23 ms", icon = "activity" })
+local prog = s_data.ProgressBar({ text = "Loading", value = 35, max = 100, suffix = "%" })
+s_data.BarChart({ text = "Damage", points = { { Value = 4, Label = "Mon" }, { Value = 8, Label = "Tue" }, { Value = 3, Label = "Wed" }, { Value = 9, Label = "Thu" }, { Value = 6, Label = "Fri" } }, suffix = "" })
+s_data.Chart({ text = "FPS", points = { 40, 55, 48, 61, 59, 72, 64 }, filled = true })
+s_data.StackedChart({ text = "Split", series = { "Hit", "Miss" }, rows = { { Name = "AK", Values = { 7, 3 } }, { Name = "AWP", Values = { 9, 1 } } } })
+
+local s_wbtn = WG.Section("BUTTONS")
+s_wbtn.RippleButton({ text = "Ripple button", callback = function() notify("Ripple", "clicked", 1.5) end })
+s_wbtn.CopyButton({ text = "Copy my id", copy = "1234567890" })
+s_wbtn.FlipButton({ front = "Hover to reveal", back = "Click to confirm", callback = function() notify("Flip", "confirmed", 1.5) end })
+s_wbtn.HoldButton({ text = "Hold to unload", duration = 1.5, callback = function() notify("Hold", "completed", 1.5) end })
+s_wbtn.Checkbox({ text = "Checkbox style", default = true, flag = "wg_cbx" })
+
+local s_pick = WG.Section("PICKERS")
+s_pick.SegmentedPicker({ text = "Mode", options = { "Legit", "Rage", "Semi" }, default = "Rage", callback = function(v) notify("Mode", v, 1.2) end })
+s_pick.GradientPicker({ text = "ESP gradient", colors = { Color3.fromRGB(255, 60, 90), Color3.fromRGB(90, 120, 255) } })
+s_pick.Button({ text = "Confirm dialog", button = "Open", callback = function()
+	NEMESIS.Modal({ title = "Are you sure?", content = "This will reset all of your settings to default.", confirmText = "Reset", onConfirm = function() notify("Modal", "confirmed", 1.5) end })
+end })
+s_pick.Button({ text = "Toast", button = "Show", callback = function() NEMESIS.Toast({ content = "Saved to config", icon = "check", duration = 2.5 }) end })
+
+local s_deco = WG.Section("DECORATIVE")
+s_deco.ShimmerLabel({ text = "NEMESIS PREMIUM", bold = true })
+s_deco.Spacer({ height = 6 })
+local spoiler = s_deco.Spoiler({ text = "Spoiler: hidden options" })
+spoiler.Toggle({ text = "Secret toggle", default = false })
+spoiler.Slider({ text = "Secret slider", min = 0, max = 10, default = 5 })
+s_deco.FAQ({ items = {
+	{ question = "How do I bind a key?", answer = "Click a keybind pill, then press any key or mouse button." },
+	{ question = "Where are configs saved?", answer = "Under the executor workspace, as JSON per config name." },
+} })
+s_deco.Changelog({ title = "Changelog", version = "2.3", date = "today", entries = {
+	{ Tag = "Added", Text = "Charts, progress bars, segmented picker and more." },
+	{ Tag = "Fixed", Text = "Tab-switch resize jump and the settings-panel click-close." },
+	{ Tag = "Changed", Text = "Every animation now eases on Syde's exponential curve." },
+} })
+s_deco.PinnedList({ title = "Scripts", items = { { Name = "Aimbot" }, { Name = "ESP", Pinned = true }, { Name = "Triggerbot" } } })
+s_deco.ScrollHint({ text = "Scroll for more" })
 
 -- Standalone page (renders below the group, no group header) -----------
 local Info = Elements.Page("Info", { icon = "info" })

@@ -2527,8 +2527,12 @@ function Elements.ColorPicker(parent, accent, opts)
 			value = slotColor(1)
 			al = slots[1].alpha
 		end
+		-- primary: a single Color3 that always tracks the colour being edited, so
+		-- single-colour consumers keep updating live even in Double / Multi mode
+		local c = cur()
+		local primary = Color3.fromHSV(c.h, c.s, c.v)
 		if opts.flag then NEMESIS.Flags[opts.flag] = value end
-		if type(opts.callback) == "function" then pcall(opts.callback, value, al) end
+		if type(opts.callback) == "function" then pcall(opts.callback, value, al, primary) end
 	end
 	local refreshRailRef  -- set when the panel (and its rail) exist
 	local function syncUI()
@@ -6353,9 +6357,9 @@ function NEMESIS.Window(opts)
 			options = { "Dark", "Midnight", "Abyss" }, default = "Dark",
 			callback = function(v) Win.SetTheme(v) end })
 		themeSec.ColorPicker({ text = "Accent color", icon = "droplet", default = accent,
-			callback = function(c) if typeof(c) == "Color3" then Win.SetAccent(c) end end })
+			callback = function(_, _, c) Win.SetAccent(c) end })
 		themeSec.ColorPicker({ text = "Hitbox color", icon = "square-check", default = accent,
-			callback = function(c) if typeof(c) == "Color3" then Win.SetHitbox(c) end end })
+			callback = function(_, _, c) Win.SetHitbox(c) end })
 		local fontOptions = { "Inter" }
 		pcall(function()
 			for _, f in ipairs(Enum.Font:GetEnumItems()) do
@@ -6401,19 +6405,19 @@ function NEMESIS.Window(opts)
 		local colorSec = S.Section("MENU COLORS")
 		colorSec.Label("Recolor the menu surfaces. Each picker has Single / Double / Multi.")
 		colorSec.ColorPicker({ text = "Background", icon = "square", default = THEME.Background,
-			callback = function(c) if typeof(c) == "Color3" then Win.SetColor("Background", c) end end })
+			callback = function(_, _, c) Win.SetColor("Background", c) end })
 		colorSec.ColorPicker({ text = "Elements", icon = "box", default = THEME.Element,
-			callback = function(c) if typeof(c) == "Color3" then Win.SetColor("Element", c) end end })
+			callback = function(_, _, c) Win.SetColor("Element", c) end })
 		colorSec.ColorPicker({ text = "Text", icon = "type", default = THEME.Text,
-			callback = function(c) if typeof(c) == "Color3" then Win.SetColor("Text", c) end end })
+			callback = function(_, _, c) Win.SetColor("Text", c) end })
 		colorSec.ColorPicker({ text = "Icons / subtext", icon = "image", default = THEME.SubText,
-			callback = function(c) if typeof(c) == "Color3" then Win.SetColor("SubText", c) end end })
+			callback = function(_, _, c) Win.SetColor("SubText", c) end })
 		colorSec.ColorPicker({ text = "Shadow", icon = "layers", default = Color3.fromRGB(0, 0, 0),
-			callback = function(c) if typeof(c) == "Color3" then Win.SetShadowColor(c) end end })
+			callback = function(_, _, c) Win.SetShadowColor(c) end })
 
 		local logoSec = S.Section("LOGO")
 		logoSec.ColorPicker({ text = "Logo color", icon = "pen-tool", default = logoColor,
-			callback = function(c) if typeof(c) == "Color3" then Win.SetLogoColor(c) end end })
+			callback = function(_, _, c) Win.SetLogoColor(c) end })
 		local logoIdInput = logoSec.Input({ text = "Logo image id", icon = "image", placeholder = "rbxassetid or number" })
 		logoSec.Button({ text = "Apply logo image", button = "Apply", icon = "check", callback = function()
 			local id = tostring(logoIdInput.Get() or ""):gsub("%s+", "")

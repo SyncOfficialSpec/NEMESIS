@@ -3120,6 +3120,8 @@ function NEMESIS.Window(opts)
 	-- below every panel, so cards read over it. Tinted + opacity adjustable.
 	local bgImage = Create("ImageLabel", {
 		Name = "BackgroundImage",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.5, 0),
 		Size = UDim2.new(1, 0, 1, 0),
 		BackgroundTransparency = 1,
 		Image = "",
@@ -4293,21 +4295,72 @@ function NEMESIS.Window(opts)
 		return true
 	end
 
-	-- Win.SetBackgroundImage(assetId or url or nil, opacity 0..1)
+	-- background image state + helpers. The image is centre-anchored so it can be
+	-- zoomed (Size scaled) and moved (Position offset) and cropped/stretched.
+	local bgState = { zoom = 1, offX = 0, offY = 0, fit = Enum.ScaleType.Crop, opacity = 0.5 }
+	-- accept a bare id, an rbxassetid/rbxthumb string, or any Roblox URL that carries
+	-- the id (e.g. create.roblox.com/store/asset/123.../silly-cat). Most pasted links
+	-- point at a Decal, and a plain rbxassetid:// will NOT render a decal on executors,
+	-- so we resolve every id through rbxthumb, which renders decals AND images reliably.
+	local function parseAsset(s)
+		s = tostring(s or ""):gsub("%s+", "")
+		if s == "" then return nil end
+		if string.match(s, "^rbxthumb://") then return s end   -- already a thumb url
+		local id = string.match(s, "/asset/(%d+)") or string.match(s, "/catalog/(%d+)")
+			or string.match(s, "[?&]id=(%d+)") or string.match(s, "assetId=(%d+)")
+			or string.match(s, "rbxassetid://(%d+)") or string.match(s, "^(%d+)$")
+			or string.match(s, "(%d+)")
+		if id then return "rbxthumb://type=Asset&id=" .. id .. "&w=420&h=420" end
+		if string.match(s, "^http") then return s end   -- last-resort raw url
+		return nil
+	end
+	local function applyBgTransform(animate)
+		local info = animate and TI.EXPAND or TweenInfo.new(0)
+		local z = bgState.zoom
+		bgImage.ScaleType = bgState.fit
+		tween(bgImage, {
+			Size = UDim2.new(z, 0, z, 0),
+			Position = UDim2.new(0.5 + bgState.offX, 0, 0.5 + bgState.offY, 0),
+		}, info)
+	end
+
+	-- Win.SetBackgroundImage(id / url / rbxassetid / nil, opacity 0..1). Parses a
+	-- create.roblox.com link or a bare number, and fades the image in smoothly.
 	function Win.SetBackgroundImage(asset, opacity)
 		if asset == nil or asset == "" or asset == 0 then
-			bgImage.Visible = false
-			bgImage.Image = ""
+			tween(bgImage, { ImageTransparency = 1 }, TI.FAST)
+			task.delay(0.25, function() if bgImage.ImageTransparency >= 0.99 then bgImage.Visible = false; bgImage.Image = "" end end)
 			return
 		end
-		local img = tostring(asset)
-		if string.match(img, "^%d+$") then img = "rbxassetid://" .. img end
+		local img = parseAsset(asset)
+		if not img then return end
+		if opacity ~= nil then bgState.opacity = math.clamp(tonumber(opacity) or 0.5, 0, 1) end
 		bgImage.Image = img
+		bgImage.ImageTransparency = 1
 		bgImage.Visible = true
-		bgImage.ImageTransparency = 1 - math.clamp(tonumber(opacity) or 0.5, 0, 1)
+		applyBgTransform(false)
+		tween(bgImage, { ImageTransparency = 1 - bgState.opacity }, TI.EXPAND)
 	end
 	function Win.SetBackgroundOpacity(opacity)
-		bgImage.ImageTransparency = 1 - math.clamp(tonumber(opacity) or 0.5, 0, 1)
+		bgState.opacity = math.clamp(tonumber(opacity) or 0.5, 0, 1)
+		tween(bgImage, { ImageTransparency = 1 - bgState.opacity }, TI.FAST)
+	end
+	-- Win.SetBackgroundFit("Crop"/"Stretch"/"Fit"/"Tile")
+	function Win.SetBackgroundFit(mode)
+		local m = mode
+		if type(mode) == "string" then local ok, e = pcall(function() return Enum.ScaleType[mode] end); m = ok and e or nil end
+		if m then bgState.fit = m; applyBgTransform(true) end
+	end
+	-- Win.SetBackgroundZoom(0.5..4): zoom the image in/out
+	function Win.SetBackgroundZoom(z)
+		bgState.zoom = math.clamp(tonumber(z) or 1, 0.5, 4)
+		applyBgTransform(true)
+	end
+	-- Win.SetBackgroundOffset(x, y): move the image, each -1..1 of the window size
+	function Win.SetBackgroundOffset(x, y)
+		if x ~= nil then bgState.offX = math.clamp(tonumber(x) or 0, -1, 1) end
+		if y ~= nil then bgState.offY = math.clamp(tonumber(y) or 0, -1, 1) end
+		applyBgTransform(true)
 	end
 
 	-- Win.SetColor(themeKey, Color3): override any single palette colour live and
@@ -4436,6 +4489,9 @@ function NEMESIS.Window(opts)
 		Win.SetFont(nil)
 		Win.SetTransparency(0)
 		Win.SetBackgroundImage(nil)
+		Win.SetBackgroundZoom(1)
+		Win.SetBackgroundOffset(0, 0)
+		Win.SetBackgroundFit("Crop")
 		Win.SetLogoColor(origLogo)
 		Win.SetWatermark(false)
 		Win.SetBlur(false)
@@ -5269,8 +5325,8 @@ function NEMESIS.Window(opts)
 		end })
 
 		local bgSec = S.Section("BACKGROUND IMAGE")
-		bgSec.Label("Show any image behind the menu. Paste an asset id, submit, then set the opacity.")
-		local bgInput = bgSec.Input({ text = "Image id", icon = "image", placeholder = "e.g. 13094912294" })
+		bgSec.Label("Paste an asset id or a Roblox link (e.g. create.roblox.com/store/asset/11176073582/silly-cat), apply it, then fit / zoom / move it to taste.")
+		local bgInput = bgSec.Input({ text = "Image id or link", icon = "image", placeholder = "id or create.roblox.com/store/asset/..." })
 		local bgOpacity = 0.55
 		bgSec.Button({ text = "Apply background", button = "Apply", icon = "check", callback = function()
 			local id = tostring(bgInput.Get() or ""):gsub("%s+", "")
@@ -5279,6 +5335,16 @@ function NEMESIS.Window(opts)
 				NEMESIS.Notify({ title = "Background", content = "Applied.", duration = 2, icon = "image" })
 			end
 		end })
+		bgSec.Dropdown({ text = "Fit", icon = "maximize", options = { "Crop", "Stretch", "Fit", "Tile" }, default = "Crop",
+			desc = "Crop fills and keeps aspect; Stretch fills exactly; Fit shows the whole image.",
+			callback = function(v) Win.SetBackgroundFit(v) end })
+		bgSec.Slider({ text = "Zoom", icon = "search", min = 50, max = 300, default = 100, suffix = "%",
+			callback = function(v) Win.SetBackgroundZoom(v / 100) end })
+		local bgX, bgY = 0, 0
+		bgSec.Slider({ text = "Move X", icon = "move-horizontal", min = -100, max = 100, default = 0, suffix = "%",
+			callback = function(v) bgX = v / 100; Win.SetBackgroundOffset(bgX, bgY) end })
+		bgSec.Slider({ text = "Move Y", icon = "move-vertical", min = -100, max = 100, default = 0, suffix = "%",
+			callback = function(v) bgY = v / 100; Win.SetBackgroundOffset(bgX, bgY) end })
 		bgSec.Slider({ text = "Opacity", icon = "eye", min = 0, max = 100, default = 55, suffix = "%", flag = "nem_bg_opacity",
 			callback = function(v) bgOpacity = v / 100; Win.SetBackgroundOpacity(bgOpacity) end })
 		bgSec.Button({ text = "Clear background", button = "Clear", icon = "x", callback = function()

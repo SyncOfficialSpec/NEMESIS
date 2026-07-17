@@ -2439,7 +2439,7 @@ function Elements.ColorPicker(parent, accent, opts)
 		backdrop.MouseButton1Click:Connect(function() openPanel(false) end)
 		local panelScale = Create("UIScale", { Scale = 1 })
 		panel = Create("CanvasGroup", {
-			Name = "ColorPanel", AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.new(0, 282, 0, 392), BackgroundColor3 = THEME.Group,
+			Name = "ColorPanel", AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.new(0, 300, 0, 424), BackgroundColor3 = THEME.Group,
 			GroupTransparency = 1, Visible = false, ZIndex = 50001, Parent = screenGui,
 		}, {
 			corner(12), stroke(THEME.Stroke, 1, 0.3), panelScale,
@@ -2560,7 +2560,7 @@ function Elements.ColorPicker(parent, accent, opts)
 		applyMode()
 
 		-- SV square (matched 8px corners on every layer + a clean boundary stroke)
-		local sv = Create("Frame", { Size = UDim2.new(1, 0, 0, 122), BackgroundColor3 = Color3.fromHSV(cur().h, 1, 1), LayoutOrder = 3, Parent = content }, { corner(3), stroke(THEME.ElementStroke, 1, 0.4) })
+		local sv = Create("Frame", { Size = UDim2.new(1, 0, 0, 148), BackgroundColor3 = Color3.fromHSV(cur().h, 1, 1), LayoutOrder = 3, Parent = content }, { corner(3), stroke(THEME.ElementStroke, 1, 0.4) })
 		svBase = sv
 		Create("Frame", { Size = UDim2.new(1, 0, 1, 0), BackgroundColor3 = Color3.new(1, 1, 1), Parent = sv }, { corner(3), Create("UIGradient", { Transparency = numSeq(0, 1) }) })
 		Create("Frame", { Size = UDim2.new(1, 0, 1, 0), BackgroundColor3 = Color3.new(0, 0, 0), Parent = sv }, { corner(3), Create("UIGradient", { Rotation = 90, Transparency = numSeq(1, 0) }) })
@@ -2698,27 +2698,40 @@ function Elements.ColorPicker(parent, accent, opts)
 		if opened then
 			if _ddCurrent and _ddCurrent ~= cpHandle then _ddCurrent.close() end
 			_ddCurrent = cpHandle
-			-- centre point of the panel (centre-anchored so it pops from its middle)
-			local cx, cy = 0.5 * 1920, 0.5 * 1080
+			-- anchor the panel just under the swatch, then clamp it fully inside
+			-- the viewport with a margin so it is never off-screen or clipped
+			local pw, ph = panel.AbsoluteSize.X, panel.AbsoluteSize.Y
+			if pw <= 0 then pw = 300 end
+			if ph <= 0 then ph = 400 end
+			local vp = viewportSize()
+			local sx, sy, sh = vp.X * 0.5 - pw / 2, vp.Y * 0.5 - ph / 2, 0
 			pcall(function()
-				local p = sw1.AbsolutePosition
-				cx, cy = p.X - 240 + 141, p.Y + 30 + 196
+				local p, s = sw1.AbsolutePosition, sw1.AbsoluteSize
+				sx = p.X + s.X - pw           -- right-align the panel to the swatch
+				sy = p.Y + s.Y + 8            -- just below the swatch
+				sh = s.Y
 			end)
+			-- flip above the swatch if it would spill off the bottom
+			if sy + ph > vp.Y - 12 then sy = sy - ph - sh - 16 end
+			sx = math.clamp(sx, 12, math.max(12, vp.X - pw - 12))
+			sy = math.clamp(sy, 12, math.max(12, vp.Y - ph - 12))
+			-- centre-anchored: convert the top-left target to a centre point
+			local cx, cy = sx + pw / 2, sy + ph / 2
 			cpOpenPos = Vector2.new(cx, cy)
-			panel.Position = UDim2.fromOffset(cx, cy + 8)
+			panel.Position = UDim2.fromOffset(cx, cy + 10)
 			panel.GroupTransparency = 1
-			if cpScale then cpScale.Scale = 0.94 end
+			if cpScale then cpScale.Scale = 0.92 end
 			backdrop.Visible = true
 			panel.Visible = true
+			-- Syde open: quick fade + scale settle
 			tween(panel, { GroupTransparency = 0, Position = UDim2.fromOffset(cx, cy) }, TI.EXPAND)
 			if cpScale then tween(cpScale, { Scale = 1 }, TI.EXPAND) end
 		else
 			if _ddCurrent == cpHandle then _ddCurrent = nil end
 			tween(panel, { GroupTransparency = 1 }, TI.FAST)
-			if cpScale then tween(cpScale, { Scale = 0.96 }, TI.FAST)
-			end
+			if cpScale then tween(cpScale, { Scale = 0.94 }, TI.FAST) end
 			backdrop.Visible = false
-			task.delay(0.16, function()
+			task.delay(0.18, function()
 				if not opened then panel.Visible = false end
 			end)
 		end

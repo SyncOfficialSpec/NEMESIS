@@ -1312,6 +1312,14 @@ local function rowText(parent, text, desc, reserveScale, reservePx, icon)
 	})
 end
 
+-- Update the title of a rowText result (a plain TextLabel, or the title label
+-- inside the two-line desc column).
+local function setRowText(res, t)
+	if not res then return end
+	if res:IsA("TextLabel") then res.Text = tostring(t)
+	else local tl = res:FindFirstChildWhichIsA("TextLabel"); if tl then tl.Text = tostring(t) end end
+end
+
 -- A right-aligned rounded field box (width = fraction of the row).
 local function fieldBox(row, frac)
 	return Create("Frame", {
@@ -3431,12 +3439,14 @@ function Elements.RippleButton(parent, accent, opts)
 	opts = opts or {}
 	onAccent(function(c) accent = c end)
 	local row = newRow(parent, opts.desc and 50 or ROW_H)
-	rowText(row, opts.text or "Action", opts.desc, 0, 0, opts.icon)
+	-- build the click surface first so the label/icon (added after) paint above the
+	-- hover wash and ripple instead of being covered by them
 	local surface = Create("TextButton", {
 		Size = UDim2.new(1, ROW_PAD * 2, 1, 0), Position = UDim2.new(0, -ROW_PAD, 0, 0),
 		BackgroundColor3 = THEME.Element, BackgroundTransparency = 1, AutoButtonColor = false, Text = "",
 		ClipsDescendants = true, Parent = row,
 	}, { corner(8) })
+	local label = rowText(row, opts.text or "Action", opts.desc, 0, 0, opts.icon)
 	surface.MouseEnter:Connect(function() tween(surface, { BackgroundTransparency = 0.85 }, TI.HOVER) end)
 	surface.MouseLeave:Connect(function() tween(surface, { BackgroundTransparency = 1 }, TI.HOVEROFF) end)
 	surface.InputBegan:Connect(function(input)
@@ -3453,6 +3463,7 @@ function Elements.RippleButton(parent, accent, opts)
 	end)
 	surface.MouseButton1Click:Connect(function() if type(opts.callback) == "function" then pcall(opts.callback) end end)
 	local control = {}
+	function control.SetText(t) setRowText(label, t) end
 	function control.Fire() if type(opts.callback) == "function" then pcall(opts.callback) end end
 	return control
 end
@@ -3464,7 +3475,8 @@ function Elements.HoldButton(parent, accent, opts)
 	onAccent(function(c) accent = c end)
 	local dur = math.clamp(tonumber(opts.duration) or 1.5, 0.2, 10)
 	local row = newRow(parent, opts.desc and 50 or ROW_H)
-	rowText(row, opts.text or "Hold to confirm", opts.desc, 0, 0, opts.icon)
+	-- surface + progress fill built first so the label/icon (added after) stay above
+	-- the sweeping fill instead of being covered by it
 	local surface = Create("TextButton", {
 		Size = UDim2.new(1, ROW_PAD * 2, 1, 0), Position = UDim2.new(0, -ROW_PAD, 0, 0),
 		BackgroundColor3 = THEME.Element, BackgroundTransparency = 1, AutoButtonColor = false, Text = "",
@@ -3473,7 +3485,9 @@ function Elements.HoldButton(parent, accent, opts)
 	local fillGrad = Create("UIGradient", {})
 	local fill = Create("Frame", { Size = UDim2.new(0, 0, 1, 0), BackgroundColor3 = accent, BackgroundTransparency = 0.6, ZIndex = 0, Parent = surface }, { fillGrad })
 	accentProp(fill, "BackgroundColor3", accent); accentGrad(fillGrad, accent)
+	local label = rowText(row, opts.text or "Hold to confirm", opts.desc, 0, 0, opts.icon)
 	local holding, tw = false, nil
+	local session = 0   -- invalidates a prior press's pending completion timer
 	local function cancel()
 		holding = false
 		if tw then tw:Cancel() end
@@ -3482,9 +3496,12 @@ function Elements.HoldButton(parent, accent, opts)
 	surface.InputBegan:Connect(function(input)
 		if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
 		holding = true
+		session = session + 1
+		local mine = session
 		tw = tween(fill, { Size = UDim2.new(1, 0, 1, 0) }, TweenInfo.new(dur, Enum.EasingStyle.Linear))
 		task.delay(dur, function()
-			if holding then
+			-- only complete if this exact press is still the one being held
+			if holding and session == mine then
 				holding = false
 				if type(opts.callback) == "function" then pcall(opts.callback) end
 				if opts.notify ~= false then NEMESIS.Notify({ title = opts.completionTitle or "Confirmed", content = opts.completionText or "Action confirmed.", duration = 2, icon = opts.completionIcon or "check" }) end
@@ -3497,7 +3514,7 @@ function Elements.HoldButton(parent, accent, opts)
 	end)
 	surface.MouseLeave:Connect(cancel)
 	local control = {}
-	function control.SetText(t) end
+	function control.SetText(t) setRowText(label, t) end
 	return control
 end
 

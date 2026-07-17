@@ -824,7 +824,7 @@ local function computeScale()
 end
 
 -- Unified mouse + touch drag
-local function makeDraggable(frame, handle)
+local function makeDraggable(frame, handle, clampGetter)
 	handle = handle or frame
 	local dragging = false
 	local dragStart, startPos
@@ -850,12 +850,17 @@ local function makeDraggable(frame, handle)
 		if input.UserInputType == Enum.UserInputType.MouseMovement
 			or input.UserInputType == Enum.UserInputType.Touch then
 			local delta = input.Position - dragStart
-			frame.Position = UDim2.new(
-				startPos.X.Scale,
-				startPos.X.Offset + delta.X,
-				startPos.Y.Scale,
-				startPos.Y.Offset + delta.Y
-			)
+			local ox = startPos.X.Offset + delta.X
+			local oy = startPos.Y.Offset + delta.Y
+			-- lock-to-screen: with a centered anchor/position the max travel each
+			-- way is half the leftover space, so the window never leaves the view
+			if clampGetter and clampGetter() and frame.Parent then
+				local vp, sz = frame.Parent.AbsoluteSize, frame.AbsoluteSize
+				local mx, my = math.max(0, (vp.X - sz.X) / 2), math.max(0, (vp.Y - sz.Y) / 2)
+				ox = math.clamp(ox, -mx, mx)
+				oy = math.clamp(oy, -my, my)
+			end
+			frame.Position = UDim2.new(startPos.X.Scale, ox, startPos.Y.Scale, oy)
 		end
 	end)
 end
@@ -3082,10 +3087,11 @@ function NEMESIS.Window(opts)
 		ClipsDescendants = true,
 		Parent = screenGui,
 	}, {
-		Create("UIScale", { Scale = scale }),
 		corner(RADIUS),
 		stroke(THEME.Stroke, 1, 0),
 	})
+	local rootScale = Create("UIScale", { Scale = scale, Parent = root })
+	local lockToScreen = false   -- Settings > Lock to screen; read by the drag handler
 	-- optional background image (set in Settings): sits above the window fill but
 	-- below every panel, so cards read over it. Tinted + opacity adjustable.
 	local bgImage = Create("ImageLabel", {
@@ -3135,7 +3141,7 @@ function NEMESIS.Window(opts)
 		BorderSizePixel = 0,
 		Parent = topbar,
 	})
-	makeDraggable(root, topbar)
+	makeDraggable(root, topbar, function() return lockToScreen end)
 
 	-- logo: the real NEMESIS brand image (downloaded + loaded via getcustomasset,
 	-- no Roblox upload). Falls back to a gradient "N" tile on executors without
@@ -4325,6 +4331,40 @@ function NEMESIS.Window(opts)
 		watermark.Visible = true
 	end
 
+	-- Win.SetBlur(bool): a BlurEffect in Lighting so the game behind the menu
+	-- frosts (Syde "acrylic"). Removed when off.
+	local blurFx
+	function Win.SetBlur(on)
+		if on then
+			if not blurFx then
+				pcall(function()
+					blurFx = Instance.new("BlurEffect")
+					blurFx.Name = "NemesisBlur"
+					blurFx.Size = 0
+					blurFx.Parent = game:GetService("Lighting")
+				end)
+			end
+			if blurFx then tween(blurFx, { Size = 18 }, TI.EXPAND) end
+		elseif blurFx then
+			tween(blurFx, { Size = 0 }, TI.EXPAND)
+			task.delay(0.4, function() if blurFx and (not on) then pcall(function() blurFx:Destroy() end); blurFx = nil end end)
+		end
+	end
+
+	-- Win.SetScale(0.6..1.4): scale the whole window (Syde-style UI scale). Applied
+	-- on top of the responsive base scale.
+	local baseScale = scale
+	function Win.SetScale(mult)
+		mult = math.clamp(tonumber(mult) or 1, 0.6, 1.4)
+		tween(rootScale, { Scale = baseScale * mult }, TI.EXPAND)
+		pcall(function() rootShadowHolder:FindFirstChildOfClass("UIScale").Scale = baseScale * mult end)
+	end
+
+	-- Win.SetLockToScreen(bool): clamp the window fully inside the viewport while
+	-- dragging (Syde LockToScreen). lockToScreen is declared up by the root so the
+	-- drag handler can read it.
+	function Win.SetLockToScreen(on) lockToScreen = on and true or false end
+
 	-- Win.ResetLook(): restore the menu's original default appearance
 	local origAccent = opts.accent or Color3.fromRGB(140, 90, 255)
 	local origLogo = opts.logoColor or THEME.Text
@@ -4337,6 +4377,9 @@ function NEMESIS.Window(opts)
 		Win.SetBackgroundImage(nil)
 		Win.SetLogoColor(origLogo)
 		Win.SetWatermark(false)
+		Win.SetBlur(false)
+		Win.SetScale(1)
+		Win.SetLockToScreen(false)
 	end
 
 	-- small live setters
@@ -5128,6 +5171,15 @@ function NEMESIS.Window(opts)
 			callback = function(on) Win.SetAnimations(on) end })
 		feelSec.Toggle({ text = "Watermark", icon = "tag", default = false, desc = "A small draggable badge on screen.",
 			callback = function(on) Win.SetWatermark(on, opts.title or "NEMESIS") end })
+		feelSec.Slider({ text = "UI scale", icon = "maximize", min = 60, max = 140, default = 100, suffix = "%",
+			desc = "Shrink or grow the whole menu.",
+			callback = function(v) Win.SetScale(v / 100) end })
+		feelSec.Toggle({ text = "Background blur", icon = "droplet", default = false,
+			desc = "Frost the game behind the menu.",
+			callback = function(on) Win.SetBlur(on) end })
+		feelSec.Toggle({ text = "Lock to screen", icon = "move", default = false,
+			desc = "Keep the window fully on screen when dragging.",
+			callback = function(on) Win.SetLockToScreen(on) end })
 
 		local colorSec = S.Section("MENU COLORS")
 		colorSec.Label("Recolor the menu surfaces. Each picker has Single / Double / Multi.")

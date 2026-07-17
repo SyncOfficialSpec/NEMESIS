@@ -2402,7 +2402,7 @@ function Elements.ColorPicker(parent, accent, opts)
 		backdrop.MouseButton1Click:Connect(function() openPanel(false) end)
 		local panelScale = Create("UIScale", { Scale = 1 })
 		panel = Create("CanvasGroup", {
-			Name = "ColorPanel", AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.new(0, 300, 0, 424), BackgroundColor3 = THEME.Group,
+			Name = "ColorPanel", AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.new(0, 300, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundColor3 = THEME.Group,
 			GroupTransparency = 1, Visible = false, ZIndex = 50001, Parent = screenGui,
 		}, {
 			corner(12), stroke(THEME.Stroke, 1, 0.3), panelScale,
@@ -2411,9 +2411,9 @@ function Elements.ColorPicker(parent, accent, opts)
 		cpScale = panelScale
 		-- absorb taps on empty panel areas so they don't fall through to the backdrop
 		Create("TextButton", { Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, AutoButtonColor = false, Text = "", ZIndex = 1, Parent = panel })
-		local content = Create("Frame", { Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, ZIndex = 2, Parent = panel }, {
-			padding(10),
-			Create("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
+		local content = Create("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, ZIndex = 2, Parent = panel }, {
+			padding(12),
+			Create("UIListLayout", { Padding = UDim.new(0, 9), SortOrder = Enum.SortOrder.LayoutOrder }),
 		})
 
 		-- header: live swatch + hex + mode toggle
@@ -2587,7 +2587,7 @@ function Elements.ColorPicker(parent, accent, opts)
 		-- scrollable so presets + any number of saved colours fit (right-click a
 		-- saved colour to remove it)
 		local gridWrap = Create("ScrollingFrame", {
-			Size = UDim2.new(1, 0, 0, 104), BackgroundTransparency = 1, BorderSizePixel = 0,
+			Size = UDim2.new(1, 0, 0, 76), BackgroundTransparency = 1, BorderSizePixel = 0,
 			ScrollBarThickness = 3, ScrollBarImageColor3 = THEME.Faint, ScrollBarImageTransparency = 0.4,
 			CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y,
 			ScrollingDirection = Enum.ScrollingDirection.Y, LayoutOrder = 6, Parent = content,

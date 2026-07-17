@@ -501,17 +501,18 @@ end
 -- Hover is asymmetric on purpose (fast in, gentle out) so surfaces feel like
 -- they settle rather than blink.
 local TI = {
-	EXP = TweenInfo.new(0.26, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),          -- state commits, fills
-	FAST = TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),          -- small tints, arrows
+	EXP = TweenInfo.new(0.26, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),          -- state commits, fills (size = Quint)
+	FAST = TweenInfo.new(0.3, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out),    -- small tints, arrows (Syde fades = Exp)
 	TAB = TweenInfo.new(0.32, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out),    -- tab/dock travel, page glide
 	EXPAND = TweenInfo.new(0.32, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out), -- overlays, collapse
-	POP = TweenInfo.new(0.26, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),          -- knob feedback
+	POP = TweenInfo.new(0.26, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),          -- knob feedback (size = Quint)
 	SCROLL = TweenInfo.new(0.24, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),        -- smooth wheel scroll
-	TICK = TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),          -- press-down, check draw
+	TICK = TweenInfo.new(0.2, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out),    -- press-down, check draw
 }
-TI.OPEN = TweenInfo.new(0.42, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)           -- window morphs
-TI.HOVER = TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)           -- hover in
-TI.HOVEROFF = TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)        -- hover out (settle)
+TI.OPEN = TweenInfo.new(0.42, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)           -- window morphs (size = Quint)
+-- hover in/out on Syde's soft exponential (0.4s), not the old snappy Quad
+TI.HOVER = TweenInfo.new(0.4, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)     -- hover in
+TI.HOVEROFF = TweenInfo.new(0.4, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)  -- hover out (settle)
 TI.SLIDE = TI.EXPAND
 TI.NOTIFY = TweenInfo.new(0.4, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)    -- notification glide
 -- Syde-matched motion: exponential for colour/opacity, quint for size/position,
@@ -521,6 +522,7 @@ TI.SYDE_FADE = TweenInfo.new(0.57, Enum.EasingStyle.Exponential, Enum.EasingDire
 TI.SYDE_SIZE = TweenInfo.new(0.55, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)      -- slider fill, keybind pill
 TI.SYDE_REFLOW = TweenInfo.new(0.45, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out) -- element reflow / page reveal
 TI.SYDE_OPT = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)         -- dropdown option highlight
+TI.SHADOW = TweenInfo.new(0.65, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)   -- shadow density
 
 -- reduced-motion governor: when the menu itself measures a starved framerate
 -- (see the footer FPS loop), tweens collapse to near-instant sets so state is
@@ -751,6 +753,24 @@ local function accentGrad(grad, accent)
 	return grad
 end
 
+-- Hitbox registry: the fill/highlight colour of toggles and slider fills. It
+-- tracks the accent until Win.SetHitbox sets an independent colour (Win.SetAccent
+-- keeps driving it while it hasn't been overridden). Mirrors the accent helpers.
+local hitboxHooks = {}
+local hitboxOverride = false
+local function onHitbox(fn) hitboxHooks[#hitboxHooks + 1] = fn end
+local function fireHitbox(c) for _, fn in ipairs(hitboxHooks) do pcall(fn, c) end end
+local function hitboxProp(inst, prop, initial)
+	inst[prop] = initial
+	onHitbox(function(c) pcall(function() inst[prop] = c end) end)
+	return inst
+end
+local function hitboxGrad(grad, initial)
+	grad.Color = ColorSequence.new(initial, accentLight(initial))
+	onHitbox(function(c) pcall(function() grad.Color = ColorSequence.new(c, accentLight(c)) end) end)
+	return grad
+end
+
 -- the classic Rayfield window shadow, vendored into this repo with the panel
 -- region punched out so it can sit behind OR inside any panel without tinting
 local RF_SHADOW = { name = "cal4_shadow.png", slice = Rect.new(91, 91, 187, 328), pad = 55 }
@@ -828,11 +848,35 @@ local function computeScale()
 	return math.clamp(w / 1560, 0.7, 1.0)
 end
 
--- Unified mouse + touch drag
-local function makeDraggable(frame, handle, clampGetter)
+-- Unified mouse + touch drag. clampGetter()->bool keeps the frame on screen;
+-- smoothGetter()->0..1 eases the frame toward the cursor (0 = instant follow).
+local function makeDraggable(frame, handle, clampGetter, smoothGetter)
 	handle = handle or frame
 	local dragging = false
 	local dragStart, startPos
+	local targetX, targetY, followConn
+
+	local function stopFollow()
+		if followConn then pcall(function() followConn:Disconnect() end); followConn = nil end
+	end
+	-- while smoothing is on, ease the frame toward the target each frame instead of
+	-- snapping (frame-rate independent; higher smoothness = softer glide)
+	local function startFollow()
+		stopFollow()
+		followConn = RunService.RenderStepped:Connect(function(dt)
+			local sm = smoothGetter and math.clamp(smoothGetter() or 0, 0, 1) or 0
+			local k = 40 - 32 * sm            -- 40 (snappy) .. 8 (smooth)
+			local a = 1 - math.exp(-dt * k)
+			local cur = frame.Position
+			local nx = cur.X.Offset + (targetX - cur.X.Offset) * a
+			local ny = cur.Y.Offset + (targetY - cur.Y.Offset) * a
+			frame.Position = UDim2.new(startPos.X.Scale, nx, startPos.Y.Scale, ny)
+			if not dragging and math.abs(targetX - nx) < 0.4 and math.abs(targetY - ny) < 0.4 then
+				frame.Position = UDim2.new(startPos.X.Scale, targetX, startPos.Y.Scale, targetY)
+				stopFollow()
+			end
+		end)
+	end
 
 	handle.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1
@@ -840,6 +884,7 @@ local function makeDraggable(frame, handle, clampGetter)
 			dragging = true
 			dragStart = input.Position
 			startPos = frame.Position
+			targetX, targetY = startPos.X.Offset, startPos.Y.Offset
 			input.Changed:Connect(function()
 				if input.UserInputState == Enum.UserInputState.End then
 					dragging = false
@@ -865,7 +910,13 @@ local function makeDraggable(frame, handle, clampGetter)
 				ox = math.clamp(ox, -mx, mx)
 				oy = math.clamp(oy, -my, my)
 			end
-			frame.Position = UDim2.new(startPos.X.Scale, ox, startPos.Y.Scale, oy)
+			targetX, targetY = ox, oy
+			local sm = smoothGetter and math.clamp(smoothGetter() or 0, 0, 1) or 0
+			if sm > 0.01 then
+				if not followConn then startFollow() end
+			else
+				frame.Position = UDim2.new(startPos.X.Scale, ox, startPos.Y.Scale, oy)
+			end
 		end
 	end)
 end
@@ -1462,6 +1513,8 @@ end
 function Elements.Toggle(parent, accent, opts)
 	opts = opts or {}
 	onAccent(function(c) accent = c end)
+	local hitbox = accent   -- fill/highlight colour; tracks accent unless overridden
+	onHitbox(function(c) hitbox = c end)
 	local state = opts.default and true or false
 	local row = newRow(parent, opts.desc and 50 or ROW_H)
 	local rowLabel = rowText(row, opts.text, opts.desc, 0, 32, opts.icon)
@@ -1489,7 +1542,7 @@ function Elements.Toggle(parent, accent, opts)
 			ZIndex = 0,
 			Parent = box,
 		})
-		onAccent(function(c) pcall(function() lamp.ImageColor3 = c end) end)
+		onHitbox(function(c) pcall(function() lamp.ImageColor3 = c end) end)
 	end
 	-- Syde-style fill: a full-size accent overlay that FADES in/out (no grow),
 	-- with a subtle gradient sheen. The box itself also tints to accent.
@@ -1501,8 +1554,8 @@ function Elements.Toggle(parent, accent, opts)
 		BorderSizePixel = 0,
 		Parent = box,
 	}, { corner(5), fillGrad })
-	accentProp(fill, "BackgroundColor3", accent)
-	accentGrad(fillGrad, accent)
+	hitboxProp(fill, "BackgroundColor3", accent)
+	hitboxGrad(fillGrad, accent)
 	local check
 	local checkSpec = resolveIcon("check")
 	if checkSpec then
@@ -1517,7 +1570,7 @@ function Elements.Toggle(parent, accent, opts)
 			Parent = box,
 		})
 		applyIcon(check, checkSpec)
-		onAccent(function(c) pcall(function() check.ImageColor3 = accentTextColor(c) end) end)
+		onHitbox(function(c) pcall(function() check.ImageColor3 = accentTextColor(c) end) end)
 	end
 	local click = Create("TextButton", {
 		BackgroundTransparency = 1,
@@ -1534,7 +1587,7 @@ function Elements.Toggle(parent, accent, opts)
 		-- fades, glow lamp fades, box tints, title brightens/dims)
 		local info = animate and TI.SYDE or TweenInfo.new(0)
 		local fadeInfo = animate and TI.SYDE_FADE or TweenInfo.new(0)
-		tween(box, { BackgroundColor3 = state and accent or THEME.ToggleOff }, info)
+		tween(box, { BackgroundColor3 = state and hitbox or THEME.ToggleOff }, info)
 		tween(fill, { BackgroundTransparency = state and 0 or 1 }, fadeInfo)
 		if check then
 			tween(check, { ImageTransparency = state and 0 or 1 }, info)
@@ -1572,6 +1625,10 @@ function Elements.Slider(parent, accent, opts)
 	local min = tonumber(opts.min) or 0
 	local max = tonumber(opts.max) or 100
 	local increment = tonumber(opts.increment) or 1
+	-- guard against min == max: a zero span would make every fraction 0/0 = NaN
+	-- and feed NaN into UDim2 scales (invisible / broken fill on strict builds)
+	local span = max - min
+	if span == 0 then span = 1 end
 	local value = math.clamp(tonumber(opts.default) or min, min, max)
 	local suffix = opts.suffix or ""
 	local decimals = opts.decimals
@@ -1624,16 +1681,16 @@ function Elements.Slider(parent, accent, opts)
 	}, { corner(2) })
 	local fillGrad = Create("UIGradient", {})
 	local fill = Create("Frame", {
-		Size = UDim2.new((value - min) / (max - min), 0, 1, 0),
+		Size = UDim2.new((value - min) / span, 0, 1, 0),
 		BackgroundColor3 = accent,
 		Parent = bar,
 	}, { fillGrad })
 	conformFill(fill, bar)
-	accentProp(fill, "BackgroundColor3", accent)
-	accentGrad(fillGrad, accent)
+	hitboxProp(fill, "BackgroundColor3", accent)
+	hitboxGrad(fillGrad, accent)
 	local handle = Create("Frame", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new((value - min) / (max - min), 0, 0.5, 0),
+		Position = UDim2.new((value - min) / span, 0, 0.5, 0),
 		Size = UDim2.new(0, 10, 0, 10),
 		BackgroundColor3 = THEME.Knob,
 		ZIndex = 2,
@@ -1656,7 +1713,7 @@ function Elements.Slider(parent, accent, opts)
 		local raw = min + (max - min) * alpha
 		local stepped = min + math.floor((raw - min) / increment + 0.5) * increment
 		value = math.clamp(stepped, min, max)
-		local frac = (value - min) / (max - min)
+		local frac = (value - min) / span
 		valueLabel.Text = fmt(value)
 		-- Syde: the fill always TWEENS toward the target (Quint 0.55, overriding),
 		-- so even dragging is a smooth catch-up rather than a hard snap
@@ -1667,7 +1724,7 @@ function Elements.Slider(parent, accent, opts)
 			pcall(opts.callback, value)
 		end
 	end
-	function control.Set(v) setFromAlpha(((tonumber(v) or min) - min) / (max - min), true, false) end
+	function control.Set(v) setFromAlpha(((tonumber(v) or min) - min) / span, true, false) end
 	function control.Get() return value end
 
 	bindBarDrag(hit, function(rel) setFromAlpha(rel, true, true) end)
@@ -2171,6 +2228,9 @@ function Elements.Keybind(parent, accent, opts)
 		if fieldStroke then tween(fieldStroke, { Color = accent, Thickness = 1.6 }, TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)) end
 	end)
 	UserInputService.InputBegan:Connect(function(input, gpe)
+		-- these UIS connections outlive the control; bail (and disarm) once the
+		-- keybind is gone so a destroyed menu never keeps firing its callback
+		if not btn.Parent then listening = false; return end
 		if listening then
 			if input.UserInputType == Enum.UserInputType.Keyboard then
 				listening = false
@@ -2196,6 +2256,7 @@ function Elements.Keybind(parent, accent, opts)
 		end
 	end)
 	UserInputService.InputEnded:Connect(function(input)
+		if not btn.Parent then return end
 		if mode == "Hold" and inputMatchesKey(input, key) then
 			if type(opts.callback) == "function" then pcall(opts.callback, false) end
 		end
@@ -3116,6 +3177,7 @@ function NEMESIS.Window(opts)
 	})
 	local rootScale = Create("UIScale", { Scale = scale, Parent = root })
 	local lockToScreen = false   -- Settings > Lock to screen; read by the drag handler
+	local dragSmooth = 0         -- Settings > Drag smoothness (0..1); read by the drag handler
 	-- optional background image (set in Settings): sits above the window fill but
 	-- below every panel, so cards read over it. Tinted + opacity adjustable.
 	local bgImage = Create("ImageLabel", {
@@ -3141,11 +3203,11 @@ function NEMESIS.Window(opts)
 		ZIndex = 0,
 		Parent = screenGui,
 	}, { Create("UIScale", { Scale = scale }) })
-	dropShadow(rootShadowHolder, 0.35)
+	local rootShadowImg = dropShadow(rootShadowHolder, 0.35)   -- for shadow density/colour settings
 	-- accent glow: the same soft shadow art, tinted to the accent and spread a bit
 	-- wider, so the whole window casts a coloured halo (Syde "Glow"). Off by default;
 	-- toggled from Settings. Recolours live with the accent.
-	local glowImg
+	local glowImg, glowGrad
 	do
 		local art = loadArt(RF_SHADOW.name)
 		if art then
@@ -3164,6 +3226,11 @@ function NEMESIS.Window(opts)
 				Parent = rootShadowHolder,
 			})
 			accentProp(glowImg, "ImageColor3", accent)
+			-- a two-stop accent gradient the "Rotate Gradient" setting can spin
+			glowGrad = Create("UIGradient", {
+				Color = ColorSequence.new(accent, accentLight(accent)), Rotation = 0, Parent = glowImg,
+			})
+			onAccent(function(c) pcall(function() glowGrad.Color = ColorSequence.new(c, accentLight(c)) end) end)
 		end
 	end
 	pcall(function()
@@ -3191,7 +3258,7 @@ function NEMESIS.Window(opts)
 		BorderSizePixel = 0,
 		Parent = topbar,
 	})
-	makeDraggable(root, topbar, function() return lockToScreen end)
+	makeDraggable(root, topbar, function() return lockToScreen end, function() return dragSmooth end)
 
 	-- logo: the real NEMESIS brand image (downloaded + loaded via getcustomasset,
 	-- no Roblox upload). Falls back to a gradient "N" tile on executors without
@@ -3630,6 +3697,7 @@ function NEMESIS.Window(opts)
 		Parent = fpsChip,
 	})
 	local fpsConn
+	local sessConn   -- Settings SESSION heartbeat; torn down in Win.Destroy
 	do
 		-- live FPS readout only. Motion is user-controlled via the Settings
 		-- "Animations" toggle; nothing auto-reduces animation on fps dips.
@@ -4472,11 +4540,43 @@ function NEMESIS.Window(opts)
 	-- drag handler can read it.
 	function Win.SetLockToScreen(on) lockToScreen = on and true or false end
 
+	-- Win.SetDragSmoothness(0..1): how much the window eases toward the cursor while
+	-- dragging. 0 snaps instantly; higher values glide.
+	function Win.SetDragSmoothness(v) dragSmooth = math.clamp(tonumber(v) or 0, 0, 1) end
+
 	-- Win.SetGlow(bool): the accent-coloured halo around the whole window (Syde
 	-- "Glow"). Fades in/out; recolours automatically with the accent.
 	function Win.SetGlow(on)
 		if not glowImg then return end
 		tween(glowImg, { ImageTransparency = on and 0.15 or 1 }, TI.EXPAND)
+	end
+
+	-- Win.SetShadowDensity(0..1): how strong the window drop-shadow reads. 1 is a
+	-- dense/opaque shadow, 0 fades it out. Animated on the Syde exponential curve.
+	function Win.SetShadowDensity(v)
+		if not rootShadowImg then return end
+		v = math.clamp(tonumber(v) or 0.65, 0, 1)
+		tween(rootShadowImg, { ImageTransparency = 1 - v }, TI.SHADOW)
+	end
+	-- Win.SetShadowColor(Color3): tint the window drop-shadow (default black)
+	function Win.SetShadowColor(c)
+		if rootShadowImg and typeof(c) == "Color3" then tween(rootShadowImg, { ImageColor3 = c }, TI.EXPAND) end
+	end
+
+	-- Win.SetRotateGradient(bool): slowly spins the accent glow's gradient so the
+	-- halo's colour sweeps around the window (most visible with Glow on).
+	local gradConn
+	function Win.SetRotateGradient(on)
+		if gradConn then pcall(function() gradConn:Disconnect() end); gradConn = nil end
+		if on and glowGrad then
+			local rot = glowGrad.Rotation
+			gradConn = RunService.RenderStepped:Connect(function(dt)
+				rot = (rot + dt * 60) % 360   -- ~60 deg/sec
+				glowGrad.Rotation = rot
+			end)
+		elseif glowGrad then
+			tween(glowGrad, { Rotation = 0 }, TI.EXPAND)
+		end
 	end
 
 	-- Win.ResetLook(): restore the menu's original default appearance
@@ -4498,6 +4598,11 @@ function NEMESIS.Window(opts)
 		Win.SetScale(1)
 		Win.SetLockToScreen(false)
 		Win.SetGlow(false)
+		Win.SetShadowDensity(0.65)
+		Win.SetShadowColor(Color3.fromRGB(0, 0, 0))
+		Win.SetRotateGradient(false)
+		Win.SetDragSmoothness(0)
+		Win.SetHitbox(nil)
 	end
 
 	-- small live setters
@@ -5083,12 +5188,18 @@ function NEMESIS.Window(opts)
 		end
 	end
 	function Win.Toggle(force)
-		setMinimized((force == nil) and (not minimized) or (not force))
+		-- explicit branch: the `(a and b) or c` idiom silently breaks when b is
+		-- false (a no-arg toggle could never restore a minimized window)
+		if force == nil then setMinimized(not minimized) else setMinimized(not force) end
 	end
 	minBtn.MouseButton1Click:Connect(function() setMinimized(not minimized) end)
 
 	function Win.Destroy()
 		if fpsConn then pcall(function() fpsConn:Disconnect() end); fpsConn = nil end
+		if sessConn then pcall(function() sessConn:Disconnect() end); sessConn = nil end
+		-- these start their own RunService loops; tear them down or they run forever
+		pcall(Win.SetRainbow, false)
+		pcall(Win.SetRotateGradient, false)
 		closeOpenDropdown()
 		tween(root, { Size = UDim2.new(0, W, 0, 0) }, TI.SLIDE)
 		task.delay(0.25, function() if root then root:Destroy() end end)
@@ -5162,10 +5273,24 @@ function NEMESIS.Window(opts)
 		accent = c
 		THEME.Accent = c
 		for _, fn in ipairs(accentHooks) do pcall(fn, c) end
+		-- the fill/highlight colour follows accent until the user overrides it
+		if not hitboxOverride then fireHitbox(c) end
 		-- re-apply the dynamic accent text (active sub-tab + breadcrumb)
 		if activeTab and activeTab.activePage then
 			pcall(function() applyPageVisual(activeTab, activeTab.activePage, false) end)
 			pcall(function() setCrumb(activeTab, activeTab.activePage) end)
+		end
+	end
+
+	-- Win.SetHitbox(Color3 or nil): the fill/highlight colour of toggles and slider
+	-- fills, independent of the accent. Pass nil to fall back to tracking the accent.
+	function Win.SetHitbox(c)
+		if typeof(c) == "Color3" then
+			hitboxOverride = true
+			fireHitbox(c)
+		else
+			hitboxOverride = false
+			fireHitbox(accent)
 		end
 	end
 
@@ -5275,6 +5400,8 @@ function NEMESIS.Window(opts)
 			callback = function(v) Win.SetTheme(v) end })
 		themeSec.ColorPicker({ text = "Accent color", icon = "droplet", default = accent,
 			callback = function(c) if typeof(c) == "Color3" then Win.SetAccent(c) end end })
+		themeSec.ColorPicker({ text = "Hitbox color", icon = "square-check", default = accent,
+			callback = function(c) if typeof(c) == "Color3" then Win.SetHitbox(c) end end })
 		local fontOptions = { "Inter" }
 		pcall(function()
 			for _, f in ipairs(Enum.Font:GetEnumItems()) do
@@ -5307,6 +5434,15 @@ function NEMESIS.Window(opts)
 		feelSec.Toggle({ text = "Lock to screen", icon = "move", default = false,
 			desc = "Keep the window fully on screen when dragging.",
 			callback = function(on) Win.SetLockToScreen(on) end })
+		feelSec.Toggle({ text = "Rotate gradient", icon = "refresh-cw", default = false,
+			desc = "Slowly spin the accent gradient (best with glow on).",
+			callback = function(on) Win.SetRotateGradient(on) end })
+		feelSec.Slider({ text = "Drag smoothness", icon = "move", min = 0, max = 100, default = 0, suffix = "%",
+			desc = "How much the window glides toward the cursor when dragged.",
+			callback = function(v) Win.SetDragSmoothness(v / 100) end })
+		feelSec.Slider({ text = "Shadow density", icon = "layers", min = 0, max = 100, default = 65, suffix = "%",
+			desc = "How strong the window drop-shadow reads.",
+			callback = function(v) Win.SetShadowDensity(v / 100) end })
 
 		local colorSec = S.Section("MENU COLORS")
 		colorSec.Label("Recolor the menu surfaces. Each picker has Single / Double / Multi.")
@@ -5318,6 +5454,8 @@ function NEMESIS.Window(opts)
 			callback = function(c) if typeof(c) == "Color3" then Win.SetColor("Text", c) end end })
 		colorSec.ColorPicker({ text = "Icons / subtext", icon = "image", default = THEME.SubText,
 			callback = function(c) if typeof(c) == "Color3" then Win.SetColor("SubText", c) end end })
+		colorSec.ColorPicker({ text = "Shadow", icon = "layers", default = Color3.fromRGB(0, 0, 0),
+			callback = function(c) if typeof(c) == "Color3" then Win.SetShadowColor(c) end end })
 
 		local logoSec = S.Section("LOGO")
 		logoSec.ColorPicker({ text = "Logo color", icon = "pen-tool", default = logoColor,
@@ -5367,7 +5505,7 @@ function NEMESIS.Window(opts)
 		local upRow = sessSec.Label("Uptime  0s")
 		pcall(function()
 			local frames, acc, uptime = 0, 0, 0
-			RunService.Heartbeat:Connect(function(dt)
+			sessConn = RunService.Heartbeat:Connect(function(dt)
 				dt = tonumber(dt) or 0
 				frames = frames + 1; acc = acc + dt; uptime = uptime + dt
 				if acc >= 1 then
@@ -5480,7 +5618,13 @@ function NEMESIS.Window(opts)
 			if res.StatusCode == 429 then return nil, "Rate limited (429). Wait a moment and try again." end
 			local dok, decoded = pcall(function() return HttpService:JSONDecode(res.Body) end)
 			if dok and decoded and decoded.candidates and decoded.candidates[1] then
-				local txt = decoded.candidates[1].content.parts[1].text
+				-- a safety/recitation-blocked candidate has no .content, so this must
+				-- be nil-safe or the whole send thread dies and the chat freezes
+				local cand = decoded.candidates[1]
+				local txt = cand.content and cand.content.parts and cand.content.parts[1] and cand.content.parts[1].text
+				if not txt then
+					return nil, (cand.finishReason == "SAFETY" and "That reply was blocked by Gemini's safety filter." or "The AI sent an empty reply. Try rephrasing.")
+				end
 				history[#history + 1] = { role = "user", parts = { { text = prompt } } }
 				history[#history + 1] = { role = "model", parts = { { text = txt } } }
 				if #history > 20 then table.remove(history, 1); table.remove(history, 1) end
@@ -5517,7 +5661,12 @@ function NEMESIS.Window(opts)
 			local thinking = addBubble("model", "...")
 			task.spawn(function()
 				local reply, err
-				if geminiKey ~= "" then reply, err = askGemini(q) else reply, err = askFree(q) end
+				-- never let a thrown request leave busy=true (that would wedge the chat
+				-- so no further message could ever send)
+				local ok = pcall(function()
+					if geminiKey ~= "" then reply, err = askGemini(q) else reply, err = askFree(q) end
+				end)
+				if not ok then err = "Something went wrong. Try again." end
 				busy = false
 				if thinking then thinking.Text = reply or err or "Something went wrong." end
 			end)

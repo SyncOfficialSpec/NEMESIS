@@ -1157,21 +1157,29 @@ function NEMESIS.Toast(opts)
 		toasts = 0
 	end
 	toasts = (toasts or 0) + 1
+	-- a plain Frame (NOT a CanvasGroup - those can white-out on executors), fading
+	-- via its own + its children's transparency; no sibling shadow (which mirrors
+	-- the Size property and, under AutomaticSize, renders as a stray white pill)
 	local scale = Create("UIScale", { Scale = 0.9 })
-	local chip = Create("CanvasGroup", {
+	local chip = Create("Frame", {
 		Size = UDim2.new(0, 0, 0, 32), AutomaticSize = Enum.AutomaticSize.X, BackgroundColor3 = THEME.Group,
-		GroupTransparency = 1, LayoutOrder = -toasts, Parent = toastHolder,
-	}, { corner(9), stroke(THEME.Stroke, 1, 0.4), scale, padXY(12, 0), Create("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8) }) })
-	siblingShadow(chip)
+		BackgroundTransparency = 1, LayoutOrder = -toasts, Parent = toastHolder,
+	}, { corner(9), scale, padXY(12, 0), Create("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8) }) })
+	local chipStroke = Create("UIStroke", { Color = THEME.Stroke, Thickness = 1, Transparency = 1, Parent = chip })
+	local anim = { { chip, "BackgroundTransparency", 0.1 }, { chipStroke, "Transparency", 0.4 } }
 	local spec = resolveIcon(opts.icon)
-	if spec then local img = Create("ImageLabel", { Size = UDim2.new(0, 16, 0, 16), BackgroundTransparency = 1, ImageColor3 = THEME.Accent, LayoutOrder = 1, Parent = chip }); applyIcon(img, spec) end
-	Create("TextLabel", { Size = UDim2.new(0, 0, 1, 0), AutomaticSize = Enum.AutomaticSize.X, BackgroundTransparency = 1, Font = FONT_MED, Text = tostring(opts.content or opts.text or ""), TextColor3 = THEME.Text, TextSize = 13, LayoutOrder = 2, Parent = chip })
-	tween(chip, { GroupTransparency = 0 }, TI.EXPAND)
-	tween(scale, { Scale = 1 }, TI.EXPAND)
+	if spec then local img = Create("ImageLabel", { Size = UDim2.new(0, 16, 0, 16), BackgroundTransparency = 1, ImageColor3 = THEME.Accent, ImageTransparency = 1, LayoutOrder = 1, Parent = chip }); applyIcon(img, spec); anim[#anim + 1] = { img, "ImageTransparency", 0 } end
+	local txt = Create("TextLabel", { Size = UDim2.new(0, 0, 1, 0), AutomaticSize = Enum.AutomaticSize.X, BackgroundTransparency = 1, Font = FONT_MED, Text = tostring(opts.content or opts.text or ""), TextColor3 = THEME.Text, TextTransparency = 1, TextSize = 13, LayoutOrder = 2, Parent = chip })
+	anim[#anim + 1] = { txt, "TextTransparency", 0 }
+	local function play(shown)
+		local info = shown and TI.EXPAND or TI.FAST
+		for _, a in ipairs(anim) do tween(a[1], { [a[2]] = shown and a[3] or 1 }, info) end
+		tween(scale, { Scale = shown and 1 or 0.9 }, info)
+	end
+	play(true)
 	task.delay(tonumber(opts.duration) or 2.5, function()
-		if not chip then return end
-		tween(chip, { GroupTransparency = 1 }, TI.FAST)
-		tween(scale, { Scale = 0.9 }, TI.FAST)
+		if not chip.Parent then return end
+		play(false)
 		task.delay(0.25, function() if chip then chip:Destroy() end end)
 	end)
 end

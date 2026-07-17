@@ -528,6 +528,13 @@ TI.HOVER = TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out) 
 TI.HOVEROFF = TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)        -- hover out (settle)
 TI.SLIDE = TI.EXPAND
 TI.NOTIFY = TweenInfo.new(0.4, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)    -- notification glide
+-- Syde-matched motion: exponential for colour/opacity, quint for size/position,
+-- long soft 0.4-0.7s durations. These carry the element animations 1:1.
+TI.SYDE = TweenInfo.new(0.7, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)      -- toggle fill, button state
+TI.SYDE_FADE = TweenInfo.new(0.57, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out) -- toggle gradient
+TI.SYDE_SIZE = TweenInfo.new(0.55, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)      -- slider fill, keybind pill
+TI.SYDE_REFLOW = TweenInfo.new(0.45, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out) -- element reflow / page reveal
+TI.SYDE_OPT = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)         -- dropdown option highlight
 
 -- reduced-motion governor: when the menu itself measures a starved framerate
 -- (see the footer FPS loop), tweens collapse to near-instant sets so state is
@@ -1194,6 +1201,7 @@ local function growBox(field, box, minW, maxW, pad)
 		Position = UDim2.new(0, 0, 2, 0), Font = box.FontFace or FONT, Text = box.PlaceholderText or "",
 		TextSize = box.TextSize, Parent = field,
 	})
+	local first = true
 	local function fit()
 		local tb = 0
 		if box.Text ~= "" then
@@ -1202,7 +1210,11 @@ local function growBox(field, box, minW, maxW, pad)
 			pcall(function() tb = measure.TextBounds.X end)
 		end
 		local y = field.Size.Y
-		field.Size = UDim2.new(0, math.clamp(tb + pad, minW, maxW), y.Scale, y.Offset)
+		local target = UDim2.new(0, math.clamp(tb + pad, minW, maxW), y.Scale, y.Offset)
+		-- Syde: the field grows to fit typed text over 0.7s Quint (snap the first
+		-- sizing so it doesn't animate from zero on build)
+		if first then field.Size = target; first = false
+		else tween(field, { Size = target }, TweenInfo.new(0.7, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)) end
 	end
 	box:GetPropertyChangedSignal("Text"):Connect(fit)
 	box:GetPropertyChangedSignal("TextBounds"):Connect(fit)
@@ -1499,7 +1511,7 @@ function Elements.Toggle(parent, accent, opts)
 	onAccent(function(c) accent = c end)
 	local state = opts.default and true or false
 	local row = newRow(parent, opts.desc and 50 or ROW_H)
-	rowText(row, opts.text, opts.desc, 0, 32, opts.icon)
+	local rowLabel = rowText(row, opts.text, opts.desc, 0, 32, opts.icon)
 
 	-- machined checkbox: recessed off-state well, accent fill + check when on,
 	-- with a soft lamp glow behind the lit box
@@ -1526,19 +1538,16 @@ function Elements.Toggle(parent, accent, opts)
 		})
 		onAccent(function(c) pcall(function() lamp.ImageColor3 = c end) end)
 	end
-	-- fill matches the box corner and never exceeds it, so its corners stay
-	-- curved all through the grow animation (no square clipping)
+	-- Syde-style fill: a full-size accent overlay that FADES in/out (no grow),
+	-- with a subtle gradient sheen. The box itself also tints to accent.
 	local fillGrad = Create("UIGradient", { Rotation = 90 })
 	local fill = Create("Frame", {
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 0, 0.5, 0),
-		Size = UDim2.new(0, 0, 0, 0),
+		Size = UDim2.new(1, 0, 1, 0),
 		BackgroundColor3 = accent,
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Parent = box,
-	}, { fillGrad })
-	conformFill(fill, box)
+	}, { corner(5), fillGrad })
 	accentProp(fill, "BackgroundColor3", accent)
 	accentGrad(fillGrad, accent)
 	local check
@@ -1565,23 +1574,27 @@ function Elements.Toggle(parent, accent, opts)
 		Parent = row,
 	})
 
+	local titleLabel = (rowLabel and rowLabel:IsA("TextLabel")) and rowLabel or nil
 	local control = {}
 	local function render(animate)
-		local fillInfo = animate and TI.POP or TweenInfo.new(0)
-		local checkInfo = animate and TI.TICK or TweenInfo.new(0)
-		tween(fill, {
-			Size = state and UDim2.new(1, 0, 1, 0) or UDim2.new(0, 0, 0, 0),
-			BackgroundTransparency = state and 0 or 1,
-		}, fillInfo)
+		-- Syde toggle: everything eases over 0.7s Exponential (fill fades, check
+		-- fades, glow lamp fades, box tints, title brightens/dims)
+		local info = animate and TI.SYDE or TweenInfo.new(0)
+		local fadeInfo = animate and TI.SYDE_FADE or TweenInfo.new(0)
+		tween(box, { BackgroundColor3 = state and accent or THEME.ToggleOff }, info)
+		tween(fill, { BackgroundTransparency = state and 0 or 1 }, fadeInfo)
 		if check then
-			tween(check, { ImageTransparency = state and 0 or 1 }, checkInfo)
+			tween(check, { ImageTransparency = state and 0 or 1 }, info)
 		end
 		if lamp then
-			tween(lamp, { ImageTransparency = state and 0.55 or 1 }, fillInfo)
+			tween(lamp, { ImageTransparency = state and 0.7 or 1 }, info)
+		end
+		if titleLabel then
+			tween(titleLabel, { TextTransparency = state and 0 or 0.35 }, info)
 		end
 	end
-	click.MouseEnter:Connect(function() tween(box, { BackgroundColor3 = state and THEME.ToggleOff or THEME.ElementHover }, TI.HOVER) end)
-	click.MouseLeave:Connect(function() tween(box, { BackgroundColor3 = THEME.ToggleOff }, TI.HOVEROFF) end)
+	click.MouseEnter:Connect(function() if not state then tween(box, { BackgroundColor3 = THEME.ElementHover }, TI.HOVER) end end)
+	click.MouseLeave:Connect(function() if not state then tween(box, { BackgroundColor3 = THEME.ToggleOff }, TI.HOVEROFF) end end)
 	function control.Set(v, silent)
 		state = v and true or false
 		if opts.flag then NEMESIS.Flags[opts.flag] = state end
@@ -1692,13 +1705,10 @@ function Elements.Slider(parent, accent, opts)
 		value = math.clamp(stepped, min, max)
 		local frac = (value - min) / (max - min)
 		valueLabel.Text = fmt(value)
-		if instant then
-			fill.Size = UDim2.new(frac, 0, 1, 0)
-			handle.Position = UDim2.new(frac, 0, 0.5, 0)
-		else
-			tween(fill, { Size = UDim2.new(frac, 0, 1, 0) }, TI.TAB)
-			tween(handle, { Position = UDim2.new(frac, 0, 0.5, 0) }, TI.TAB)
-		end
+		-- Syde: the fill always TWEENS toward the target (Quint 0.55, overriding),
+		-- so even dragging is a smooth catch-up rather than a hard snap
+		tween(fill, { Size = UDim2.new(frac, 0, 1, 0) }, TI.SYDE_SIZE)
+		tween(handle, { Position = UDim2.new(frac, 0, 0.5, 0) }, TI.SYDE_SIZE)
 		if opts.flag then NEMESIS.Flags[opts.flag] = value end
 		if fire and type(opts.callback) == "function" then
 			pcall(opts.callback, value)
@@ -1885,13 +1895,14 @@ function Elements.Dropdown(parent, accent, opts)
 		optionButtons = {}
 		for _, v in ipairs(options) do
 			local ob = Create("TextButton", {
+				BackgroundColor3 = THEME.ElementHover,
 				BackgroundTransparency = 1,
 				Size = UDim2.new(1, 0, 0, OPT_H),
 				AutoButtonColor = false,
 				Text = "",
 				ZIndex = 50003,
 				Parent = holder,
-			})
+			}, { corner(6) })
 			local dot = Create("Frame", {
 				AnchorPoint = Vector2.new(0, 0.5),
 				Position = UDim2.new(0, 8, 0.5, 0),
@@ -1920,7 +1931,8 @@ function Elements.Dropdown(parent, accent, opts)
 			})
 			local function apply(animate, visible)
 				local on = multi and selected[v] or (single == v)
-				local info = animate and FADE or TweenInfo.new(0)
+				local info = animate and TI.SYDE_OPT or TweenInfo.new(0)
+				tween(ob, { BackgroundTransparency = (visible and on) and 0.55 or 1 }, info)
 				tween(dot, { BackgroundTransparency = (visible and on) and 0 or 1 }, info)
 				tween(olabel, {
 					TextTransparency = visible and (on and 0 or 0.35) or 1,
@@ -1930,11 +1942,17 @@ function Elements.Dropdown(parent, accent, opts)
 			apply(false, false)
 			ob.MouseEnter:Connect(function()
 				local on = multi and selected[v] or (single == v)
-				if open and not on then tween(olabel, { TextTransparency = 0.1 }, TI.HOVER) end
+				if open and not on then
+					tween(olabel, { TextTransparency = 0.1 }, TI.HOVER)
+					tween(ob, { BackgroundTransparency = 0.8 }, TI.HOVER)
+				end
 			end)
 			ob.MouseLeave:Connect(function()
 				local on = multi and selected[v] or (single == v)
-				if open and not on then tween(olabel, { TextTransparency = 0.35 }, TI.HOVER) end
+				if open and not on then
+					tween(olabel, { TextTransparency = 0.35 }, TI.HOVER)
+					tween(ob, { BackgroundTransparency = 1 }, TI.HOVER)
+				end
 			end)
 			ob.MouseButton1Click:Connect(function()
 				if multi then selected[v] = not selected[v] else single = v end
@@ -1955,7 +1973,15 @@ function Elements.Dropdown(parent, accent, opts)
 		tween(panelStroke, { Transparency = opening and 0.15 or 1 }, FADE)
 		if panelShadow then tween(panelShadow, { ImageTransparency = opening and 0.35 or 1 }, FADE) end
 		tween(holder, { ScrollBarImageTransparency = opening and 0.4 or 1 }, FADE)
-		for _, rec in ipairs(optionButtons) do rec.apply(true, opening) end
+		-- Syde-style cascade: options reveal top-down with a tiny incrementing
+		-- delay so the list unfurls rather than popping all at once
+		for i, rec in ipairs(optionButtons) do
+			if opening then
+				task.delay((i - 1) * 0.03, function() if open then rec.apply(true, true) end end)
+			else
+				rec.apply(true, false)
+			end
+		end
 	end
 	local function track()
 		local fp, fs = field.AbsolutePosition, field.AbsoluteSize
@@ -1970,7 +1996,9 @@ function Elements.Dropdown(parent, accent, opts)
 	local function setOpen(b)
 		if b == open then return end
 		open = b
-		tween(arrow, { Rotation = open and 180 or 0, [arrowColorProp] = open and accent or THEME.SubText }, TI.FAST)
+		-- arrow flips over 0.35 Quint, exactly like Syde's dropdown chevron
+		tween(arrow, { Rotation = open and 180 or 0 }, TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out))
+		tween(arrow, { [arrowColorProp] = open and accent or THEME.SubText }, TI.FAST)
 		tween(field, { BackgroundColor3 = open and THEME.ElementHover or THEME.Element }, TI.FAST)
 		if open then
 			if _ddCurrent and _ddCurrent ~= ddHandle then _ddCurrent.close() end
@@ -2122,7 +2150,15 @@ function Elements.Keybind(parent, accent, opts)
 	local key = opts.default
 	local row = newRow(parent, ROW_H)
 	rowText(row, opts.text, opts.desc, FIELD_FRAC, 16, opts.icon)
-	local field = fieldBox(row)
+	-- Syde keybind: a pill that auto-sizes to fit the key text and thickens its
+	-- stroke while listening
+	local field = Create("Frame", {
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, 0, 0.5, 0),
+		Size = UDim2.new(0, 54, 0, 26),
+		BackgroundColor3 = THEME.Element,
+		Parent = row,
+	}, { corner(6), stroke(THEME.ElementStroke, 1, 0.4) })
 	local fieldStroke = field:FindFirstChildOfClass("UIStroke")
 	local btn = Create("TextButton", {
 		BackgroundTransparency = 1,
@@ -2134,6 +2170,13 @@ function Elements.Keybind(parent, accent, opts)
 		AutoButtonColor = false,
 		Parent = field,
 	})
+	local function fitPill()
+		local tb = 40
+		pcall(function() tb = btn.TextBounds.X end)
+		tween(field, { Size = UDim2.new(0, math.clamp(tb + 24, 54, 160), 0, 26) }, TI.SYDE_SIZE)
+	end
+	btn:GetPropertyChangedSignal("TextBounds"):Connect(fitPill)
+	task.defer(fitPill)
 
 	local listening = false
 	local toggled = false
@@ -2142,7 +2185,8 @@ function Elements.Keybind(parent, accent, opts)
 		key = v
 		btn.Text = string.upper(keyDisplay(key))
 		btn.TextColor3 = THEME.Text
-		if fieldStroke then tween(fieldStroke, { Color = THEME.ElementStroke }, TI.EXP) end
+		if fieldStroke then tween(fieldStroke, { Color = THEME.ElementStroke, Thickness = 1 }, TI.EXP) end
+		fitPill()
 		if opts.flag then NEMESIS.Flags[opts.flag] = key end
 	end
 	function control.Get() return key end
@@ -2151,7 +2195,7 @@ function Elements.Keybind(parent, accent, opts)
 		listening = true
 		btn.Text = "..."
 		btn.TextColor3 = accent
-		if fieldStroke then tween(fieldStroke, { Color = accent }, TI.EXP) end
+		if fieldStroke then tween(fieldStroke, { Color = accent, Thickness = 1.6 }, TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)) end
 	end)
 	UserInputService.InputBegan:Connect(function(input, gpe)
 		if listening then
@@ -3793,8 +3837,27 @@ function NEMESIS.Window(opts)
 		if tab ~= activeTab then return end
 		for _, p in ipairs(tab.pages) do p.body.Visible = (p == page) end
 		if animate ~= false then
-			page.body.Position = UDim2.new(0, 12, 0, 0)
-			tween(page.body, { Position = UDim2.new(0, 0, 0, 0) }, TI.TAB)
+			-- Syde-style page reveal: the whole page settles up from a small
+			-- offset over 0.45s Exponential, and the section cards cascade in via
+			-- a per-card UIScale pop (works alongside the UIListLayout)
+			page.body.Position = UDim2.new(0, 0, 0, 14)
+			tween(page.body, { Position = UDim2.new(0, 0, 0, 0) }, TI.SYDE_REFLOW)
+			pcall(function()
+				local i = 0
+				for _, col in ipairs(page.columnsHolder:GetChildren()) do
+					if col:IsA("Frame") then
+						for _, card in ipairs(col:GetChildren()) do
+							if card:IsA("Frame") then
+								local sc = card:FindFirstChildOfClass("UIScale")
+								if not sc then sc = Create("UIScale", { Scale = 1, Parent = card }) end
+								sc.Scale = 0.94
+								task.delay(i * 0.03, function() tween(sc, { Scale = 1 }, TI.SYDE_REFLOW) end)
+								i = i + 1
+							end
+						end
+					end
+				end
+			end)
 		end
 		setCrumb(tab, page)
 		runSearch(searchBox.Text)
@@ -4251,6 +4314,59 @@ function NEMESIS.Window(opts)
 		return true
 	end
 
+	-- Win.SetTransparency(0..0.9): see-through window (Syde "Window transparency")
+	function Win.SetTransparency(v)
+		v = math.clamp(tonumber(v) or 0, 0, 0.9)
+		pcall(function() root.BackgroundTransparency = v end)
+		pcall(function() sidebarBG.BackgroundTransparency = v * 0.85 end)
+	end
+
+	-- Win.SetAnimations(bool): master switch for all motion (Syde-style toggle)
+	function Win.SetAnimations(on)
+		reducedMotion = not on
+	end
+
+	-- Win.SetRainbow(bool): cycles the accent through the hue wheel (Syde rainbow)
+	local rainbowConn
+	function Win.SetRainbow(on)
+		if rainbowConn then pcall(function() rainbowConn:Disconnect() end); rainbowConn = nil end
+		if not on then return end
+		pcall(function()
+			local h = 0
+			rainbowConn = RunService.Heartbeat:Connect(function(dt)
+				h = (h + (tonumber(dt) or 0) * 0.12) % 1
+				Win.SetAccent(Color3.fromHSV(h, 0.7, 1))
+			end)
+		end)
+	end
+
+	-- Win.SetWatermark(bool, text): a small draggable pill (Syde watermark)
+	local watermark
+	function Win.SetWatermark(on, text)
+		if not on then
+			if watermark then watermark.Visible = false end
+			return
+		end
+		if not watermark then
+			watermark = Create("TextLabel", {
+				Name = "Watermark",
+				AnchorPoint = Vector2.new(0, 0),
+				Position = UDim2.new(0, 12, 0, 12),
+				Size = UDim2.new(0, 160, 0, 26),
+				AutomaticSize = Enum.AutomaticSize.X,
+				BackgroundColor3 = THEME.Topbar,
+				Font = FONT_MED,
+				Text = "  " .. tostring(text or "NEMESIS") .. "  ",
+				TextColor3 = THEME.Text,
+				TextSize = 13,
+				Parent = screenGui,
+			}, { corner(8), accentProp(stroke(accent, 1, 0.4), "Color", accent) })
+			makeDraggable(watermark, watermark)
+		end
+		watermark.Text = "  " .. tostring(text or "NEMESIS") .. "  "
+		watermark.Visible = true
+	end
+
 	-- small live setters
 	function Win.SetTitle(t) wordmark.Text = string.upper(tostring(t or "NEMESIS")) end
 	function Win.SetGame(t) gameLabel.Text = tostring(t or "") end
@@ -4461,7 +4577,7 @@ function NEMESIS.Window(opts)
 				name = tostring(pname or "Page"),
 				group = groupName,
 				row = row, label = label, icon = rowIcon,
-				body = pageBody, active = false,
+				body = pageBody, columnsHolder = columnsHolder, active = false,
 			}
 			table.insert(tab.pages, page)
 
@@ -4953,6 +5069,17 @@ function NEMESIS.Window(opts)
 			text = "Font", icon = "type", options = fontOptions, default = "Inter",
 			callback = function(v) Win.SetFont(v) end,
 		})
+		themeSec.Toggle({ text = "Rainbow accent", icon = "sparkles", default = false, desc = "Cycle the accent through every hue.",
+			callback = function(on) Win.SetRainbow(on) end })
+
+		-- Feel: window transparency, master animations switch, watermark, lock
+		local feelSec = look.Section("FEEL")
+		feelSec.Slider({ text = "Window transparency", icon = "square", min = 0, max = 90, default = 0, suffix = "%",
+			callback = function(v) Win.SetTransparency(v / 100) end })
+		feelSec.Toggle({ text = "Animations", icon = "zap", default = true, desc = "Turn off for instant, motion-free UI.",
+			callback = function(on) Win.SetAnimations(on) end })
+		feelSec.Toggle({ text = "Watermark", icon = "tag", default = false, desc = "A small draggable badge on screen.",
+			callback = function(on) Win.SetWatermark(on, opts.title or "NEMESIS") end })
 
 		local colorSec = look.Section("MENU COLORS")
 		colorSec.Label("Recolor the menu surfaces. Each picker has Single / Double / Multi; Single is used for a flat recolor.")

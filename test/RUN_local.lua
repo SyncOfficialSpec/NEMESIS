@@ -886,6 +886,9 @@ end
 local function bindBarDrag(hit, onAlpha)
 	local dragging = false
 	local function upd(input)
+		-- a destroyed element leaves these UIS connections dangling; bail if the
+		-- bar is gone so an unloaded control never keeps firing callbacks
+		if not hit.Parent then dragging = false; return end
 		local rel = math.clamp((input.Position.X - hit.AbsolutePosition.X) / hit.AbsoluteSize.X, 0, 1)
 		onAlpha(rel)
 	end
@@ -2534,6 +2537,7 @@ function Elements.ColorPicker(parent, accent, opts)
 		refreshRail()
 		-- drag a handle along the rail
 		UserInputService.InputChanged:Connect(function(input)
+			if not rail.Parent then railDragIdx = nil; return end
 			if railDragIdx and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
 				local rel = 0.5
 				pcall(function() rel = math.clamp((input.Position.X - rail.AbsolutePosition.X) / math.max(rail.AbsoluteSize.X, 1), 0, 1) end)
@@ -2580,6 +2584,7 @@ function Elements.ColorPicker(parent, accent, opts)
 		do
 			local dragging = false
 			local function upd(input)
+				if not sv.Parent then dragging = false; return end
 				local rx = math.clamp((input.Position.X - sv.AbsolutePosition.X) / sv.AbsoluteSize.X, 0, 1)
 				local ry = math.clamp((input.Position.Y - sv.AbsolutePosition.Y) / sv.AbsoluteSize.Y, 0, 1)
 				cur().s = rx; cur().v = 1 - ry

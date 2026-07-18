@@ -229,6 +229,47 @@ local function loadArt(name)
 	return artCache[name] or nil
 end
 
+-- SF Symbols style names -> the matching open-source (Lucide) icon, so anyone used
+-- to Apple's SF Symbols names can use them and get an equivalent icon. A trailing
+-- variant (.fill / .circle / ...) is stripped, so "house.fill" resolves via "house".
+local SF_ALIAS = {
+	["gearshape"] = "settings", ["gear"] = "settings", ["gearshape.2"] = "settings", ["slider.horizontal.3"] = "sliders-horizontal",
+	["magnifyingglass"] = "search", ["house"] = "home", ["person"] = "user", ["person.crop.circle"] = "user-circle",
+	["person.2"] = "users", ["person.3"] = "users", ["bell"] = "bell", ["bell.slash"] = "bell-off",
+	["lock"] = "lock", ["lock.open"] = "unlock", ["key"] = "key", ["shield"] = "shield", ["shield.lefthalf.filled"] = "shield",
+	["eye"] = "eye", ["eye.slash"] = "eye-off", ["folder"] = "folder", ["folder.badge.plus"] = "folder-plus",
+	["star"] = "star", ["heart"] = "heart", ["hand.thumbsup"] = "thumbs-up", ["hand.thumbsdown"] = "thumbs-down",
+	["plus"] = "plus", ["minus"] = "minus", ["xmark"] = "x", ["checkmark"] = "check",
+	["plus.circle"] = "plus-circle", ["minus.circle"] = "minus-circle", ["xmark.circle"] = "x-circle", ["checkmark.circle"] = "check-circle",
+	["chevron.up"] = "chevron-up", ["chevron.down"] = "chevron-down", ["chevron.left"] = "chevron-left", ["chevron.right"] = "chevron-right",
+	["arrow.up"] = "arrow-up", ["arrow.down"] = "arrow-down", ["arrow.left"] = "arrow-left", ["arrow.right"] = "arrow-right",
+	["arrow.clockwise"] = "refresh-cw", ["arrow.counterclockwise"] = "refresh-ccw", ["arrow.triangle.2.circlepath"] = "refresh-cw",
+	["trash"] = "trash-2", ["pencil"] = "pencil", ["square.and.pencil"] = "edit", ["highlighter"] = "highlighter",
+	["square.and.arrow.up"] = "share", ["square.and.arrow.down"] = "download", ["arrow.up.circle"] = "upload",
+	["bolt"] = "zap", ["flame"] = "flame", ["drop"] = "droplet", ["moon"] = "moon", ["moon.stars"] = "moon",
+	["sun.max"] = "sun", ["cloud"] = "cloud", ["wifi"] = "wifi", ["bluetooth"] = "bluetooth", ["battery.100"] = "battery",
+	["speaker.wave.2"] = "volume-2", ["speaker.slash"] = "volume-x", ["mic"] = "mic", ["mic.slash"] = "mic-off",
+	["play"] = "play", ["pause"] = "pause", ["stop"] = "square", ["forward"] = "skip-forward", ["backward"] = "skip-back",
+	["gamecontroller"] = "gamepad-2", ["scope"] = "crosshair", ["target"] = "target", ["camera"] = "camera", ["photo"] = "image",
+	["doc"] = "file", ["doc.text"] = "file-text", ["calendar"] = "calendar", ["clock"] = "clock", ["timer"] = "timer",
+	["map"] = "map", ["mappin"] = "map-pin", ["location"] = "navigation", ["paperplane"] = "send", ["envelope"] = "mail",
+	["phone"] = "phone", ["message"] = "message-square", ["bubble.left"] = "message-circle", ["cart"] = "shopping-cart",
+	["bag"] = "shopping-bag", ["creditcard"] = "credit-card", ["tag"] = "tag", ["flag"] = "flag", ["bookmark"] = "bookmark",
+	["book"] = "book", ["link"] = "link", ["paperclip"] = "paperclip", ["scissors"] = "scissors", ["wrench"] = "wrench",
+	["hammer"] = "hammer", ["screwdriver"] = "wrench", ["power"] = "power", ["list.bullet"] = "list",
+	["square.grid.2x2"] = "layout-grid", ["rectangle.stack"] = "layers", ["textformat"] = "type", ["keyboard"] = "keyboard",
+	["command"] = "command", ["terminal"] = "terminal", ["cpu"] = "cpu", ["memorychip"] = "cpu", ["externaldrive"] = "hard-drive",
+	["server.rack"] = "server", ["network"] = "network", ["globe"] = "globe", ["waveform"] = "activity",
+	["chart.bar"] = "bar-chart", ["chart.line.uptrend.xyaxis"] = "trending-up", ["chart.pie"] = "pie-chart",
+	["speedometer"] = "gauge", ["hourglass"] = "hourglass", ["sparkles"] = "sparkles", ["wand.and.stars"] = "wand-2",
+	["paintbrush"] = "paintbrush", ["paintpalette"] = "palette", ["eyedropper"] = "pipette", ["drop.fill"] = "droplet",
+	["circle"] = "circle", ["square"] = "square", ["triangle"] = "triangle", ["hexagon"] = "hexagon", ["diamond"] = "diamond",
+	["cube"] = "box", ["shippingbox"] = "package", ["gift"] = "gift", ["crown"] = "crown", ["trophy"] = "trophy", ["rosette"] = "award",
+	["exclamationmark.triangle"] = "alert-triangle", ["info.circle"] = "info", ["questionmark.circle"] = "help-circle",
+	["hand.raised"] = "hand", ["face.smiling"] = "smile", ["brain"] = "brain", ["bolt.horizontal"] = "activity",
+	["figure.walk"] = "footprints", ["pills"] = "pill", ["bandage"] = "bandage", ["cross.case"] = "briefcase-medical",
+}
+
 local function resolveIcon(icon)
 	if not icon or icon == 0 or icon == "" then
 		return nil
@@ -243,8 +284,16 @@ local function resolveIcon(icon)
 		if string.find(icon, "rbxassetid://") == 1 or string.sub(icon, 1, 4) == "http" then
 			return { Image = icon }
 		end
+		-- map SF Symbols style names to the open equivalent (strip a trailing variant)
+		local name = string.lower(icon)
+		if SF_ALIAS[name] then
+			name = SF_ALIAS[name]
+		elseif name:find("%.") then
+			local base = name:gsub("%.%a+$", "")
+			name = SF_ALIAS[base] or base
+		end
 		local idx = loadIconIndex()
-		local entry = type(idx) == "table" and idx[string.lower(icon)]
+		local entry = type(idx) == "table" and idx[name]
 		if entry then
 			local sheet = loadIconSheet(entry[1])
 			if sheet then

@@ -22,19 +22,21 @@ local Win = NEMESIS.Window({
 })
 
 ------------------------------------------------------------------ TAB 1: COMBAT
-local Combat = Win.Tab("Combat", "crosshair")
+-- NOTE: every icon below is written with an SF Symbols name (scope, gearshape,
+-- bolt, target, flame, ...) and resolves to the matching open icon.
+local Combat = Win.Tab("Combat", "scope")
 
 -- a two-column page so you can watch the columns reflow while resizing
 local Aim = Combat.Page("Aimbot", { icon = "target", columns = 2 })
 
 local s_general = Aim.Section("GENERAL")
-s_general.Toggle({ text = "Enabled", default = true, flag = "aim_on", callback = function(v) notify("Aimbot", v and "on" or "off", 1) end })
-s_general.Toggle({ text = "Silent aim", default = false, desc = "No visible snap." })
-s_general.Slider({ text = "FOV", min = 0, max = 360, default = 120, suffix = "deg", flag = "aim_fov" })
-s_general.Slider({ text = "Smoothness", min = 0, max = 100, default = 35, suffix = "%" })
-s_general.Dropdown({ text = "Target part", options = { "Head", "Neck", "Chest", "Stomach" }, default = "Head" })
-s_general.Dropdown({ text = "Priority", options = { "Distance", "Health", "Crosshair", "Threat" }, multi = true, default = { "Distance" } })
-s_general.Keybind({ text = "Aim key", default = "MOUSE2", mode = "Hold" })
+s_general.Toggle({ text = "Enabled", icon = "bolt", default = true, flag = "aim_on", callback = function(v) notify("Aimbot", v and "on" or "off", 1) end })
+s_general.Toggle({ text = "Silent aim", icon = "eye.slash", default = false, desc = "No visible snap." })
+s_general.Slider({ text = "FOV", icon = "scope", min = 0, max = 360, default = 120, suffix = "deg", flag = "aim_fov" })
+s_general.Slider({ text = "Smoothness", icon = "slider.horizontal.3", min = 0, max = 100, default = 35, suffix = "%" })
+s_general.Dropdown({ text = "Target part", icon = "person.crop.circle", options = { "Head", "Neck", "Chest", "Stomach" }, default = "Head" })
+s_general.Dropdown({ text = "Priority", icon = "list.bullet", options = { "Distance", "Health", "Crosshair", "Threat" }, multi = true, default = { "Distance" } })
+s_general.Keybind({ text = "Aim key", icon = "keyboard", default = "MOUSE2", mode = "Hold" })
 
 local s_target = Aim.Section("TARGETING")
 s_target.Toggle({ text = "Visibility check", default = true })
@@ -56,13 +58,13 @@ for i = 1, 6 do
 	s_extra.Toggle({ text = "Toggle option " .. i, default = i % 2 == 0 })
 end
 s_extra.ProgressBar({ text = "Config load", value = 72, max = 100, suffix = "%" })
-s_extra.Stat({ text = "Targets hit", value = "1,284", icon = "activity" })
+s_extra.Stat({ text = "Targets hit", value = "1,284", icon = "waveform" })
 s_extra.HoldButton({ text = "Hold to reset", duration = 1.5, callback = function() notify("Reset", "done", 1) end })
 s_extra.RippleButton({ text = "Ripple action", callback = function() notify("Action", "fired", 1) end })
 
 ------------------------------------------------------------------ TAB 2: VISUALS
 local Visuals = Win.Tab("Visuals", "eye")
-local Esp = Visuals.Page("ESP", { icon = "scan-eye", columns = 2 })
+local Esp = Visuals.Page("ESP", { icon = "camera", columns = 2 })
 
 local s_box = Esp.Section("BOXES")
 s_box.Toggle({ text = "Enabled", default = true })

@@ -4040,6 +4040,7 @@ function makeSection(host, accent, title, startClosed)
 
 	if title and title ~= "" then
 		local header = Create("TextButton", {
+			Name = "SectionHeader",
 			Size = UDim2.new(1, 0, 0, 30),
 			BackgroundTransparency = 1,
 			AutoButtonColor = false,
@@ -4063,24 +4064,37 @@ function makeSection(host, accent, title, startClosed)
 		chev.AnchorPoint = Vector2.new(1, 0.5)
 		chev.Position = UDim2.new(1, 0, 0.5, 0)
 		local open = true
+		local SEC_SLIDE = TweenInfo.new(0.36, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
 		sectionSetOpen = function(want, animate)
 			open = want
+			local info = animate == false and TweenInfo.new(0) or SEC_SLIDE
 			tween(chev, { Rotation = open and 0 or 180 }, animate == false and TweenInfo.new(0) or TI.FAST)
 			if open then
+				bodyWrap.AutomaticSize = Enum.AutomaticSize.None
 				local target = 0
 				pcall(function() target = body.AbsoluteSize.Y end)
-				bodyWrap.AutomaticSize = Enum.AutomaticSize.None
-				tween(bodyWrap, { Size = UDim2.new(1, 0, 0, target) }, animate == false and TweenInfo.new(0) or TI.EXPAND)
-				task.delay(0.28, function() if open then bodyWrap.AutomaticSize = Enum.AutomaticSize.Y end end)
+				if target <= 0 then
+					bodyWrap.AutomaticSize = Enum.AutomaticSize.Y
+					return
+				end
+				tween(bodyWrap, { Size = UDim2.new(1, 0, 0, target) }, info)
+				-- slide the content down into place so it eases in instead of popping
+				body.Position = UDim2.new(0, 0, 0, -10)
+				tween(body, { Position = UDim2.new(0, 0, 0, 0) }, info)
+				task.delay(info.Time + 0.03, function() if open then bodyWrap.AutomaticSize = Enum.AutomaticSize.Y end end)
 			else
 				local cur = 0
 				pcall(function() cur = bodyWrap.AbsoluteSize.Y end)
 				bodyWrap.AutomaticSize = Enum.AutomaticSize.None
 				bodyWrap.Size = UDim2.new(1, 0, 0, cur)
-				tween(bodyWrap, { Size = UDim2.new(1, 0, 0, 0) }, animate == false and TweenInfo.new(0) or TI.EXPAND)
+				tween(bodyWrap, { Size = UDim2.new(1, 0, 0, 0) }, info)
 			end
 		end
-		header.MouseButton1Click:Connect(function() sectionSetOpen(not open, true) end)
+		header.MouseButton1Click:Connect(function()
+			-- a drag just happened on this panel: swallow the click so it doesn't collapse
+			if card:GetAttribute("NemDidDrag") then return end
+			sectionSetOpen(not open, true)
+		end)
 		if startClosed then task.defer(function() sectionSetOpen(false, false) end) end
 	end
 
@@ -4327,6 +4341,10 @@ function NEMESIS.Window(opts)
 	local accentHex = hexOf(accent)
 	local logoColor = opts.logoColor or THEME.Text -- neutral chrome tint; accent belongs to state
 	local windowColumns = opts.columns or (IS_MOBILE and 1 or 2) -- default panel columns per page
+	-- Canvas: draggable panel layout. autoArrange = reflow panels on window resize;
+	-- drag = panels can be picked up by their header and rearranged. Read live by pages.
+	local canvasAutoArrange = true
+	local canvasDrag = false
 	ensureRoot()
 
 	local scale = computeScale()
@@ -5639,6 +5657,11 @@ function NEMESIS.Window(opts)
 		reducedMotion = not on
 	end
 
+	-- Canvas: Win.SetAutoArrange(bool) reflow panels on resize; Win.SetPanelDrag(bool)
+	-- lets the user drag panels by their header to rearrange them
+	function Win.SetAutoArrange(on) canvasAutoArrange = on and true or false end
+	function Win.SetPanelDrag(on) canvasDrag = on and true or false end
+
 	-- Win.SetRainbow(bool): cycles the accent through the hue wheel (Syde rainbow)
 	local rainbowConn
 	function Win.SetRainbow(on)
@@ -5999,19 +6022,148 @@ function NEMESIS.Window(opts)
 				relayoutQueued = true
 				task.defer(function() relayoutQueued = false; if columnsHolder.Parent then pcall(relayout, animate) end end)
 			end
-			columnsHolder:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() queueRelayout(true) end)
+			-- ===== Canvas: drag a panel by its header to rearrange it =====
+			local dragCard, dropSlot, grabOff, lastTi, dragShadow = nil, nil, nil, nil, nil
+			local armedCard, armStart, dragConn = nil, nil, nil
+			local function indexOf(v) for i, x in ipairs(sections) do if x == v then return i end end end
+			local function computeTi()
+				-- stable: count REAL cards (not the drop slot) whose centre is above the
+				-- dragged card's centre; insert there. independent of the drop slot, so no oscillation.
+				if not dragCard then return #sections + 1 end
+				local my = dragCard.AbsolutePosition.Y + dragCard.AbsoluteSize.Y / 2
+				local above = 0
+				for _, card in ipairs(sections) do
+					if card ~= dropSlot then
+						local cy = card.AbsolutePosition.Y + card.AbsoluteSize.Y / 2
+						if cy < my then above = above + 1 end
+					end
+				end
+				return math.clamp(above + 1, 1, #sections + 1)
+			end
+			local function stepDrag()
+				if not dragCard or not columnsHolder.Parent then return end
+				local sc = uiScale()
+				local m = UserInputService:GetMouseLocation()
+				local o = columnsHolder.AbsolutePosition
+				dragCard.Position = UDim2.fromOffset((m.X - o.X) / sc - grabOff.X, (m.Y - o.Y) / sc - grabOff.Y)
+				if dragShadow then
+					local pad = RF_SHADOW.pad
+					local cw, ch = dragCard.AbsoluteSize.X / sc, dragCard.AbsoluteSize.Y / sc
+					dragShadow.Size = UDim2.fromOffset(cw + pad * 2, ch + pad * 2)
+					dragShadow.Position = UDim2.fromOffset(dragCard.Position.X.Offset - pad, dragCard.Position.Y.Offset - pad + 8)
+				end
+				local ti = computeTi()
+				if ti ~= lastTi and dropSlot then
+					lastTi = ti
+					local si = indexOf(dropSlot); if si then table.remove(sections, si) end
+					table.insert(sections, math.clamp(ti, 1, #sections + 1), dropSlot)
+					relayout(false)
+				end
+			end
+			local function endDrag()
+				if not dragCard then return end
+				local card = dragCard
+				local ti = #sections + 1
+				if dropSlot then local si = indexOf(dropSlot); if si then ti = si; table.remove(sections, si) end; dropSlot:Destroy(); heights[dropSlot] = nil; dropSlot = nil end
+				card.ZIndex = 1
+				if dragShadow then dragShadow:Destroy(); dragShadow = nil end
+				pcall(function() card:SetAttribute("NemDidDrag", true) end)
+				task.delay(0.15, function() pcall(function() card:SetAttribute("NemDidDrag", false) end) end)
+				tween(card, { Rotation = 0 }, TI.FAST)
+				table.insert(sections, math.clamp(ti, 1, #sections + 1), card)
+				dragCard, grabOff, lastTi = nil, nil, nil
+				if dragConn then dragConn:Disconnect(); dragConn = nil end
+				relayout(true)
+			end
+			local function beginDrag(card)
+				if not canvasDrag or dragCard or not card.Parent then return end
+				local idx = indexOf(card); if not idx then return end
+				dragCard = card
+				local sc = uiScale()
+				local m = UserInputService:GetMouseLocation()
+				grabOff = Vector2.new((m.X - card.AbsolutePosition.X) / sc, (m.Y - card.AbsolutePosition.Y) / sc)
+				table.remove(sections, idx)
+				dropSlot = Create("Frame", {
+					BackgroundColor3 = accent, BackgroundTransparency = 0.86, BorderSizePixel = 0,
+					AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(0, 0, 0, 0),
+				}, { corner(10), stroke(accent, 1.5, 0.35),
+					Create("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, card.AbsoluteSize.Y / sc) }),
+					Create("TextLabel", { Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Font = FONT_SEMI, Text = "Drop here", TextColor3 = accent, TextTransparency = 0.15, TextSize = 13 }),
+				})
+				dropSlot:SetAttribute("NemDropSlot", true)
+				heights[dropSlot] = card.AbsoluteSize.Y / sc
+				dropSlot.Parent = columnsHolder
+				table.insert(sections, idx, dropSlot)
+				lastTi = idx
+				card.ZIndex = 60
+				dragShadow = Create("ImageLabel", {
+					BackgroundTransparency = 1, Image = loadArt(RF_SHADOW.name) or "",
+					ImageColor3 = accent, ImageTransparency = 0.5,
+					ScaleType = Enum.ScaleType.Slice, SliceCenter = RF_SHADOW.slice,
+					ZIndex = 58, Parent = columnsHolder,
+				})
+				tween(card, { Rotation = 3 }, TI.FAST)
+				relayout(true)
+				if dragConn then dragConn:Disconnect() end
+				dragConn = RunService.RenderStepped:Connect(stepDrag)
+			end
+			local function wireCard(card)
+				-- also arm the drag from the header's own input (a real mouse fires GUI
+				-- object events even where the global input is sunk by the GUI)
+				local header = card:FindFirstChild("SectionHeader")
+				if header then
+					header.InputBegan:Connect(function(input)
+						if not canvasDrag or dragCard then return end
+						if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+							armedCard = card; armStart = UserInputService:GetMouseLocation()
+						end
+					end)
+				end
+			end
+			-- arm a drag from a global mouse-down when the cursor is over a panel header
+			-- (the screenGui has IgnoreGuiInset = true, so GetMouseLocation shares GUI space)
+			UserInputService.InputBegan:Connect(function(input)
+				if not canvasDrag or dragCard or not pageBody.Visible then return end
+				if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+				local m = UserInputService:GetMouseLocation()
+				for _, card in ipairs(sections) do
+					local hdr = card:FindFirstChild("SectionHeader")
+					if hdr then
+						local p, s = hdr.AbsolutePosition, hdr.AbsoluteSize
+						if m.X >= p.X and m.X <= p.X + s.X and m.Y >= p.Y and m.Y <= p.Y + s.Y then
+							armedCard = card; armStart = m; break
+						end
+					end
+				end
+			end)
+			UserInputService.InputChanged:Connect(function(input)
+				if input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then return end
+				if armedCard and not dragCard and (UserInputService:GetMouseLocation() - armStart).Magnitude > 6 then
+					local c = armedCard; armedCard = nil; beginDrag(c)
+				end
+			end)
+			UserInputService.InputEnded:Connect(function(input)
+				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+					armedCard = nil
+					if dragCard then endDrag() end
+				end
+			end)
+
+				columnsHolder:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() if canvasAutoArrange then queueRelayout(true) end end)
 			columnsHolder.ChildAdded:Connect(function(c)
 				if not c:IsA("Frame") then return end
+				if c:GetAttribute("NemDropSlot") then return end
 				c.AnchorPoint = Vector2.new(0, 0)
 				c.AutomaticSize = Enum.AutomaticSize.Y
 				sections[#sections + 1] = c
 				heights[c] = c.AbsoluteSize.Y / uiScale()
 				c:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
 					local h = c.AbsoluteSize.Y / uiScale()
-					if math.abs((heights[c] or 0) - h) > 0.5 then heights[c] = h; queueRelayout(true) end
+					if math.abs((heights[c] or 0) - h) > 0.5 then heights[c] = h; queueRelayout(false) end
 				end)
 				queueRelayout(false)
 				refreshEmpty()
+				wireCard(c)
 			end)
 			columnsHolder.ChildRemoved:Connect(function() task.defer(refreshEmpty) end)
 			-- every panel now lands in one shared holder; the masonry places it
@@ -6626,6 +6778,15 @@ function NEMESIS.Window(opts)
 			callback = function(v) Win.SetFont(v) end })
 		themeSec.Toggle({ text = "Rainbow accent", icon = "sparkles", default = false, desc = "Cycle the accent through every hue.",
 			callback = function(on) Win.SetRainbow(on) end })
+
+		local layoutSec = S.Section("LAYOUT")
+		layoutSec.Label("Rearrange your panels: turn on dragging, then grab a panel by its title.")
+		layoutSec.Toggle({ text = "Auto arrange", icon = "layout-grid", default = true,
+			desc = "Reflow panels to fit when the window is resized.",
+			callback = function(on) Win.SetAutoArrange(on) end })
+		layoutSec.Toggle({ text = "Rearrange panels", icon = "move", default = false,
+			desc = "Drag a panel by its title to move it around.",
+			callback = function(on) Win.SetPanelDrag(on) end })
 
 		local feelSec = S.Section("FEEL")
 		feelSec.Slider({ text = "Window transparency", icon = "square", min = 0, max = 90, default = 0, suffix = "%",

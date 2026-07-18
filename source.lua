@@ -6113,7 +6113,7 @@ function NEMESIS.Window(opts)
 				local header = card:FindFirstChild("SectionHeader")
 				if header then
 					header.InputBegan:Connect(function(input)
-						if not canvasDrag or dragCard then return end
+						if not canvasDrag or dragCard or _ddCurrent or _overlayCurrent then return end
 						if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 							armedCard = card; armStart = UserInputService:GetMouseLocation()
 						end
@@ -6123,7 +6123,8 @@ function NEMESIS.Window(opts)
 			-- arm a drag from a global mouse-down when the cursor is over a panel header
 			-- (the screenGui has IgnoreGuiInset = true, so GetMouseLocation shares GUI space)
 			UserInputService.InputBegan:Connect(function(input)
-				if not canvasDrag or dragCard or not pageBody.Visible then return end
+				-- don't arm a panel drag while a dropdown / colour picker / overlay is open
+				if not canvasDrag or dragCard or not pageBody.Visible or _ddCurrent or _overlayCurrent then return end
 				if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
 				local m = UserInputService:GetMouseLocation()
 				for _, card in ipairs(sections) do
@@ -6756,6 +6757,12 @@ function NEMESIS.Window(opts)
 		local S = makeOverlayPanel("Settings", "settings")
 		openSettingsPanel = S.open
 
+		-- colorpickers fire their callback once at construction to seed their value;
+		-- ignore that startup call for the Icon picker so it does not lock the hitbox
+		-- override on at boot (which would stop the accent from ever reaching the fills)
+		local settingsReady = false
+		task.defer(function() settingsReady = true end)
+
 		local themeSec = S.Section("THEME")
 		themeSec.Dropdown({ text = "Menu theme", icon = "sun-moon",
 			options = { "Dark", "Midnight", "Abyss" }, default = "Dark",
@@ -6765,7 +6772,7 @@ function NEMESIS.Window(opts)
 			-- accent fills across the menu become a real gradient)
 			callback = function(v) Win.SetAccent(v) end })
 		themeSec.ColorPicker({ text = "Icon color", icon = "square-check", default = accent,
-			callback = function(v) Win.SetHitbox(v) end })
+			callback = function(v) if settingsReady then Win.SetHitbox(v) end end })
 		local fontOptions = { "Inter" }
 		pcall(function()
 			for _, f in ipairs(Enum.Font:GetEnumItems()) do

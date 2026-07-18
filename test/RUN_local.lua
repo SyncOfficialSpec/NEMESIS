@@ -1177,7 +1177,8 @@ function NEMESIS.Modal(opts)
 		local b = Create("TextButton", {
 			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(x, x == 1 and 0 or -6, 0.5, 0), Size = UDim2.new(0, 96, 0, 30),
 			BackgroundColor3 = primary and THEME.Accent or THEME.Element, AutoButtonColor = false, Font = FONT_MED,
-			Text = tostring(text), TextColor3 = primary and accentTextColor(THEME.Accent) or THEME.Text, TextSize = 13, Parent = btnRow,
+			Text = tostring(text), TextColor3 = primary and accentTextColor(THEME.Accent) or THEME.Text, TextSize = 13,
+			TextTruncate = Enum.TextTruncate.AtEnd, Parent = btnRow,
 		}, { corner(7), stroke(THEME.ElementStroke, 1, primary and 1 or 0.4) })
 		return b
 	end
@@ -1472,17 +1473,25 @@ function Elements.Listbox(parent, accent, opts)
 	local single = (not multi) and opts.default or nil
 	local rows = tonumber(opts.rows) or 4
 
+	-- wrap the caption + list box in one container so the section's list layout
+	-- always renders the caption above the box, instead of leaving their order to a
+	-- Name tie-break (which put the box on top)
+	local wrap = Create("Frame", {
+		Size = UDim2.new(1, -ROW_PAD * 2, 0, 0), Position = UDim2.new(0, ROW_PAD, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, Parent = parent,
+	}, { Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 6) }) })
 	if opts.text then
 		Create("TextLabel", {
-			Size = UDim2.new(1, -ROW_PAD * 2, 0, 22), Position = UDim2.new(0, ROW_PAD, 0, 0),
+			Size = UDim2.new(1, 0, 0, 22),
 			BackgroundTransparency = 1, Font = FONT_MED, Text = tostring(opts.text),
-			TextColor3 = THEME.Text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, Parent = parent,
+			TextColor3 = THEME.Text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left,
+			TextTruncate = Enum.TextTruncate.AtEnd, LayoutOrder = 1, Parent = wrap,
 		})
 	end
 
 	local box = Create("Frame", {
-		Size = UDim2.new(1, -ROW_PAD * 2, 0, rows * 28 + 8), Position = UDim2.new(0, ROW_PAD, 0, 0),
-		BackgroundColor3 = THEME.Element, Parent = parent,
+		Size = UDim2.new(1, 0, 0, rows * 28 + 8), LayoutOrder = 2,
+		BackgroundColor3 = THEME.Element, Parent = wrap,
 	}, { corner(8), stroke(THEME.ElementStroke, 1, 0.5) })
 	local holder = Create("ScrollingFrame", {
 		Size = UDim2.new(1, -8, 1, -8), Position = UDim2.new(0, 4, 0, 4),
@@ -1630,6 +1639,7 @@ function Elements.Button(parent, accent, opts)
 		Text = tostring(opts.button or "Run"),
 		TextColor3 = THEME.Text,
 		TextSize = 12,
+		TextTruncate = Enum.TextTruncate.AtEnd,
 		Parent = row,
 	}, { corner(6), chipStroke })
 	click.MouseEnter:Connect(function() tween(chip, { BackgroundColor3 = THEME.ElementHover }, TI.HOVER) end)
@@ -3640,7 +3650,12 @@ function Elements.CursorTag(parent, accent, opts)
 		show()
 		moveConn = RunService.RenderStepped:Connect(function()
 			local m = UserInputService:GetMouseLocation()
-			chip.Position = UDim2.fromOffset(m.X + (opts.offset and opts.offset.X or 12), m.Y + (opts.offset and opts.offset.Y or -6))
+			local vp = viewportSize()
+			local cw, ch = chip.AbsoluteSize.X, chip.AbsoluteSize.Y
+			-- chip anchor is bottom-left, so keep [x, x+w] and [y-h, y] inside the viewport
+			local tx = math.clamp(m.X + (opts.offset and opts.offset.X or 12), 2, math.max(2, vp.X - cw - 2))
+			local ty = math.clamp(m.Y + (opts.offset and opts.offset.Y or -6), ch + 2, math.max(ch + 2, vp.Y - 2))
+			chip.Position = UDim2.fromOffset(tx, ty)
 		end)
 	end)
 	area.MouseLeave:Connect(function() if moveConn then moveConn:Disconnect(); moveConn = nil end hide() end)
@@ -4796,6 +4811,7 @@ function NEMESIS.Window(opts)
 		TextColor3 = THEME.SubText,
 		TextSize = 12,
 		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
 		Parent = header,
 	})
 

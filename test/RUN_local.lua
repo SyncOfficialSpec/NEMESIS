@@ -6974,19 +6974,21 @@ function PERDITION.Window(opts)
 
 	-- minimize / restore, close, hide-key, mobile reopen
 	local minimized = false
+	local MIN_W = math.min(W, 400)   -- compact pill width when minimized
 	local function setMinimized(m)
 		minimized = m
 		closeOpenDropdown()
 		if resizeGrip then resizeGrip.Visible = not m end
-		if m then
-			topbarFiller.Visible = false
-			tween(root, { Size = UDim2.new(0, W, 0, TOPBAR_H) }, TI.OPEN)
-			setMinIcon("plus", "\u{002B}")
-		else
-			topbarFiller.Visible = true
-			tween(root, { Size = UDim2.new(0, W, 0, H) }, TI.OPEN)
-			setMinIcon("minus", "\u{2013}")
-		end
+		-- collapse to a tidy pill: hide the tab dock, narrow the bar, and shrink the
+		-- shadow with it (the shadow used to stay full-window-sized, casting a big
+		-- halo behind the thin bar)
+		tabArea.Visible = not m
+		topbarFiller.Visible = not m
+		local tw = m and MIN_W or W
+		local th = m and TOPBAR_H or H
+		tween(root, { Size = UDim2.new(0, tw, 0, th) }, TI.OPEN)
+		tween(rootShadowHolder, { Size = UDim2.new(0, tw, 0, th) }, TI.OPEN)
+		setMinIcon(m and "plus" or "minus", m and "\u{002B}" or "\u{2013}")
 	end
 	function Win.Toggle(force)
 		-- explicit branch: the `(a and b) or c` idiom silently breaks when b is

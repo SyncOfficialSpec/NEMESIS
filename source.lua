@@ -4057,6 +4057,9 @@ function makeSection(host, accent, title, startClosed)
 	}, {
 		corner(13),
 		stroke(THEME.ElementStroke, 1, 0.45),
+		-- gentle top-lit depth (NOT a gloss): ~7% darker toward the base so the
+		-- plate reads as lifted rather than flat. Subtle enough to stay editorial.
+		Create("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(236, 236, 240)) }),
 		Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
 

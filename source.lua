@@ -776,7 +776,9 @@ local function unpackValue(kind, rec, v)
 		pcall(function() ctrl.Set(Enum.KeyCode[v.__kc]) end)
 		return
 	end
-	ctrl.Set(v)
+	-- hydrate toggles instantly (no animation) but still fire their callback so the
+	-- restored setting actually applies
+	if kind == "toggle" then ctrl.Set(v, nil, true) else ctrl.Set(v) end
 end
 
 -- Accent registry: callbacks run on Win.SetAccent so the menu recolours live
@@ -1740,10 +1742,12 @@ function Elements.Toggle(parent, accent, opts)
 	end
 	click.MouseEnter:Connect(function() if not state then tween(box, { BackgroundColor3 = THEME.ElementHover }, TI.HOVER) end end)
 	click.MouseLeave:Connect(function() if not state then tween(box, { BackgroundColor3 = THEME.ToggleOff }, TI.HOVEROFF) end end)
-	function control.Set(v, silent)
+	function control.Set(v, silent, instant)
 		state = v and true or false
 		if opts.flag then NEMESIS.Flags[opts.flag] = state end
-		render(true)
+		-- instant skips the 0.7s animation (config hydration paints the final state at
+		-- once); silent skips the callback. they are independent.
+		render(not instant)
 		if not silent and type(opts.callback) == "function" then
 			pcall(opts.callback, state)
 		end
@@ -1780,7 +1784,7 @@ function Elements.Slider(parent, accent, opts)
 		return tostring(math.floor(v + 0.5)) .. suffix
 	end
 
-	local row = newRow(parent, ROW_H)
+	local row = newRow(parent, opts.desc and 50 or ROW_H)
 	rowText(row, opts.text, opts.desc, SLIDER_FRAC, 12, opts.icon)
 
 	local cluster = Create("Frame", {
@@ -1854,10 +1858,11 @@ function Elements.Slider(parent, accent, opts)
 		value = math.clamp(stepped, min, max)
 		local frac = (value - min) / span
 		valueLabel.Text = fmt(value)
-		-- Syde: the fill always TWEENS toward the target (Quint 0.55, overriding),
-		-- so even dragging is a smooth catch-up rather than a hard snap
-		tween(fill, { Size = UDim2.new(frac, 0, 1, 0) }, TI.SYDE_SIZE)
-		tween(handle, { Position = UDim2.new(frac, 0, 0.5, 0) }, TI.SYDE_SIZE)
+		-- during a drag the fill/handle track the cursor 1:1 (instant); external Set /
+		-- typed values keep the smooth Syde catch-up so they glide to the new spot
+		local info = instant and TweenInfo.new(0) or TI.SYDE_SIZE
+		tween(fill, { Size = UDim2.new(frac, 0, 1, 0) }, info)
+		tween(handle, { Position = UDim2.new(frac, 0, 0.5, 0) }, info)
 		if opts.flag then NEMESIS.Flags[opts.flag] = value end
 		if fire and type(opts.callback) == "function" then
 			pcall(opts.callback, value)

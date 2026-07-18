@@ -6449,12 +6449,18 @@ function PERDITION.Window(opts)
 				for i = 1, cols do colH[i] = 0 end
 				for _, card in ipairs(sections) do
 					if card.Parent then
+						-- self-heal the height cache from the live value when it is real,
+						-- so a card added before its AutomaticSize resolved (cached ~0)
+						-- can never leave a gap or an overlap in its column
+						local live = card.AbsoluteSize.Y / sc
+						if live > 1 then heights[card] = live end
+						local h = heights[card] or live
 						local ci = 1
 						for i = 2, cols do if colH[i] < colH[ci] then ci = i end end
 						card.Size = UDim2.new(0, colW, 0, 0)
 						local target = UDim2.fromOffset((ci - 1) * (colW + GAP), colH[ci])
 						if animate then tween(card, { Position = target }, TI.SYDE_REFLOW) else card.Position = target end
-						colH[ci] = colH[ci] + (heights[card] or (card.AbsoluteSize.Y / sc)) + GAP
+						colH[ci] = colH[ci] + h + GAP
 					end
 				end
 				local maxH = 0
@@ -6601,12 +6607,17 @@ function PERDITION.Window(opts)
 				c.AnchorPoint = Vector2.new(0, 0)
 				c.AutomaticSize = Enum.AutomaticSize.Y
 				sections[#sections + 1] = c
-				heights[c] = c.AbsoluteSize.Y / uiScale()
+				local h0 = c.AbsoluteSize.Y / uiScale()
+				if h0 > 1 then heights[c] = h0 end   -- never cache a 0 (AutomaticSize not resolved yet)
 				c:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
 					local h = c.AbsoluteSize.Y / uiScale()
 					if math.abs((heights[c] or 0) - h) > 0.5 then heights[c] = h; queueRelayout(false) end
 				end)
 				queueRelayout(false)
+				-- settle passes: a freshly added card's height resolves a frame or two
+				-- later, so re-layout then to correct any temporary gap/overlap
+				task.delay(0.05, function() if columnsHolder.Parent then queueRelayout(false) end end)
+				task.delay(0.3, function() if columnsHolder.Parent then queueRelayout(false) end end)
 				refreshEmpty()
 				wireCard(c)
 			end)

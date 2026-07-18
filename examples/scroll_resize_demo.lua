@@ -3,6 +3,9 @@
 	the resizing (grab the bottom-right corner) - drag it narrow and the panels
 	switch columns, wide and they spread back out, all animated.
 
+	Tip: right-click any tab or sidebar page icon to open a searchable picker
+	over every Lucide icon and swap it live.
+
 	Run this in your executor. It pulls the latest library from GitHub.
 ]]
 
@@ -97,4 +100,4 @@ s_world.FAQ({ items = {
 s_world.Divider()
 s_world.Label("Scroll the page to see every panel; grab the bottom-right corner to resize.")
 
-notify("Loaded", "Two tabs ready. Resize me!", 3)
+notify("Loaded", "Two tabs ready. Right-click an icon to change it.", 3)

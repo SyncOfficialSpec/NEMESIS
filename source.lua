@@ -271,6 +271,21 @@ local function applyIcon(image, spec)
 	return true
 end
 
+-- Every Lucide icon name, sorted alphabetically, cached after the atlas index
+-- loads. Feeds the right-click icon editor's search. Returns nil until the
+-- index is fetched, so callers just try again on the next open.
+local _iconNamesCache = nil
+local function allIconNames()
+	if _iconNamesCache then return _iconNamesCache end
+	local idx = loadIconIndex()
+	if type(idx) ~= "table" then return nil end
+	local list = {}
+	for name in pairs(idx) do list[#list + 1] = name end
+	table.sort(list)
+	_iconNamesCache = list
+	return list
+end
+
 -- Instance helpers
 local function Create(class, props, children)
 	local inst = Instance.new(class)
@@ -5827,6 +5842,260 @@ function NEMESIS.Window(opts)
 	function Win.SetGame(t) gameLabel.Text = tostring(t or "") end
 	function Win.SetStatus(t) statusLabel.Text = tostring(t or "") end
 
+	-- Right-click icon editor.
+	-- Right-click any menu icon (a tab or a sidebar page) to open a searchable
+	-- picker over the whole Lucide set, pick a new one and apply it live. Built
+	-- once, lazily, the first time someone opens it; reused after that.
+	local iconPicker
+	local function ensureIconPicker()
+		if iconPicker then return iconPicker end
+
+		local CAP = 150   -- most result cells rendered at once (search to narrow)
+		local pool = {}   -- reused result cells so typing never churns instances
+		local visibleCount = 0
+		local pending = nil        -- currently highlighted icon name
+		local currentSubmit = nil  -- callback for the slot being edited
+		local openPos = UDim2.new(0.5, 0, 0.5, 0)
+		local openPosDown = UDim2.new(0.5, 0, 0.5, 14)
+
+		local backdrop = Create("TextButton", {
+			Name = "IconPickerBackdrop", Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1,
+			AutoButtonColor = false, Text = "", Visible = false, ZIndex = 40998, Parent = screenGui,
+		})
+		local pScale = Create("UIScale", { Scale = 1 })
+		local card = Create("Frame", {
+			Name = "IconPicker", AnchorPoint = Vector2.new(0.5, 0.5), Position = openPos,
+			Size = UDim2.new(0, 432, 0, 494), BackgroundColor3 = THEME.Group,
+			Visible = false, ZIndex = 41001, Parent = screenGui,
+		}, { corner(14), stroke(THEME.Stroke, 1, 0.2), pScale })
+		siblingShadow(card)
+
+		-- header
+		local header = Create("Frame", { Size = UDim2.new(1, 0, 0, 46), BackgroundTransparency = 1, Parent = card }, { padXY(16, 0) })
+		makeDraggable(card, header)
+		local hx = 0
+		local hspec = resolveIcon("image")
+		if hspec then
+			local hi = Create("ImageLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(0, 17, 0, 17), BackgroundTransparency = 1, ImageColor3 = accent, Parent = header })
+			applyIcon(hi, hspec); accentProp(hi, "ImageColor3", accent); hx = 25
+		end
+		Create("TextLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, hx, 0.5, 0), Size = UDim2.new(1, -hx - 30, 1, 0),
+			BackgroundTransparency = 1, Font = FONT_SEMI, Text = "Change icon", TextColor3 = THEME.Text, TextSize = 15,
+			TextXAlignment = Enum.TextXAlignment.Left, Parent = header })
+		local closeX = Create("TextButton", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 24, 0, 24),
+			BackgroundTransparency = 1, AutoButtonColor = false, Text = "", Parent = header })
+		local closeIcon = iconX(closeX, 13, THEME.SubText)
+		Create("Frame", { Position = UDim2.new(0, 12, 0, 46), Size = UDim2.new(1, -24, 0, 1), BackgroundColor3 = THEME.Stroke, BackgroundTransparency = 0.4, BorderSizePixel = 0, Parent = card })
+
+		-- preview of the currently picked icon + which slot is being edited
+		local preview = Create("Frame", { Position = UDim2.new(0, 16, 0, 56), Size = UDim2.new(1, -32, 0, 44), BackgroundTransparency = 1, Parent = card })
+		local previewChip = Create("Frame", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(0, 44, 0, 44), BackgroundColor3 = THEME.Element, Parent = preview }, { corner(11), stroke(THEME.ElementStroke, 1, 0.4) })
+		local previewImg = Create("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, 26, 0, 26), BackgroundTransparency = 1, ImageColor3 = accent, Parent = previewChip })
+		accentProp(previewImg, "ImageColor3", accent)
+		local previewTitle = Create("TextLabel", { AnchorPoint = Vector2.new(0, 0), Position = UDim2.new(0, 56, 0, 4), Size = UDim2.new(1, -56, 0, 18), BackgroundTransparency = 1, Font = FONT_SEMI, Text = "Change icon", TextColor3 = THEME.Text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = preview })
+		local previewSub = Create("TextLabel", { AnchorPoint = Vector2.new(0, 0), Position = UDim2.new(0, 56, 0, 22), Size = UDim2.new(1, -56, 0, 16), BackgroundTransparency = 1, Font = FONT_MONO, Text = "", TextColor3 = THEME.SubText, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = preview })
+
+		-- search field
+		local searchWrap = Create("Frame", { Position = UDim2.new(0, 16, 0, 108), Size = UDim2.new(1, -32, 0, 36), BackgroundColor3 = THEME.Element, Parent = card }, { corner(10), stroke(THEME.ElementStroke, 1, 0.35) })
+		local sIcon = Create("ImageLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 11, 0.5, 0), Size = UDim2.new(0, 15, 0, 15), BackgroundTransparency = 1, ImageColor3 = THEME.SubText, Parent = searchWrap })
+		local hasS = applyIcon(sIcon, resolveIcon("search"))
+		local searchBox = Create("TextBox", { BackgroundTransparency = 1, Position = UDim2.new(0, hasS and 34 or 12, 0, 0), Size = UDim2.new(1, hasS and -44 or -22, 1, 0),
+			Font = FONT, PlaceholderText = "Search icons", Text = "", TextColor3 = THEME.Text, PlaceholderColor3 = THEME.Faint, TextSize = 13,
+			TextXAlignment = Enum.TextXAlignment.Left, ClearTextOnFocus = false, Parent = searchWrap })
+
+		-- results grid
+		local results = Create("ScrollingFrame", { Position = UDim2.new(0, 0, 0, 154), Size = UDim2.new(1, 0, 1, -212), BackgroundTransparency = 1, BorderSizePixel = 0,
+			ScrollBarThickness = 3, ScrollBarImageColor3 = THEME.Faint, ScrollBarImageTransparency = 0.4, CanvasSize = UDim2.new(0, 0, 0, 0),
+			AutomaticCanvasSize = Enum.AutomaticSize.Y, ZIndex = 41001, Parent = card }, {
+			Create("UIGridLayout", { CellSize = UDim2.new(0, 48, 0, 48), CellPadding = UDim2.new(0, 8, 0, 8), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Left }),
+			Create("UIPadding", { PaddingLeft = UDim.new(0, 14), PaddingRight = UDim.new(0, 8), PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 8) }),
+		})
+		local emptyLabel = Create("TextLabel", { Position = UDim2.new(0, 0, 0, 154), Size = UDim2.new(1, 0, 0, 40), BackgroundTransparency = 1, Font = FONT, Text = "", TextColor3 = THEME.SubText, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Center, Visible = false, ZIndex = 41002, Parent = card })
+
+		-- footer: match count + Apply
+		Create("Frame", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 12, 1, -58), Size = UDim2.new(1, -24, 0, 1), BackgroundColor3 = THEME.Stroke, BackgroundTransparency = 0.4, BorderSizePixel = 0, Parent = card })
+		local footer = Create("Frame", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(1, 0, 0, 58), BackgroundTransparency = 1, Parent = card }, { padXY(16, 0) })
+		local countLabel = Create("TextLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(1, -110, 1, 0), BackgroundTransparency = 1, Font = FONT, Text = "", TextColor3 = THEME.Faint, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, Parent = footer })
+		local applyBtn = Create("TextButton", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 96, 0, 34), BackgroundColor3 = accent, AutoButtonColor = false, Font = FONT_SEMI, Text = "Apply", TextColor3 = accentTextColor(accent), TextSize = 13, Parent = footer }, { corner(9) })
+		accentProp(applyBtn, "BackgroundColor3", accent)
+
+		local function paintCells()
+			for i = 1, visibleCount do
+				local c = pool[i]
+				local sel = (c.name ~= nil and c.name == pending)
+				c.selected = sel
+				if sel then
+					c.button.BackgroundColor3 = accent
+					c.stroke.Color = accent; c.stroke.Transparency = 0
+					c.img.ImageColor3 = accentTextColor(accent)
+				else
+					c.button.BackgroundColor3 = THEME.Element
+					c.stroke.Color = THEME.ElementStroke; c.stroke.Transparency = 0.4
+					c.img.ImageColor3 = THEME.SubText
+				end
+			end
+		end
+
+		local function updatePreview()
+			applyIcon(previewImg, resolveIcon(pending))
+			previewSub.Text = tostring(pending or "none")
+		end
+
+		local applyNow
+
+		local function selectIcon(name)
+			pending = name
+			updatePreview()
+			paintCells()
+		end
+
+		local function createCell()
+			local b = Create("TextButton", { Size = UDim2.new(0, 48, 0, 48), BackgroundColor3 = THEME.Element, AutoButtonColor = false, Text = "", Parent = results }, { corner(10) })
+			local st = stroke(THEME.ElementStroke, 1, 0.4); st.Parent = b
+			local img = Create("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, 25, 0, 25), BackgroundTransparency = 1, ImageColor3 = THEME.SubText, Parent = b })
+			local cell = { button = b, img = img, stroke = st, name = nil, selected = false }
+			b.MouseEnter:Connect(function()
+				if not cell.selected then tween(b, { BackgroundColor3 = THEME.ElementHover }, TI.HOVER); tween(img, { ImageColor3 = THEME.Text }, TI.HOVER) end
+			end)
+			b.MouseLeave:Connect(function()
+				if not cell.selected then tween(b, { BackgroundColor3 = THEME.Element }, TI.HOVEROFF); tween(img, { ImageColor3 = THEME.SubText }, TI.HOVEROFF) end
+			end)
+			b.MouseButton1Click:Connect(function()
+				if not cell.name then return end
+				if cell.name == pending then applyNow() else selectIcon(cell.name) end
+			end)
+			pool[#pool + 1] = cell
+			return cell
+		end
+
+		local retryToken = 0
+		local function render(query)
+			local names = allIconNames()
+			if not names then
+				-- atlas index not fetched yet: show a note and retry shortly
+				for i = 1, #pool do pool[i].button.Visible = false; pool[i].name = nil end
+				visibleCount = 0
+				emptyLabel.Text = "Loading icons"
+				emptyLabel.Visible = true
+				countLabel.Text = ""
+				retryToken = retryToken + 1
+				local my = retryToken
+				task.delay(0.4, function() if iconPicker.opened and my == retryToken then render(searchBox.Text) end end)
+				return
+			end
+			local q = string.lower(tostring(query or "")):gsub("^%s+", ""):gsub("%s+$", "")
+			local matches, total = {}, 0
+			if q == "" then
+				local seen = {}
+				if type(pending) == "string" and pending ~= "" then matches[1] = pending; seen[pending] = true; total = 1 end
+				for _, n in ipairs(names) do
+					if not seen[n] then
+						total = total + 1
+						if #matches < CAP then matches[#matches + 1] = n end
+					end
+				end
+			else
+				local starts, contains = {}, {}
+				for _, n in ipairs(names) do
+					local f = string.find(n, q, 1, true)
+					if f == 1 then starts[#starts + 1] = n
+					elseif f then contains[#contains + 1] = n end
+				end
+				total = #starts + #contains
+				for _, n in ipairs(starts) do if #matches < CAP then matches[#matches + 1] = n end end
+				for _, n in ipairs(contains) do if #matches < CAP then matches[#matches + 1] = n end end
+			end
+			for i, n in ipairs(matches) do
+				local c = pool[i] or createCell()
+				c.name = n
+				c.button.LayoutOrder = i
+				applyIcon(c.img, resolveIcon(n))
+				c.button.Visible = true
+			end
+			for i = #matches + 1, #pool do pool[i].button.Visible = false; pool[i].name = nil end
+			visibleCount = #matches
+			paintCells()
+			results.CanvasPosition = Vector2.new(0, 0)
+			if #matches == 0 then
+				emptyLabel.Text = 'No icons match "' .. q .. '"'
+				emptyLabel.Visible = true
+			else
+				emptyLabel.Visible = false
+			end
+			if total > #matches then
+				countLabel.Text = "showing " .. #matches .. " of " .. total
+			else
+				countLabel.Text = total .. (total == 1 and " icon" or " icons")
+			end
+		end
+
+		local searchToken = 0
+		searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+			searchToken = searchToken + 1
+			local my = searchToken
+			task.delay(0.05, function() if iconPicker.opened and my == searchToken then render(searchBox.Text) end end)
+		end)
+		searchBox.FocusLost:Connect(function(enter)
+			if enter and pending then applyNow() end
+		end)
+
+		iconPicker = { opened = false }
+		function iconPicker.close()
+			if not iconPicker.opened then return end
+			iconPicker.opened = false
+			if _overlayCurrent == iconPicker then _overlayCurrent = nil end
+			tween(pScale, { Scale = 0.94 }, TI.FAST)
+			tween(card, { Position = openPosDown }, TI.FAST)
+			task.delay(0.16, function() if not iconPicker.opened then card.Visible = false; backdrop.Visible = false end end)
+		end
+		function applyNow()
+			if pending and currentSubmit then pcall(currentSubmit, pending) end
+			iconPicker.close()
+		end
+		function iconPicker.open(current, subtitle, submit)
+			currentSubmit = submit
+			previewTitle.Text = subtitle or "Change icon"
+			if _overlayCurrent and _overlayCurrent ~= iconPicker then _overlayCurrent.close() end
+			closeOpenDropdown()
+			_overlayCurrent = iconPicker
+			iconPicker.opened = true
+			searchBox.Text = ""
+			backdrop.Visible = true
+			card.Visible = true
+			render("")
+			selectIcon(current)
+			card.Position = openPosDown
+			pScale.Scale = 0.94
+			tween(card, { Position = openPos }, TI.EXPAND)
+			tween(pScale, { Scale = 1 }, TI.EXPAND)
+			task.defer(function() pcall(function() searchBox:CaptureFocus() end) end)
+		end
+		backdrop.MouseButton1Click:Connect(iconPicker.close)
+		closeX.MouseButton1Click:Connect(iconPicker.close)
+		closeX.MouseEnter:Connect(function() recolorIcon(closeIcon, DANGER, TI.HOVER) end)
+		closeX.MouseLeave:Connect(function() recolorIcon(closeIcon, THEME.SubText, TI.HOVEROFF) end)
+		applyBtn.MouseButton1Click:Connect(function() applyNow() end)
+		applyBtn.MouseEnter:Connect(function() tween(applyBtn, { Size = UDim2.new(0, 100, 0, 34) }, TI.HOVER) end)
+		applyBtn.MouseLeave:Connect(function() tween(applyBtn, { Size = UDim2.new(0, 96, 0, 34) }, TI.HOVEROFF) end)
+		return iconPicker
+	end
+
+	local function openIconPicker(current, subtitle, submit)
+		local p = ensureIconPicker()
+		if p then p.open(current, subtitle, submit) end
+	end
+
+	-- Wire a clickable that owns a menu icon so right-clicking it opens the picker.
+	-- getName() returns the live icon name; setName(name) applies + remembers it.
+	local function editIcon(host, getName, setName, subtitle)
+		if not host then return end
+		pcall(function()
+			host.MouseButton2Click:Connect(function()
+				openIconPicker(getName(), subtitle, setName)
+			end)
+		end)
+	end
+
 	-- Tab / Group / Page builders
 	function Win.Tab(name, icon, ...)
 		-- Tolerate method-style calls: Window:Tab("X") passes Window as the first
@@ -5855,18 +6124,25 @@ function NEMESIS.Window(opts)
 			}),
 		})
 		local tabIcon
-		local iconSpec = resolveIcon(icon)
-		if iconSpec then
-			tabIcon = Create("ImageLabel", {
-				Size = UDim2.new(0, 15, 0, 15),
-				BackgroundTransparency = 1,
-				ImageColor3 = THEME.SubText,
-				LayoutOrder = 1,
-				ZIndex = 4,
-				Parent = btn,
-			})
-			applyIcon(tabIcon, iconSpec)
+		local tabIconName = icon
+		-- created on first use so a tab with no icon can still gain one via the
+		-- right-click editor; colour matches the tab's current active state
+		local function ensureTabIcon()
+			if not tabIcon then
+				tabIcon = Create("ImageLabel", {
+					Size = UDim2.new(0, 15, 0, 15),
+					BackgroundTransparency = 1,
+					ImageColor3 = (activeTab == tab) and INDICATOR_TEXT or THEME.SubText,
+					LayoutOrder = 1,
+					ZIndex = 4,
+					Parent = btn,
+				})
+				tab.icon = tabIcon
+			end
+			return tabIcon
 		end
+		local iconSpec = resolveIcon(icon)
+		if iconSpec then applyIcon(ensureTabIcon(), iconSpec) end
 		local label = Create("TextLabel", {
 			Size = UDim2.new(0, 0, 1, 0),
 			AutomaticSize = Enum.AutomaticSize.X,
@@ -5897,6 +6173,15 @@ function NEMESIS.Window(opts)
 			end
 		end)
 		btn.MouseButton1Click:Connect(function() showTab(tab) end)
+		-- right-click the tab to change its icon (searchable Lucide picker)
+		editIcon(btn, function() return tabIconName end, function(newName)
+			tabIconName = newName
+			local spec = resolveIcon(newName)
+			ensureTabIcon()
+			applyIcon(tabIcon, spec)
+			paintTab(tab, activeTab == tab, false)
+			if activeTab == tab then moveIndicator(false) end
+		end, tostring(name or "Tab") .. " tab")
 		pcall(function()
 			btn:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
 				if activeTab == tab then moveIndicator(false) end
@@ -5936,21 +6221,28 @@ function NEMESIS.Window(opts)
 				Parent = parentFrame or tab.sidebarFrame,
 			}, { corner(8) })
 			local rowIcon
+			local rowIconName = popts.icon
+			local label
 			local rowIconSpec = resolveIcon(popts.icon)
-			local labelX = 12
-			if rowIconSpec then
-				rowIcon = Create("ImageLabel", {
-					AnchorPoint = Vector2.new(0, 0.5),
-					Position = UDim2.new(0, 10, 0.5, 0),
-					Size = UDim2.new(0, 15, 0, 15),
-					BackgroundTransparency = 1,
-					ImageColor3 = THEME.SubText,
-					Parent = row,
-				})
-				applyIcon(rowIcon, rowIconSpec)
-				labelX = 32
+			local labelX = rowIconSpec and 32 or 12
+			-- created on first use so a page with no icon can still gain one via the
+			-- right-click editor; the label slides right to make room for it
+			local function ensureRowIcon()
+				if not rowIcon then
+					rowIcon = Create("ImageLabel", {
+						AnchorPoint = Vector2.new(0, 0.5),
+						Position = UDim2.new(0, 10, 0.5, 0),
+						Size = UDim2.new(0, 15, 0, 15),
+						BackgroundTransparency = 1,
+						ImageColor3 = THEME.SubText,
+						Parent = row,
+					})
+					if label then tween(label, { Position = UDim2.new(0, 32, 0, 0), Size = UDim2.new(1, -42, 1, 0) }, TI.FAST) end
+				end
+				return rowIcon
 			end
-			local label = Create("TextLabel", {
+			if rowIconSpec then applyIcon(ensureRowIcon(), rowIconSpec) end
+			label = Create("TextLabel", {
 				BackgroundTransparency = 1,
 				Position = UDim2.new(0, labelX, 0, 0),
 				Size = UDim2.new(1, -labelX - 10, 1, 0),
@@ -6205,6 +6497,15 @@ function NEMESIS.Window(opts)
 				if not page.active then tween(row, { BackgroundTransparency = 1 }, TI.HOVEROFF) end
 			end)
 			row.MouseButton1Click:Connect(function() showPage(tab, page, true) end)
+			-- right-click the sidebar row to change its page icon
+			editIcon(row, function() return rowIconName end, function(newName)
+				rowIconName = newName
+				local spec = resolveIcon(newName)
+				ensureRowIcon()
+				applyIcon(rowIcon, spec)
+				page.icon = rowIcon
+				rowIcon.ImageColor3 = page.active and accent or THEME.SubText
+			end, tostring(pname or "Page") .. " page")
 
 			-- page element API
 			local Page = {}

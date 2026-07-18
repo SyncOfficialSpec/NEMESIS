@@ -7112,7 +7112,7 @@ function PERDITION.Window(opts)
 		local pScale = Create("UIScale", { Scale = 1 })
 		local card = Create("CanvasGroup", {
 			Name = "OverlayPanel", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0),
-			Size = UDim2.new(0, 400, 0, 468), BackgroundColor3 = THEME.Group,
+			Size = UDim2.new(0, 400, 0, 468), BackgroundColor3 = THEME.Background,
 			GroupTransparency = 1, Visible = false, ZIndex = 40001, Parent = screenGui,
 		}, { corner(14), stroke(THEME.Stroke, 1, 0.3), pScale })
 		siblingShadow(card)
@@ -7151,14 +7151,17 @@ function PERDITION.Window(opts)
 			Create("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12), PaddingTop = UDim.new(0, 12), PaddingBottom = UDim.new(0, 14) }),
 		})
 
+		-- Syde open/close: a clear grow + fade (exponential ease, ~0.42s in / 0.26s out)
+		local OV_OPEN = TweenInfo.new(0.42, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)
+		local OV_CLOSE = TweenInfo.new(0.26, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)
 		local ov = { opened = false }
 		function ov.close()
 			if not ov.opened then return end
 			ov.opened = false
 			if _overlayCurrent == ov then _overlayCurrent = nil end
-			tween(card, { GroupTransparency = 1 }, TI.FAST)
-			tween(pScale, { Scale = 0.94 }, TI.FAST)
-			task.delay(0.18, function() if not ov.opened then card.Visible = false; backdrop.Visible = false end end)
+			tween(card, { GroupTransparency = 1, Position = UDim2.new(0.5, 0, 0.5, 8) }, OV_CLOSE)
+			tween(pScale, { Scale = 0.93 }, OV_CLOSE)
+			task.delay(0.28, function() if not ov.opened then card.Visible = false; backdrop.Visible = false end end)
 		end
 		function ov.open()
 			if ov.opened then return end
@@ -7168,16 +7171,15 @@ function PERDITION.Window(opts)
 			closeOpenDropdown()
 			_overlayCurrent = ov
 			ov.opened = true
-			card.Position = UDim2.new(0.5, 0, 0.5, 10)
+			card.Position = UDim2.new(0.5, 0, 0.5, 14)
 			card.GroupTransparency = 1
-			pScale.Scale = 0.92
+			pScale.Scale = 0.9
 			backdrop.BackgroundTransparency = 1
 			backdrop.Visible = true
 			card.Visible = true
-			-- Syde open: grow+fade
-			tween(card, { GroupTransparency = 0, Position = UDim2.new(0.5, 0, 0.5, 0) }, TI.EXPAND)
-			tween(pScale, { Scale = 1 }, TI.EXPAND)
-			backdrop.BackgroundTransparency = 1  -- never dull the screen; just click-to-close
+			-- Syde open: grow from 0.9 up into place while fading in
+			tween(card, { GroupTransparency = 0, Position = UDim2.new(0.5, 0, 0.5, 0) }, OV_OPEN)
+			tween(pScale, { Scale = 1 }, OV_OPEN)
 		end
 		function ov.toggle() if ov.opened then ov.close() else ov.open() end end
 		backdrop.MouseButton1Click:Connect(ov.close)

@@ -4219,6 +4219,26 @@ function makeSection(host, accent, title, startClosed)
 	host.EnhancedView = bind("EnhancedView")
 	host.EnchancedView = bind("EnhancedView")   -- Syde-name alias
 	host.SetOpen = function(o, animate) if sectionSetOpen then sectionSetOpen(o ~= false, animate) end end
+	-- Robustness: the nested AutomaticSize chain (card -> bodyWrap -> body -> rows)
+	-- can occasionally settle at 0 on the first frame under load, leaving an
+	-- empty-looking panel until it is interacted with. For open sections, if the
+	-- body reads ~0 next frame, kick a re-measure for a few frames until it fills.
+	if not startClosed then
+		task.defer(function()
+			for _ = 1, 5 do
+				if bodyWrap.AbsoluteSize.Y > 2 then return end
+				if body.AutomaticSize == Enum.AutomaticSize.Y then
+					body.AutomaticSize = Enum.AutomaticSize.None
+					body.AutomaticSize = Enum.AutomaticSize.Y
+				end
+				if bodyWrap.AutomaticSize == Enum.AutomaticSize.Y then
+					bodyWrap.AutomaticSize = Enum.AutomaticSize.None
+					bodyWrap.AutomaticSize = Enum.AutomaticSize.Y
+				end
+				task.wait()
+			end
+		end)
+	end
 	return host
 end
 

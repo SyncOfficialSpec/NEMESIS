@@ -785,14 +785,27 @@ end
 local accentHooks = {}
 local function onAccent(fn) accentHooks[#accentHooks + 1] = fn end
 local function accentLight(c) return c:Lerp(Color3.fromRGB(255, 255, 255), 0.35) end
+-- accent / hitbox can be a Color3 OR a ColorSequence (a Multi gradient). flat
+-- consumers use the first stop; gradient consumers get the whole sequence.
+local function seqPrimary(v)
+	if typeof(v) == "ColorSequence" then
+		local kp = v.Keypoints
+		return (kp[1] and kp[1].Value) or Color3.new(1, 1, 1)
+	end
+	return v
+end
+local function accentGradColor(c)
+	if typeof(c) == "ColorSequence" then return c end
+	return ColorSequence.new(c, accentLight(c))
+end
 local function accentProp(inst, prop, accent)
-	inst[prop] = accent
-	onAccent(function(c) pcall(function() inst[prop] = c end) end)
+	inst[prop] = seqPrimary(accent)
+	onAccent(function(c) pcall(function() inst[prop] = seqPrimary(c) end) end)
 	return inst
 end
 local function accentGrad(grad, accent)
-	grad.Color = ColorSequence.new(accent, accentLight(accent))
-	onAccent(function(c) pcall(function() grad.Color = ColorSequence.new(c, accentLight(c)) end) end)
+	grad.Color = accentGradColor(accent)
+	onAccent(function(c) pcall(function() grad.Color = accentGradColor(c) end) end)
 	return grad
 end
 
@@ -804,13 +817,13 @@ local hitboxOverride = false
 local function onHitbox(fn) hitboxHooks[#hitboxHooks + 1] = fn end
 local function fireHitbox(c) for _, fn in ipairs(hitboxHooks) do pcall(fn, c) end end
 local function hitboxProp(inst, prop, initial)
-	inst[prop] = initial
-	onHitbox(function(c) pcall(function() inst[prop] = c end) end)
+	inst[prop] = seqPrimary(initial)
+	onHitbox(function(c) pcall(function() inst[prop] = seqPrimary(c) end) end)
 	return inst
 end
 local function hitboxGrad(grad, initial)
-	grad.Color = ColorSequence.new(initial, accentLight(initial))
-	onHitbox(function(c) pcall(function() grad.Color = ColorSequence.new(c, accentLight(c)) end) end)
+	grad.Color = accentGradColor(initial)
+	onHitbox(function(c) pcall(function() grad.Color = accentGradColor(c) end) end)
 	return grad
 end
 
@@ -1868,11 +1881,10 @@ function Elements.Slider(parent, accent, opts)
 		value = math.clamp(stepped, min, max)
 		local frac = (value - min) / span
 		valueLabel.Text = fmt(value)
-		-- during a drag the fill/handle track the cursor 1:1 (instant); external Set /
-		-- typed values keep the smooth Syde catch-up so they glide to the new spot
-		local info = instant and TweenInfo.new(0) or TI.SYDE_SIZE
-		tween(fill, { Size = UDim2.new(frac, 0, 1, 0) }, info)
-		tween(handle, { Position = UDim2.new(frac, 0, 0.5, 0) }, info)
+		-- the fill/handle always ease toward the target (Syde Quint catch-up), so even
+		-- a drag reads as a smooth glide rather than a hard snap
+		tween(fill, { Size = UDim2.new(frac, 0, 1, 0) }, TI.SYDE_SIZE)
+		tween(handle, { Position = UDim2.new(frac, 0, 0.5, 0) }, TI.SYDE_SIZE)
 		if opts.flag then NEMESIS.Flags[opts.flag] = value end
 		if fire and type(opts.callback) == "function" then
 			pcall(opts.callback, value)
@@ -2477,9 +2489,12 @@ function Elements.ColorPicker(parent, accent, opts)
 	}
 	-- mode: Single (one colour), Double (two colours), Multi (many stops).
 	-- "gradient = true" is the old name for Double; "multi = true" starts on Multi.
-	local mode = opts.mode or (opts.multi and "Multi") or (opts.gradient and "Double") or "Single"
-	local MODES = { Single = 1, Double = 2, Multi = 3 }
-	local isGradient = (mode == "Double")
+	-- two sections only: Single (one colour) and Multiple (a multi-stop gradient).
+	-- legacy "Double" / opts.gradient collapses into Multiple.
+	local mode = opts.mode or (opts.multi and "Multi") or (opts.gradient and "Multi") or "Single"
+	if mode == "Double" then mode = "Multi" end
+	local MODES = { Single = 1, Multi = 2 }
+	local isGradient = false
 	local active = 1        -- active slot index (Single/Double)
 	local activeStop = 1    -- active stop index (Multi)
 	local saved = {}
@@ -2697,17 +2712,16 @@ function Elements.ColorPicker(parent, accent, opts)
 		})
 		local applyMode  -- forward decl, defined after the rail exists
 		local modeSeg
-		modeSeg, setModeVisual = segmented(150, { "Single", "Double", "Multi" }, function(i)
-			mode = (i == 3) and "Multi" or (i == 2) and "Double" or "Single"
-			isGradient = (mode == "Double")
-			if mode ~= "Double" then active = 1 end
+		modeSeg, setModeVisual = segmented(148, { "Single", "Multiple" }, function(i)
+			mode = (i == 2) and "Multi" or "Single"
+			active = 1
 			applyMode(true)
 			syncUI(); commit()
 		end)
 		modeSeg.AnchorPoint = Vector2.new(1, 0.5)
 		modeSeg.Position = UDim2.new(1, 0, 0.5, 0)
 		modeSeg.Parent = head
-		setModeVisual(MODES[mode])
+		setModeVisual(MODES[mode] or 1)
 		-- GradientPicker locks to Multi: hide the mode switch so it cannot collapse to a flat colour
 		if opts.lockMode then modeSeg.Visible = false end
 
@@ -2990,15 +3004,9 @@ function Elements.ColorPicker(parent, accent, opts)
 		if panel then syncUI() end
 		commit()
 	end
-	function control.SetGradient(c1, c2, a1, a2)
-		mode = "Double"; isGradient = true
-		slots[1].h, slots[1].s, slots[1].v = (c1 or slotColor(1)):ToHSV()
-		slots[2].h, slots[2].s, slots[2].v = (c2 or slotColor(2)):ToHSV()
-		if a1 ~= nil then slots[1].alpha = a1 end
-		if a2 ~= nil then slots[2].alpha = a2 end
-		if setModeVisual then setModeVisual(2) end
-		if applyMode then applyMode() else layoutSwatches() end
-		if panel then syncUI() end; commit()
+	-- Double mode was removed; a two-colour gradient is now a 2-stop Multiple
+	function control.SetGradient(c1, c2)
+		control.SetMulti({ c1 or slotColor(1), c2 or slotColor(2) })
 	end
 	-- SetMulti(seq_or_colorlist): switch to Multi mode with these stops
 	function control.SetMulti(seqOrList)
@@ -6340,8 +6348,11 @@ function NEMESIS.Window(opts)
 	-- live-recolor the whole menu's accent (Win.SetAccent(Color3))
 	function Win.SetAccent(c)
 		if not c then return end
-		accent = c
-		THEME.Accent = c
+		-- c may be a Color3 or a ColorSequence (Multi gradient). keep a flat colour for
+		-- everything that needs one, but hand the hooks the original so gradients apply.
+		local flat = seqPrimary(c)
+		accent = flat
+		THEME.Accent = flat
 		for _, fn in ipairs(accentHooks) do pcall(fn, c) end
 		-- the fill/highlight colour follows accent until the user overrides it
 		if not hitboxOverride then fireHitbox(c) end
@@ -6355,7 +6366,7 @@ function NEMESIS.Window(opts)
 	-- Win.SetHitbox(Color3 or nil): the fill/highlight colour of toggles and slider
 	-- fills, independent of the accent. Pass nil to fall back to tracking the accent.
 	function Win.SetHitbox(c)
-		if typeof(c) == "Color3" then
+		if typeof(c) == "Color3" or typeof(c) == "ColorSequence" then
 			hitboxOverride = true
 			fireHitbox(c)
 		else
@@ -6470,9 +6481,11 @@ function NEMESIS.Window(opts)
 			options = { "Dark", "Midnight", "Abyss" }, default = "Dark",
 			callback = function(v) Win.SetTheme(v) end })
 		themeSec.ColorPicker({ text = "Accent color", icon = "droplet", default = accent,
-			callback = function(_, _, c) Win.SetAccent(c) end })
-		themeSec.ColorPicker({ text = "Hitbox color", icon = "square-check", default = accent,
-			callback = function(_, _, c) Win.SetHitbox(c) end })
+			-- pass the full value: a Color3 in Single, a ColorSequence in Multi (so the
+			-- accent fills across the menu become a real gradient)
+			callback = function(v) Win.SetAccent(v) end })
+		themeSec.ColorPicker({ text = "Icon color", icon = "square-check", default = accent,
+			callback = function(v) Win.SetHitbox(v) end })
 		local fontOptions = { "Inter" }
 		pcall(function()
 			for _, f in ipairs(Enum.Font:GetEnumItems()) do

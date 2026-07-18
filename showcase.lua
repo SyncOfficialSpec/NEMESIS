@@ -122,6 +122,7 @@ local s_wbtn = WG.Section("BUTTONS")
 s_wbtn.RippleButton({ text = "Ripple button", callback = function() notify("Ripple", "clicked", 1.5) end })
 s_wbtn.CopyButton({ text = "Copy my id", copy = "1234567890" })
 s_wbtn.HoldButton({ text = "Hold to unload", duration = 1.5, callback = function() notify("Hold", "completed", 1.5) end })
+s_wbtn.SlideButton({ text = "Slide to unload", callback = function() notify("Slide", "confirmed", 1.5) end })
 s_wbtn.Checkbox({ text = "Checkbox style", default = true, flag = "wg_cbx" })
 
 local s_pick = WG.Section("PICKERS")

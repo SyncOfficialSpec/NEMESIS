@@ -3587,6 +3587,96 @@ function Elements.HoldButton(parent, accent, opts)
 	return control
 end
 
+-- SlideButton: drag the knob across the track to confirm (slide-to-confirm).
+-- opts { text, confirmText, callback, notify, completionTitle, completionText }
+function Elements.SlideButton(parent, accent, opts)
+	opts = opts or {}
+	onAccent(function(c) accent = c end)
+	local row = newRow(parent, 42)
+	local track = Create("TextButton", {
+		AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(1, 0, 0, 34),
+		BackgroundColor3 = THEME.Element, AutoButtonColor = false, Text = "", ClipsDescendants = true, Parent = row,
+	}, { corner(10), stroke(THEME.ElementStroke, 1, 0.4) })
+	local fillGrad = Create("UIGradient", {})
+	local fill = Create("Frame", {
+		Size = UDim2.new(0, 32, 1, 0), BackgroundColor3 = accent, BackgroundTransparency = 0.15, BorderSizePixel = 0, Parent = track,
+	}, { corner(10), fillGrad })
+	accentProp(fill, "BackgroundColor3", accent); accentGrad(fillGrad, accent)
+	local prompt = Create("TextLabel", {
+		Size = UDim2.new(1, -44, 1, 0), Position = UDim2.new(0, 40, 0, 0), BackgroundTransparency = 1,
+		Font = FONT_MED, Text = opts.text or "Slide to confirm", TextColor3 = THEME.SubText, TextSize = 13,
+		TextXAlignment = Enum.TextXAlignment.Center, Parent = track,
+	})
+	local knob = Create("TextButton", {
+		AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 2, 0.5, 0), Size = UDim2.new(0, 30, 0, 30),
+		BackgroundColor3 = THEME.Knob, AutoButtonColor = false, Text = "", ZIndex = 4, Parent = track,
+	}, { corner(8) })
+	local darkGlyph = Color3.fromRGB(24, 25, 28)
+	do
+		local aspec = resolveIcon("chevrons-right") or resolveIcon("chevron-right")
+		if aspec then
+			local a = Create("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, 16, 0, 16), BackgroundTransparency = 1, ImageColor3 = darkGlyph, ZIndex = 5, Parent = knob })
+			applyIcon(a, aspec)
+		else
+			Create("TextLabel", { Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Font = FONT_BOLD, Text = ">", TextColor3 = darkGlyph, TextSize = 16, ZIndex = 5, Parent = knob })
+		end
+	end
+
+	local knobW = 30
+	local dragging, confirmed, curPx = false, false, 0
+	local function maxX() return math.max(track.AbsoluteSize.X - knobW - 4, 1) end
+	local function place(px, animate)
+		px = math.clamp(px, 0, maxX())
+		curPx = px
+		if animate then
+			tween(knob, { Position = UDim2.new(0, 2 + px, 0.5, 0) }, TI.EXPAND)
+			tween(fill, { Size = UDim2.new(0, px + knobW + 2, 1, 0) }, TI.EXPAND)
+		else
+			knob.Position = UDim2.new(0, 2 + px, 0.5, 0)
+			fill.Size = UDim2.new(0, px + knobW + 2, 1, 0)
+		end
+		prompt.TextTransparency = math.clamp(px / maxX(), 0, 1) * 0.85
+	end
+	local function reset(animate)
+		confirmed = false
+		prompt.Text = opts.text or "Slide to confirm"
+		place(0, animate)
+	end
+	local function confirm()
+		if confirmed then return end
+		confirmed = true
+		prompt.Text = opts.confirmText or "Confirmed"
+		prompt.TextTransparency = 0
+		place(maxX(), true)
+		if type(opts.callback) == "function" then pcall(opts.callback) end
+		if opts.notify ~= false then NEMESIS.Notify({ title = opts.completionTitle or "Confirmed", content = opts.completionText or "Action confirmed.", duration = 2, icon = opts.completionIcon or "check" }) end
+		if not opts.stayConfirmed then task.delay(1.1, function() if confirmed then reset(true) end end) end
+	end
+	knob.InputBegan:Connect(function(input)
+		if confirmed then return end
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = true end
+	end)
+	UserInputService.InputChanged:Connect(function(input)
+		if not dragging then return end
+		if not track.Parent then dragging = false; return end
+		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+			place(input.Position.X - track.AbsolutePosition.X - knobW / 2, false)
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if not dragging then return end
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = false
+			if curPx >= maxX() * 0.9 then confirm() else reset(true) end
+		end
+	end)
+	local control = {}
+	function control.Reset() reset(true) end
+	function control.SetText(t) opts.text = tostring(t); if not confirmed then prompt.Text = opts.text end end
+	task.defer(function() place(0, false) end)
+	return control
+end
+
 -- ShimmerLabel: a heading whose text has a bright band that sweeps across it.
 function Elements.ShimmerLabel(parent, accent, opts)
 	opts = opts or {}
@@ -4029,6 +4119,7 @@ function makeSection(host, accent, title, startClosed)
 	host.StackedChart = bind("StackedChart")
 	host.RippleButton = bind("RippleButton")
 	host.HoldButton = bind("HoldButton")
+	host.SlideButton = bind("SlideButton")
 	host.ShimmerLabel = bind("ShimmerLabel")
 	host.ScrollHint = bind("ScrollHint")
 	host.CursorTag = bind("CursorTag")
@@ -4716,36 +4807,40 @@ function NEMESIS.Window(opts)
 		BorderSizePixel = 0,
 		Parent = sbFooter,
 	})
-	local statusDot = Create("Frame", {
+	-- player profile: avatar headshot + display name + @username, with a small
+	-- online dot on the avatar. SetGame / SetStatus still override the two lines.
+	local lp = localPlayer()
+	local profName, profUser, profId
+	pcall(function()
+		if lp then
+			profName = lp.DisplayName or lp.Name
+			profUser = "@" .. (lp.Name or "player")
+			profId = lp.UserId
+		end
+	end)
+	local avatar = Create("ImageLabel", {
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.new(0, 12, 0.5, 1),
-		Size = UDim2.new(0, 6, 0, 6),
+		Size = UDim2.new(0, 30, 0, 30),
+		BackgroundColor3 = THEME.Element,
+		Image = profId and ("rbxthumb://type=AvatarHeadShot&id=%d&w=60&h=60"):format(profId) or "",
+		Parent = sbFooter,
+	}, { corner(8), stroke(THEME.ElementStroke, 1, 0.4) })
+	local statusDot = Create("Frame", {
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.new(1, 1, 1, 1),
+		Size = UDim2.new(0, 9, 0, 9),
 		BackgroundColor3 = THEME.Good,
 		BorderSizePixel = 0,
-		Parent = sbFooter,
-	}, { corner(3) })
-	do
-		local dotArt = loadArt("cal1_glow_dot.png")
-		if dotArt then
-			Create("ImageLabel", {
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.new(0.5, 0, 0.5, 0),
-				Size = UDim2.new(0, 16, 0, 16),
-				BackgroundTransparency = 1,
-				Image = dotArt,
-				ImageColor3 = THEME.Good,
-				ImageTransparency = 0.4,
-				ZIndex = 0,
-				Parent = statusDot,
-			})
-		end
-	end
+		ZIndex = 3,
+		Parent = avatar,
+	}, { corner(5), stroke(THEME.Sidebar, 2, 0) })
 	local gameLabel = Create("TextLabel", {
-		Position = UDim2.new(0, 26, 0, 8),
-		Size = UDim2.new(1, -86, 0, 16),
+		Position = UDim2.new(0, 50, 0, 8),
+		Size = UDim2.new(1, -110, 0, 16),
 		BackgroundTransparency = 1,
-		Font = FONT_MED,
-		Text = tostring(opts.game or "Connected"),
+		Font = FONT_SEMI,
+		Text = tostring(profName or opts.game or "NEMESIS"),
 		TextColor3 = THEME.Text,
 		TextSize = 13,
 		TextTruncate = Enum.TextTruncate.AtEnd,
@@ -4753,11 +4848,11 @@ function NEMESIS.Window(opts)
 		Parent = sbFooter,
 	})
 	local statusLabel = Create("TextLabel", {
-		Position = UDim2.new(0, 26, 0, 25),
-		Size = UDim2.new(1, -86, 0, 14),
+		Position = UDim2.new(0, 50, 0, 25),
+		Size = UDim2.new(1, -110, 0, 14),
 		BackgroundTransparency = 1,
 		Font = FONT,
-		Text = tostring(opts.status or ""),
+		Text = tostring(profUser or opts.status or ""),
 		TextColor3 = THEME.SubText,
 		TextSize = 12,
 		TextTruncate = Enum.TextTruncate.AtEnd,
@@ -5857,6 +5952,26 @@ function NEMESIS.Window(opts)
 			local sections = {}   -- ordered panel cards
 			local heights = {}    -- card -> cached local (pre-scale) height
 			local relayoutQueued = false
+			-- empty state: a friendly ghost shown when the page has no panels yet
+			local emptyState = Create("Frame", {
+				AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 44),
+				Size = UDim2.new(1, -40, 0, 88), BackgroundTransparency = 1, Visible = false, Parent = pageBody,
+			})
+			do
+				local gspec = resolveIcon("ghost")
+				if gspec then
+					local gi = Create("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 0), Size = UDim2.new(0, 40, 0, 40), BackgroundTransparency = 1, ImageColor3 = THEME.SubText, ImageTransparency = 0.15, Parent = emptyState })
+					applyIcon(gi, gspec)
+				end
+				Create("TextLabel", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 48), Size = UDim2.new(1, 0, 0, 18), BackgroundTransparency = 1, Font = FONT_SEMI, Text = "Nothing here yet", TextColor3 = THEME.Text, TextSize = 14, TextXAlignment = Enum.TextXAlignment.Center, Parent = emptyState })
+				Create("TextLabel", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 68), Size = UDim2.new(1, 0, 0, 16), BackgroundTransparency = 1, Font = FONT, Text = "Add some settings or enable a feature.", TextColor3 = THEME.SubText, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Center, Parent = emptyState })
+			end
+			local function refreshEmpty()
+				local any = false
+				for _, c in ipairs(sections) do if c.Parent then any = true break end end
+				emptyState.Visible = not any
+			end
+			task.defer(refreshEmpty)
 			local function uiScale() local s = 1; pcall(function() s = rootScale.Scale end); return (s and s > 0) and s or 1 end
 			local function relayout(animate)
 				local sc = uiScale()
@@ -5896,7 +6011,9 @@ function NEMESIS.Window(opts)
 					if math.abs((heights[c] or 0) - h) > 0.5 then heights[c] = h; queueRelayout(true) end
 				end)
 				queueRelayout(false)
+				refreshEmpty()
 			end)
+			columnsHolder.ChildRemoved:Connect(function() task.defer(refreshEmpty) end)
 			-- every panel now lands in one shared holder; the masonry places it
 			local function pickColumn() return columnsHolder end
 

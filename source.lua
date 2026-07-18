@@ -878,9 +878,10 @@ local function dropShadow(parent, transparency)
 		Size = UDim2.new(1, RF_SHADOW.pad * 2, 1, RF_SHADOW.pad * 2),
 		BackgroundTransparency = 1,
 		Image = art,
-		-- the Rayfield shadow asset is white; tint it black so it reads as a shadow
-		ImageColor3 = Color3.fromRGB(0, 0, 0),
-		ImageTransparency = transparency or 0.4,
+		-- the Rayfield shadow asset is white; tint it a warm near-black so it reads
+		-- as a soft shadow on the paper ground rather than a harsh cold halo
+		ImageColor3 = Color3.fromRGB(34, 27, 18),
+		ImageTransparency = transparency or 0.55,
 		ScaleType = Enum.ScaleType.Slice,
 		SliceCenter = RF_SHADOW.slice,
 		ZIndex = 0,
@@ -2223,7 +2224,7 @@ function Elements.Dropdown(parent, accent, opts)
 	local function fadePanel(opening)
 		tween(panel, { BackgroundTransparency = opening and 0 or 1 }, FADE)
 		tween(panelStroke, { Transparency = opening and 0.15 or 1 }, FADE)
-		if panelShadow then tween(panelShadow, { ImageTransparency = opening and 0.35 or 1 }, FADE) end
+		if panelShadow then tween(panelShadow, { ImageTransparency = opening and 0.6 or 1 }, FADE) end
 		tween(holder, { ScrollBarImageTransparency = opening and 0.4 or 1 }, FADE)
 		-- Syde-style cascade: options reveal top-down with a tiny incrementing
 		-- delay so the list unfurls rather than popping all at once
@@ -4131,13 +4132,7 @@ function makeSection(host, accent, title, startClosed)
 		local chev = iconChevron(header, 15, THEME.Faint, "chevron-down")
 		chev.AnchorPoint = Vector2.new(1, 0.5)
 		chev.Position = UDim2.new(1, 0, 0.5, 0)
-		-- thin rule under the header, separating it from the body (absolutely
-		-- placed so it never disturbs the collapse layout)
-		Create("Frame", {
-			AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, 0),
-			Size = UDim2.new(1, -2, 0, 1), BackgroundColor3 = THEME.RowDivider,
-			BorderSizePixel = 0, ZIndex = 2, Parent = header,
-		})
+		-- (no header rule: it read as a stray line; header/body separate by spacing)
 		local open = true
 		local SEC_SLIDE = TweenInfo.new(0.36, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
 		sectionSetOpen = function(want, animate)
@@ -4490,7 +4485,7 @@ function PERDITION.Window(opts)
 		ZIndex = 0,
 		Parent = screenGui,
 	}, { Create("UIScale", { Scale = scale }) })
-	local rootShadowImg = dropShadow(rootShadowHolder, 0.35)   -- for shadow density/colour settings
+	local rootShadowImg = dropShadow(rootShadowHolder, 0.48)   -- for shadow density/colour settings
 	-- accent glow: the same soft shadow art, tinted to the accent and spread a bit
 	-- wider, so the whole window casts a coloured halo (Syde "Glow"). Off by default;
 	-- toggled from Settings. Recolours live with the accent.
@@ -7048,7 +7043,7 @@ function PERDITION.Window(opts)
 			TextSize = 19,
 			Parent = screenGui,
 		}, { corner(8), stroke(THEME.Stroke, 1, 0.15) })
-		dropShadow(fab, 0.45)
+		dropShadow(fab, 0.6)
 		accentProp(fab, "TextColor3", accent)
 		makeDraggable(fab, fab)
 		fab.MouseButton1Click:Connect(function() setHidden(not hidden) end)

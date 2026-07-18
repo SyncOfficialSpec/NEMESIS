@@ -1,5 +1,5 @@
 --[[
-	Smoke test for NEMESIS. Run from the repo root:
+	Smoke test for PERDITION. Run from the repo root:
 		lua  test/smoke.lua
 		luau test/smoke.lua   (luau may lack dofile; lua is preferred)
 
@@ -10,7 +10,7 @@
 
 dofile("test/stub.lua")
 
-local NEMESIS = dofile("source.lua")
+local PERDITION = dofile("source.lua")
 
 local function check(cond, msg)
 	if not cond then
@@ -19,14 +19,14 @@ local function check(cond, msg)
 	print("  ok: " .. msg)
 end
 
-print("NEMESIS smoke test")
-check(type(NEMESIS) == "table", "module returns a table")
-check(type(NEMESIS.Window) == "function", "NEMESIS.Window exists")
-check(type(NEMESIS.Notify) == "function", "NEMESIS.Notify exists")
-check(type(NEMESIS.Flags) == "table", "NEMESIS.Flags table exists")
+print("PERDITION smoke test")
+check(type(PERDITION) == "table", "module returns a table")
+check(type(PERDITION.Window) == "function", "PERDITION.Window exists")
+check(type(PERDITION.Notify) == "function", "PERDITION.Notify exists")
+check(type(PERDITION.Flags) == "table", "PERDITION.Flags table exists")
 
-local Win = NEMESIS.Window({
-	title = "NEMESIS",
+local Win = PERDITION.Window({
+	title = "PERDITION",
 	accent = Color3.fromRGB(140, 90, 255),
 	game = "CS2",
 	status = "Connected",
@@ -66,13 +66,13 @@ local tog = gen.Toggle({ text = "Enable", default = true, flag = "aim_enable", c
 check(tog.Get() == true, "Toggle default true")
 tog.Set(false)
 check(tog.Get() == false, "Toggle Set(false)")
-check(NEMESIS.Flags.aim_enable == false, "Toggle flag synced to Flags")
+check(PERDITION.Flags.aim_enable == false, "Toggle flag synced to Flags")
 
 local sld = gen.Slider({ text = "Point Scale", min = 0, max = 1, default = 0.65, increment = 0.01, flag = "scale" })
 check(sld.Get() == 0.65, "Slider default 0.65")
 sld.Set(0.5)
 check(math.abs(sld.Get() - 0.5) < 1e-6, "Slider Set(0.5)")
-check(NEMESIS.Flags.scale ~= nil, "Slider flag synced")
+check(PERDITION.Flags.scale ~= nil, "Slider flag synced")
 
 local dd = gen.Dropdown({ text = "Weapon Group", options = { "Rifles", "Pistols", "Snipers" }, default = "Rifles", flag = "wg" })
 check(dd.Get() == "Rifles", "Dropdown default")
@@ -114,7 +114,7 @@ local prog = gen.ProgressBar({ text = "Load", value = 40, max = 100, suffix = "%
 check(prog.Get() == 40, "ProgressBar Get"); prog.Set(75); check(prog.Get() == 75, "ProgressBar Set")
 local stat = gen.Stat({ text = "Kills", value = 12 }); stat.Set(99); check(stat.Get() == "99", "Stat Set/Get")
 local cbx = gen.Checkbox({ text = "Box", default = false, flag = "cbx" }); cbx.Set(true)
-check(cbx.Get() == true and NEMESIS.Flags.cbx == true, "Checkbox Set + flag")
+check(cbx.Get() == true and PERDITION.Flags.cbx == true, "Checkbox Set + flag")
 local cpy = gen.CopyButton({ text = "Copy id", copy = "abc" }); check(type(cpy) == "table", "CopyButton created")
 check(type(gen.BarChart({ text = "Bars", points = { 3, 7, 2, 9 } }).Push) == "function", "BarChart created")
 check(type(gen.Chart({ text = "Line", points = { 1, 4, 2, 6, 3 } }).Push) == "function", "Chart created")
@@ -128,28 +128,28 @@ check(type(gen.CursorTag({ text = "Tag", hint = "hover" }).Set) == "function", "
 local colsec = gen.CollapsibleSection({ text = "More", open = true })
 check(type(colsec.Toggle) == "function", "CollapsibleSection hosts elements")
 colsec.Toggle({ text = "Nested", default = true, flag = "nested_t" })
-check(NEMESIS.Flags.nested_t == true, "nested element inside CollapsibleSection works")
+check(PERDITION.Flags.nested_t == true, "nested element inside CollapsibleSection works")
 local faq = gen.FAQ({ items = { { question = "Q1?", answer = "A1" }, { question = "Q2?", answer = "A2" } } })
 check(type(faq.Items) == "table" and #faq.Items == 2 and type(faq.Items[1].Open) == "function", "FAQ accordion")
 check(type(gen.Changelog({ title = "Notes", version = "2.0", entries = { { Tag = "Added", Text = "new" }, "plain" } })) == "table", "Changelog created")
 local seg = gen.SegmentedPicker({ text = "Mode", options = { "Low", "Mid", "High" }, default = "Mid", flag = "seg" })
-check(seg.Get() == "Mid" and NEMESIS.Flags.seg == "Mid", "SegmentedPicker default + flag"); seg.Set("High"); check(seg.Get() == "High", "SegmentedPicker Set")
+check(seg.Get() == "Mid" and PERDITION.Flags.seg == "Mid", "SegmentedPicker default + flag"); seg.Set("High"); check(seg.Get() == "High", "SegmentedPicker Set")
 check(type(gen.GradientPicker({ text = "Grad", colors = { Color3.new(1,0,0), Color3.new(0,0,1) } }).Get) == "function", "GradientPicker created")
 local pl = gen.PinnedList({ title = "Items", items = { { Name = "One" }, { Name = "Two", Pinned = true } } })
 check(type(pl.Pin) == "function" and type(pl.GetPinned) == "function", "PinnedList Pin/GetPinned")
 pl.Pin("One", true); check(#pl.GetPinned() == 2, "PinnedList programmatic pin")
 check(type(gen.EnhancedView({ title = "Model" }).SetModel) == "function", "EnhancedView created")
 -- global modal + toast
-check(type(NEMESIS.Modal) == "function", "NEMESIS.Modal exists")
-NEMESIS.Modal({ title = "Confirm", content = "Do it?", onConfirm = function() end, onCancel = function() end })
-check(type(NEMESIS.Toast) == "function", "NEMESIS.Toast exists")
-NEMESIS.Toast({ content = "Saved", duration = 1, icon = "check" })
+check(type(PERDITION.Modal) == "function", "PERDITION.Modal exists")
+PERDITION.Modal({ title = "Confirm", content = "Do it?", onConfirm = function() end, onCancel = function() end })
+check(type(PERDITION.Toast) == "function", "PERDITION.Toast exists")
+PERDITION.Toast({ content = "Saved", duration = 1, icon = "check" })
 print("  ok: Modal + Toast ran")
 
 -- second collapsible section on the same page
 local hb = General.Section("HITBOX")
 hb.Toggle({ text = "Multi-Point", default = true, flag = "mp" })
-check(NEMESIS.Flags.mp == true, "second Section control works")
+check(PERDITION.Flags.mp == true, "second Section control works")
 
 -- page-level direct control (lazy default section)
 local direct = Misc.Toggle({ text = "Clean Screen", default = false, flag = "clean" })
@@ -158,15 +158,15 @@ check(direct.Get() == false, "page-level direct control works")
 -- other top tab gets content too
 local vEsp = Visuals.Group("ESP").Page("Players", { icon = "eye" })
 vEsp.Section("BOXES").Toggle({ text = "Enabled", default = true, flag = "v_box" })
-check(NEMESIS.Flags.v_box == true, "second tab content works")
+check(PERDITION.Flags.v_box == true, "second tab content works")
 
 -- columns: a page with an explicit column count + manual section placement
 local Grid = Combat.Group("LAYOUT").Page("Grid", { icon = "grid-2x2", columns = 2 })
 Grid.Section("LEFT").Toggle({ text = "A", default = true, flag = "grid_a" }) -- auto column 1
 Grid.Section("RIGHT", { column = 2 }).Toggle({ text = "B", default = false, flag = "grid_b" })
-check(NEMESIS.Flags.grid_a == true and NEMESIS.Flags.grid_b == false, "columns page + { column = 2 } Section works")
+check(PERDITION.Flags.grid_a == true and PERDITION.Flags.grid_b == false, "columns page + { column = 2 } Section works")
 
-NEMESIS.Notify({ title = "Loaded", content = "NEMESIS ready", duration = 2 })
+PERDITION.Notify({ title = "Loaded", content = "PERDITION ready", duration = 2 })
 print("  ok: Notify ran without error")
 
 -- icon atlas pipeline: the topbar icons (x/minus/search) resolve through the
@@ -205,12 +205,12 @@ check(sawPreset, "ListConfigs sees preset names from opts.configs")
 tog.Set(false); sld.Set(0.9); dd.Set("Pistols"); mdd.Set({ "x" })
 inp.Set("overwritten"); kb.Set("MOUSE3"); cp.Set(Color3.fromRGB(1, 2, 3), 0)
 check(Win.LoadConfig("smoketest") == true, "LoadConfig reads it back")
-check(NEMESIS.Flags.aim_enable == true, "toggle restored from config")
-check(math.abs(NEMESIS.Flags.scale - 0.25) < 1e-6, "slider restored from config")
-check(NEMESIS.Flags.wg == "Snipers", "dropdown restored from config")
-check(type(NEMESIS.Flags.tg) == "table" and #NEMESIS.Flags.tg == 2, "multi dropdown restored from config")
-check(NEMESIS.Flags.wh == "abc123", "input restored from config")
-check(NEMESIS.Flags.kb == "MOUSE2", "keybind restored from config")
+check(PERDITION.Flags.aim_enable == true, "toggle restored from config")
+check(math.abs(PERDITION.Flags.scale - 0.25) < 1e-6, "slider restored from config")
+check(PERDITION.Flags.wg == "Snipers", "dropdown restored from config")
+check(type(PERDITION.Flags.tg) == "table" and #PERDITION.Flags.tg == 2, "multi dropdown restored from config")
+check(PERDITION.Flags.wh == "abc123", "input restored from config")
+check(PERDITION.Flags.kb == "MOUSE2", "keybind restored from config")
 local rc = cp.Get()
 check(math.abs(rc.R * 255 - 10) < 1.01 and math.abs(rc.G * 255 - 200) < 1.01, "colorpicker colour restored from config")
 check(math.abs(cp.GetAlpha() - 0.5) < 1e-6, "colorpicker alpha restored from config")
@@ -222,13 +222,13 @@ check(Win.GetAutoload() == nil, "deleting the autoload config clears the marker"
 
 -- theme switching: window recolours live, palette merges into future builds
 check(Win.SetTheme("Midnight") == true, "SetTheme accepts a preset name")
-local midnight = NEMESIS.Themes.Midnight
+local midnight = PERDITION.Themes.Midnight
 check(math.abs(Win.Instance.BackgroundColor3.R - midnight.Background.R) < 1e-6, "window recoloured to the Midnight palette")
 check(Win.SetTheme("Dark") == true, "SetTheme back to Dark")
 
 -- key system: a saved key file unlocks with no prompt (and no blocking)
 STUB_DISK["Nemesis/key.txt"] = "SMOKE-KEY"
-local KWin = NEMESIS.Window({ title = "KEYTEST", key = { key = "SMOKE-KEY" } })
+local KWin = PERDITION.Window({ title = "KEYTEST", key = { key = "SMOKE-KEY" } })
 check(type(KWin) == "table", "key system: saved key unlocks without prompting")
 KWin.Destroy()
 

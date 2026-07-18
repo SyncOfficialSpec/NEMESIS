@@ -1,5 +1,5 @@
 --[[
-	NEMESIS demo: two tabs stuffed with elements so you can test the scroll and
+	PERDITION demo: two tabs stuffed with elements so you can test the scroll and
 	the resizing (grab the bottom-right corner) - drag it narrow and the panels
 	switch columns, wide and they spread back out, all animated.
 
@@ -9,15 +9,15 @@
 	Run this in your executor. It pulls the latest library from GitHub.
 ]]
 
-local NEMESIS = loadstring(game:HttpGet("https://raw.githubusercontent.com/SyncOfficialSpec/NEMESIS/main/source.lua?_=" .. tostring(os.time())))()
+local PERDITION = loadstring(game:HttpGet("https://raw.githubusercontent.com/SyncOfficialSpec/NEMESIS/main/source.lua?_=" .. tostring(os.time())))()
 
 local function notify(title, body, dur)
-	NEMESIS.Notify({ title = title, content = body, duration = dur or 2, icon = "check" })
+	PERDITION.Notify({ title = title, content = body, duration = dur or 2, icon = "check" })
 end
 
-local Win = NEMESIS.Window({
-	title = "NEMESIS",
-	accent = Color3.fromRGB(140, 90, 255),
+local Win = PERDITION.Window({
+	title = "PERDITION",
+	accent = Color3.fromRGB(255, 59, 91),
 	game = "Demo",
 	status = "Connected",
 	configs = { "Default", "Legit", "Rage" },
@@ -51,7 +51,7 @@ local s_pred = Aim.Section("PREDICTION")
 s_pred.Slider({ text = "Hit chance", min = 0, max = 100, default = 80, suffix = "%" })
 s_pred.Slider({ text = "Air resistance", min = 0, max = 5, default = 1.2, increment = 0.1 })
 s_pred.Toggle({ text = "Resolver", default = true })
-s_pred.ColorPicker({ text = "FOV color", default = Color3.fromRGB(140, 90, 255) })
+s_pred.ColorPicker({ text = "FOV color", default = Color3.fromRGB(255, 59, 91) })
 s_pred.Paragraph({ title = "Note", content = "Prediction only matters for projectile weapons. Hit-scan ignores these values entirely." })
 
 local s_extra = Aim.Section("EXTRA")

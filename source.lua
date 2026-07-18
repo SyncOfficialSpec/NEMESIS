@@ -1,13 +1,13 @@
 --[[
-	NEMESIS UI Library (v1.0)
+	PERDITION UI Library (v1.0)
 	A UI library for Roblox script executors.
 
 	Load:
-		local NEMESIS = loadstring(game:HttpGet("https://raw.githubusercontent.com/SyncOfficialSpec/NEMESIS/main/source.lua"))()
+		local PERDITION = loadstring(game:HttpGet("https://raw.githubusercontent.com/SyncOfficialSpec/NEMESIS/main/source.lua"))()
 
 	Hierarchy: Window > Tab > Group > Page > Section > controls
 
-		local Win     = NEMESIS.Window({ title = "NEMESIS" })
+		local Win     = PERDITION.Window({ title = "PERDITION" })
 		local Combat  = Win.Tab("Combat")
 		local Aimbot  = Combat.Group("AIMBOT")
 		local General = Aimbot.Page("General", { icon = "crosshair" })
@@ -20,9 +20,9 @@
 	See README.md for the full reference.
 ]]
 
-local NEMESIS = {}
-NEMESIS.Flags = {}
-NEMESIS.Version = "2.0.0"
+local PERDITION = {}
+PERDITION.Flags = {}
+PERDITION.Version = "3.0.0"
 
 -- Services (cloneref-safe)
 local function getService(name)
@@ -132,7 +132,7 @@ local function loadBrandLogo()
 	return brandLogoCache or nil
 end
 
--- Icons: NEMESIS ships its own Lucide atlas (white 48px sprites packed into
+-- Icons: PERDITION ships its own Lucide atlas (white 48px sprites packed into
 -- spritesheets under assets/icons, regenerate with tools/iconsgen). The index
 -- maps a name to {sheet, x, y}; sheets download once, cache on disk, and load
 -- through getcustomasset, same as the logo. Versioned filenames (v2) bust both
@@ -417,7 +417,7 @@ end
 
 local function tagSearch(frame, text)
 	pcall(function()
-		frame:SetAttribute("NemesisSearch", tostring(text or ""))
+		frame:SetAttribute("PerditionSearch", tostring(text or ""))
 	end)
 end
 
@@ -428,7 +428,7 @@ end
 -- NOTE for new presets: Sidebar and Topbar must share one colour (the live
 -- re-theme walk matches instances by current colour value, so keys that share
 -- a value must share it in every preset).
-NEMESIS.Themes = {
+PERDITION.Themes = {
 	Dark = {
 		Background = Color3.fromRGB(10, 11, 13),      -- window / content well (darkest plate)
 		Sidebar = Color3.fromRGB(14, 15, 18),         -- sidebar card
@@ -488,8 +488,8 @@ NEMESIS.Themes = {
 	},
 }
 
-local THEME = { Accent = Color3.fromRGB(140, 90, 255) }
-for k, v in pairs(NEMESIS.Themes.Dark) do THEME[k] = v end
+local THEME = { Accent = Color3.fromRGB(255, 59, 91) }
+for k, v in pairs(PERDITION.Themes.Dark) do THEME[k] = v end
 
 -- Type: Inter carries the words, Roboto Mono carries every numeric readout so
 -- digits never shift width while a value slides. Mono falls back to Inter on
@@ -546,28 +546,31 @@ local function hueSequence()
 end
 
 -- Tween helpers
--- mechanical easing set: everything eases Out and stops dead, nothing bounces.
--- Hover is asymmetric on purpose (fast in, gentle out) so surfaces feel like
--- they settle rather than blink.
+-- PERDITION motion law (synthesized from Syde + Gen2/Gen3 + Neverlose):
+--   colour / opacity / fades  -> Exponential, Out
+--   size / position           -> Quint, Out
+--   the sliding dock landing   -> Quart, Out (the one exception)
+-- Everything eases Out and stops dead, nothing bounces. Hover is asymmetric on
+-- purpose: crisp in (Quad 0.18), soft settle out (Exp 0.40).
 local TI = {
 	EXP = TweenInfo.new(0.26, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),          -- state commits, fills (size = Quint)
-	FAST = TweenInfo.new(0.3, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out),    -- small tints, arrows (Syde fades = Exp)
-	TAB = TweenInfo.new(0.32, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out),    -- tab/dock travel, page glide
+	FAST = TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),          -- micro tints: icon recolour, chevron nudge, small arrows
+	TAB = TweenInfo.new(0.32, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),          -- sliding dock indicator landing (the Quart exception)
 	EXPAND = TweenInfo.new(0.32, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out), -- overlays, collapse
 	POP = TweenInfo.new(0.26, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),          -- knob feedback (size = Quint)
 	SCROLL = TweenInfo.new(0.24, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),        -- smooth wheel scroll
 	TICK = TweenInfo.new(0.2, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out),    -- press-down, check draw
 }
 TI.OPEN = TweenInfo.new(0.42, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)           -- window morphs (size = Quint)
--- hover in/out on Syde's soft exponential (0.4s), not the old snappy Quad
-TI.HOVER = TweenInfo.new(0.4, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)     -- hover in
+-- asymmetric hover: crisp Quad in, soft Exp settle out
+TI.HOVER = TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)           -- hover in (crisp)
 TI.HOVEROFF = TweenInfo.new(0.4, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)  -- hover out (settle)
 TI.SLIDE = TI.EXPAND
 TI.NOTIFY = TweenInfo.new(0.4, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)    -- notification glide
--- Syde-matched motion: exponential for colour/opacity, quint for size/position,
--- long soft 0.4-0.7s durations. These carry the element animations 1:1.
-TI.SYDE = TweenInfo.new(0.7, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)      -- toggle fill, button state
-TI.SYDE_FADE = TweenInfo.new(0.57, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out) -- toggle gradient
+-- Syde-matched motion, tightened so it reads premium not slow: exponential for
+-- colour/opacity, quint for size/position.
+TI.SYDE = TweenInfo.new(0.6, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)      -- toggle fill, button state
+TI.SYDE_FADE = TweenInfo.new(0.5, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)  -- toggle gradient
 TI.SYDE_SIZE = TweenInfo.new(0.55, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)      -- slider fill, keybind pill
 TI.SYDE_REFLOW = TweenInfo.new(0.45, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out) -- element reflow / page reveal
 TI.SYDE_OPT = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)         -- dropdown option highlight
@@ -1059,7 +1062,7 @@ local function ensureRoot()
 		return screenGui
 	end
 	screenGui = Create("ScreenGui", {
-		Name = "NEMESIS_" .. tostring(math.random(1000, 9999)),
+		Name = "PERDITION_" .. tostring(math.random(1000, 9999)),
 		ResetOnSpawn = false,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		DisplayOrder = 9999,
@@ -1090,7 +1093,7 @@ local function ensureRoot()
 end
 
 -- Notifications
-function NEMESIS.Notify(opts)
+function PERDITION.Notify(opts)
 	opts = opts or {}
 	ensureRoot()
 	-- Rayfield Gen1 notification: a semi-transparent card grows its height in over
@@ -1167,9 +1170,9 @@ function NEMESIS.Notify(opts)
 	end)
 end
 
--- NEMESIS.Modal({ title, content, confirmText, cancelText, onConfirm, onCancel }):
+-- PERDITION.Modal({ title, content, confirmText, cancelText, onConfirm, onCancel }):
 -- a centred confirm dialog over a dimming backdrop; grows + fades in.
-function NEMESIS.Modal(opts)
+function PERDITION.Modal(opts)
 	opts = opts or {}
 	local gui = ensureRoot()
 	local backdrop = Create("TextButton", {
@@ -1217,10 +1220,10 @@ function NEMESIS.Modal(opts)
 	return { Close = close }
 end
 
--- NEMESIS.Toast({ content, duration, icon }): a small top-centre chip that slides
+-- PERDITION.Toast({ content, duration, icon }): a small top-centre chip that slides
 -- in and auto-dismisses. Lighter than Notify (which is the side card).
 local toastHolder, toasts
-function NEMESIS.Toast(opts)
+function PERDITION.Toast(opts)
 	opts = opts or {}
 	local gui = ensureRoot()
 	if not (toastHolder and toastHolder.Parent) then
@@ -1534,7 +1537,7 @@ function Elements.Listbox(parent, accent, opts)
 	end
 	local function fire()
 		local val = multi and listValues() or single
-		if opts.flag then NEMESIS.Flags[opts.flag] = val end
+		if opts.flag then PERDITION.Flags[opts.flag] = val end
 		if type(opts.callback) == "function" then pcall(opts.callback, val) end
 	end
 
@@ -1591,7 +1594,7 @@ function Elements.Listbox(parent, accent, opts)
 	function control.Get() return multi and listValues() or single end
 	function control.SetOptions(newOpts) options = newOpts or {}; rebuild() end
 
-	if opts.flag then NEMESIS.Flags[opts.flag] = control.Get() end
+	if opts.flag then PERDITION.Flags[opts.flag] = control.Get() end
 	bindFlag(opts.flag, control, "listbox")
 	return control
 end
@@ -1803,7 +1806,7 @@ function Elements.Toggle(parent, accent, opts)
 	click.MouseLeave:Connect(function() if not state then tween(box, { BackgroundColor3 = THEME.ToggleOff }, TI.HOVEROFF) end end)
 	function control.Set(v, silent, instant)
 		state = v and true or false
-		if opts.flag then NEMESIS.Flags[opts.flag] = state end
+		if opts.flag then PERDITION.Flags[opts.flag] = state end
 		-- instant skips the 0.7s animation (config hydration paints the final state at
 		-- once); silent skips the callback. they are independent.
 		render(not instant)
@@ -1815,7 +1818,7 @@ function Elements.Toggle(parent, accent, opts)
 
 	click.MouseButton1Click:Connect(function() control.Set(not state) end)
 
-	if opts.flag then NEMESIS.Flags[opts.flag] = state end
+	if opts.flag then PERDITION.Flags[opts.flag] = state end
 	bindFlag(opts.flag, control, "toggle")
 	render(false)
 	return control
@@ -1921,7 +1924,7 @@ function Elements.Slider(parent, accent, opts)
 		-- a drag reads as a smooth glide rather than a hard snap
 		tween(fill, { Size = UDim2.new(frac, 0, 1, 0) }, TI.SYDE_SIZE)
 		tween(handle, { Position = UDim2.new(frac, 0, 0.5, 0) }, TI.SYDE_SIZE)
-		if opts.flag then NEMESIS.Flags[opts.flag] = value end
+		if opts.flag then PERDITION.Flags[opts.flag] = value end
 		if fire and type(opts.callback) == "function" then
 			pcall(opts.callback, value)
 		end
@@ -1949,7 +1952,7 @@ function Elements.Slider(parent, accent, opts)
 		if num then control.Set(num) else valueLabel.Text = fmt(value) end
 	end)
 
-	if opts.flag then NEMESIS.Flags[opts.flag] = value end
+	if opts.flag then PERDITION.Flags[opts.flag] = value end
 	bindFlag(opts.flag, control, "slider")
 	return control
 end
@@ -2104,7 +2107,7 @@ function Elements.Dropdown(parent, accent, opts)
 		current.TextColor3 = (multi and #listValues() > 0 or single ~= nil) and THEME.Text or THEME.SubText
 	end
 	local function fire()
-		if opts.flag then NEMESIS.Flags[opts.flag] = multi and listValues() or single end
+		if opts.flag then PERDITION.Flags[opts.flag] = multi and listValues() or single end
 		if type(opts.callback) == "function" then
 			pcall(opts.callback, multi and listValues() or single)
 		end
@@ -2308,7 +2311,7 @@ function Elements.Dropdown(parent, accent, opts)
 	end)
 
 	rebuildOptions(); refreshLabel()
-	if opts.flag then NEMESIS.Flags[opts.flag] = control.Get() end
+	if opts.flag then PERDITION.Flags[opts.flag] = control.Get() end
 	bindFlag(opts.flag, control, "dropdown")
 	return control
 end
@@ -2355,7 +2358,7 @@ function Elements.Input(parent, accent, opts)
 	local control = {}
 	function control.Set(v)
 		box.Text = tostring(v)
-		if opts.flag then NEMESIS.Flags[opts.flag] = box.Text end
+		if opts.flag then PERDITION.Flags[opts.flag] = box.Text end
 		if type(opts.callback) == "function" then pcall(opts.callback, box.Text) end
 	end
 	function control.Get() return box.Text end
@@ -2364,10 +2367,10 @@ function Elements.Input(parent, accent, opts)
 	end)
 	box.FocusLost:Connect(function()
 		if fieldStroke then tween(fieldStroke, { Color = THEME.ElementStroke }, TI.EXP) end
-		if opts.flag then NEMESIS.Flags[opts.flag] = box.Text end
+		if opts.flag then PERDITION.Flags[opts.flag] = box.Text end
 		if type(opts.callback) == "function" then pcall(opts.callback, box.Text) end
 	end)
-	if opts.flag then NEMESIS.Flags[opts.flag] = box.Text end
+	if opts.flag then PERDITION.Flags[opts.flag] = box.Text end
 	bindFlag(opts.flag, control, "input")
 	return control
 end
@@ -2442,7 +2445,7 @@ function Elements.Keybind(parent, accent, opts)
 		btn.TextColor3 = THEME.Text
 		if fieldStroke then tween(fieldStroke, { Color = THEME.ElementStroke, Thickness = 1 }, TI.EXP) end
 		fitPill()
-		if opts.flag then NEMESIS.Flags[opts.flag] = key end
+		if opts.flag then PERDITION.Flags[opts.flag] = key end
 	end
 	function control.Get() return key end
 
@@ -2504,7 +2507,7 @@ function Elements.Keybind(parent, accent, opts)
 		end
 	end)
 
-	if opts.flag then NEMESIS.Flags[opts.flag] = key end
+	if opts.flag then PERDITION.Flags[opts.flag] = key end
 	bindFlag(opts.flag, control, "keybind")
 	return control
 end
@@ -2658,7 +2661,7 @@ function Elements.ColorPicker(parent, accent, opts)
 		-- single-colour consumers keep updating live even in Double / Multi mode
 		local c = cur()
 		local primary = Color3.fromHSV(c.h, c.s, c.v)
-		if opts.flag then NEMESIS.Flags[opts.flag] = value end
+		if opts.flag then PERDITION.Flags[opts.flag] = value end
 		if type(opts.callback) == "function" then pcall(opts.callback, value, al, primary) end
 	end
 	local refreshRailRef  -- set when the panel (and its rail) exist
@@ -3042,7 +3045,7 @@ function Elements.ColorPicker(parent, accent, opts)
 	sw2.MouseButton1Click:Connect(function() openPanel(nil, 2) end)
 	sw1.MouseButton2Click:Connect(function()
 		local hex = "#" .. hexOf(slotColor(1))
-		if setClipboard(hex) then NEMESIS.Notify({ title = "Copied", content = hex, duration = 2 }) end
+		if setClipboard(hex) then PERDITION.Notify({ title = "Copied", content = hex, duration = 2 }) end
 	end)
 
 	function control.Set(c, a)
@@ -3136,7 +3139,7 @@ function Elements.ProgressBar(parent, accent, opts)
 		local frac = (value - min) / span
 		pct.Text = (max <= 1 and tostring(math.floor(frac * 100 + 0.5)) or tostring(math.floor(value + 0.5))) .. (opts.suffix or "%")
 		tween(fill, { Size = UDim2.new(frac, 0, 1, 0) }, animate == false and TweenInfo.new(0) or TI.SYDE_SIZE)
-		if opts.flag then NEMESIS.Flags[opts.flag] = value end
+		if opts.flag then PERDITION.Flags[opts.flag] = value end
 	end
 	function control.Get() return value end
 	control.Set(value)
@@ -3197,14 +3200,14 @@ function Elements.Checkbox(parent, accent, opts)
 	function control.Set(v, fire)
 		state = v and true or false
 		render(true)
-		if opts.flag then NEMESIS.Flags[opts.flag] = state end
+		if opts.flag then PERDITION.Flags[opts.flag] = state end
 		if fire ~= false and type(opts.callback) == "function" then pcall(opts.callback, state) end
 	end
 	function control.Get() return state end
 	local click = Create("TextButton", { Size = UDim2.new(1, ROW_PAD * 2, 1, 0), Position = UDim2.new(0, -ROW_PAD, 0, 0), BackgroundTransparency = 1, Text = "", Parent = row })
 	click.MouseButton1Click:Connect(function() control.Set(not state) end)
 	render(false)
-	if opts.flag then NEMESIS.Flags[opts.flag] = state end
+	if opts.flag then PERDITION.Flags[opts.flag] = state end
 	bindFlag(opts.flag, control, "toggle")
 	return control
 end
@@ -3218,7 +3221,7 @@ function Elements.CopyButton(parent, accent, opts)
 		text = opts.text or "Copy", button = opts.button or "Copy", icon = opts.icon or "copy", desc = opts.desc,
 		callback = function()
 			if setClipboard(tostring(text)) then
-				NEMESIS.Notify({ title = "Copied", content = "Copied to clipboard.", duration = 2, icon = "copy" })
+				PERDITION.Notify({ title = "Copied", content = "Copied to clipboard.", duration = 2, icon = "copy" })
 			end
 		end,
 	})
@@ -3609,7 +3612,7 @@ function Elements.HoldButton(parent, accent, opts)
 			if holding and session == mine then
 				holding = false
 				if type(opts.callback) == "function" then pcall(opts.callback) end
-				if opts.notify ~= false then NEMESIS.Notify({ title = opts.completionTitle or "Confirmed", content = opts.completionText or "Action confirmed.", duration = 2, icon = opts.completionIcon or "check" }) end
+				if opts.notify ~= false then PERDITION.Notify({ title = opts.completionTitle or "Confirmed", content = opts.completionText or "Action confirmed.", duration = 2, icon = opts.completionIcon or "check" }) end
 				tween(fill, { Size = UDim2.new(0, 0, 1, 0) }, TI.HOVEROFF)
 			end
 		end)
@@ -3685,7 +3688,7 @@ function Elements.SlideButton(parent, accent, opts)
 		prompt.TextTransparency = 0
 		place(maxX(), true)
 		if type(opts.callback) == "function" then pcall(opts.callback) end
-		if opts.notify ~= false then NEMESIS.Notify({ title = opts.completionTitle or "Confirmed", content = opts.completionText or "Action confirmed.", duration = 2, icon = opts.completionIcon or "check" }) end
+		if opts.notify ~= false then PERDITION.Notify({ title = opts.completionTitle or "Confirmed", content = opts.completionText or "Action confirmed.", duration = 2, icon = opts.completionIcon or "check" }) end
 		if not opts.stayConfirmed then task.delay(1.1, function() if confirmed then reset(true) end end) end
 	end
 	knob.InputBegan:Connect(function(input)
@@ -3903,13 +3906,13 @@ function Elements.SegmentedPicker(parent, accent, opts)
 	for i, o in ipairs(options) do
 		local b = Create("TextButton", { Size = UDim2.new(1 / n, 0, 1, 0), Position = UDim2.new((i - 1) / n, 0, 0, 0), BackgroundTransparency = 1, AutoButtonColor = false, Font = FONT_MED, Text = tostring(o), TextColor3 = THEME.SubText, TextSize = 12, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 2, Parent = track })
 		btns[i] = b
-		b.MouseButton1Click:Connect(function() sel = i; paint(true); if opts.flag then NEMESIS.Flags[opts.flag] = options[sel] end if type(opts.callback) == "function" then pcall(opts.callback, options[sel]) end end)
+		b.MouseButton1Click:Connect(function() sel = i; paint(true); if opts.flag then PERDITION.Flags[opts.flag] = options[sel] end if type(opts.callback) == "function" then pcall(opts.callback, options[sel]) end end)
 	end
 	function control.Set(v) for i, o in ipairs(options) do if o == v then sel = i end end paint(true) end
 	function control.Get() return options[sel] end
 	control.CurrentOption = options[sel]
 	paint(false)
-	if opts.flag then NEMESIS.Flags[opts.flag] = options[sel] end
+	if opts.flag then PERDITION.Flags[opts.flag] = options[sel] end
 	bindFlag(opts.flag, control, "segmented")
 	return control
 end
@@ -4246,7 +4249,7 @@ local function keyGate(kopts, windowTitle)
 		Size = UDim2.new(1, -28, 0, 20),
 		BackgroundTransparency = 1,
 		Font = FONT_SEMI,
-		Text = tostring(kopts.title or ((windowTitle or "NEMESIS") .. "  |  key required")),
+		Text = tostring(kopts.title or ((windowTitle or "PERDITION") .. "  |  key required")),
 		TextColor3 = THEME.Text,
 		TextSize = 15,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -4362,21 +4365,21 @@ local function keyGate(kopts, windowTitle)
 	return result
 end
 
-function NEMESIS.Window(opts)
+function PERDITION.Window(opts)
 	opts = opts or {}
 	-- opts.theme = { Background = Color3, Element = Color3, ... } overrides any
 	-- THEME colour (see the Theme table near the top of this file for the keys)
 	if type(opts.theme) == "table" then
 		for key, value in pairs(opts.theme) do THEME[key] = value end
-	elseif type(opts.theme) == "string" and NEMESIS.Themes[opts.theme] then
+	elseif type(opts.theme) == "string" and PERDITION.Themes[opts.theme] then
 		-- a preset name works too: Window({ theme = "Light" })
-		for key, value in pairs(NEMESIS.Themes[opts.theme]) do THEME[key] = value end
+		for key, value in pairs(PERDITION.Themes[opts.theme]) do THEME[key] = value end
 	end
 
 	-- key system gate: nothing is built until the key checks out
 	if type(opts.key) == "table" then
 		if not keyGate(opts.key, opts.title) then
-			error("NEMESIS: key required", 0)
+			error("PERDITION: key required", 0)
 		end
 	end
 	local accent = opts.accent or THEME.Accent
@@ -4494,14 +4497,16 @@ function NEMESIS.Window(opts)
 	})
 	makeDraggable(root, topbar, function() return lockToScreen end, function() return dragSmooth end)
 
-	-- logo: the real NEMESIS brand image (downloaded + loaded via getcustomasset,
+	-- logo: the real PERDITION brand image (downloaded + loaded via getcustomasset,
 	-- no Roblox upload). Falls back to a gradient "N" tile on executors without
 	-- custom-asset support. opts.logo = <assetId> forces an uploaded image.
 	local logoSpec = (opts.logo ~= nil) and resolveIcon(opts.logo) or nil
-	local brandAsset = (opts.logo == nil) and loadBrandLogo() or nil
+	-- PERDITION shows a clean text wordmark by default (the old image said NEMESIS);
+	-- a proper branded logo lands with the visual-identity pass. opts.logo still wins.
+	local brandAsset = nil
 
-	-- brand: the NEMESIS wordmark image (its own purple/white colours, so it is
-	-- not tinted). Falls back to a bold "NEMESIS" text if the image cannot load.
+	-- brand: the PERDITION wordmark image (its own purple/white colours, so it is
+	-- not tinted). Falls back to a bold "PERDITION" text if the image cannot load.
 	local WORDMARK_H, WORDMARK_W = 22, 148   -- 6.72:1 aspect
 	local logoImage
 	local wordmark  -- kept for Win.SetTitle compatibility (text fallback)
@@ -4521,10 +4526,10 @@ function NEMESIS.Window(opts)
 		wordmark = Create("TextLabel", {
 			Position = UDim2.new(0, 16, 0.5, 0),
 			AnchorPoint = Vector2.new(0, 0.5),
-			Size = UDim2.new(0, 120, 1, 0),
+			Size = UDim2.new(0, 170, 1, 0),
 			BackgroundTransparency = 1,
 			Font = FONT_BOLD,
-			Text = string.upper(tostring(opts.title or "NEMESIS")),
+			Text = string.upper(tostring(opts.title or "PERDITION")),
 			TextColor3 = THEME.Text,
 			TextSize = 17,
 			TextXAlignment = Enum.TextXAlignment.Left,
@@ -4900,7 +4905,7 @@ function NEMESIS.Window(opts)
 		Size = UDim2.new(1, -110, 0, 16),
 		BackgroundTransparency = 1,
 		Font = FONT_SEMI,
-		Text = tostring(profName or opts.game or "NEMESIS"),
+		Text = tostring(profName or opts.game or "PERDITION"),
 		TextColor3 = THEME.Text,
 		TextSize = 13,
 		TextTruncate = Enum.TextTruncate.AtEnd,
@@ -5059,7 +5064,7 @@ function NEMESIS.Window(opts)
 		text = string.lower(text or "")
 		local total, hits = 0, 0
 		for _, d in ipairs(page.body:GetDescendants()) do
-			local ok, tag = pcall(function() return d:GetAttribute("NemesisSearch") end)
+			local ok, tag = pcall(function() return d:GetAttribute("PerditionSearch") end)
 			if ok and tag ~= nil then
 				total = total + 1
 				local hit = (text == "") or (string.find(string.lower(tag), text, 1, true) ~= nil)
@@ -5209,7 +5214,7 @@ function NEMESIS.Window(opts)
 	-- ===== configs: every { flag = ... } element serialized to json on disk =====
 	local cfgFolder = nil
 	if hasFileApi() and opts.config ~= false then
-		local safe = tostring(opts.title or "NEMESIS"):gsub("[^%w%-_ ]", ""):gsub("%s+", "_")
+		local safe = tostring(opts.title or "PERDITION"):gsub("[^%w%-_ ]", ""):gsub("%s+", "_")
 		cfgFolder = (type(opts.config) == "table" and opts.config.folder)
 			or (type(opts.folder) == "string" and opts.folder)
 			or ("Nemesis/" .. safe)
@@ -5362,7 +5367,7 @@ function NEMESIS.Window(opts)
 
 		saveBtn.MouseButton1Click:Connect(function()
 			if Win.SaveConfig(cfgCurrent) then
-				NEMESIS.Notify({ title = "Config saved", content = cfgCurrent, duration = 2, icon = "save" })
+				PERDITION.Notify({ title = "Config saved", content = cfgCurrent, duration = 2, icon = "save" })
 			end
 		end)
 
@@ -5440,7 +5445,7 @@ function NEMESIS.Window(opts)
 				end)
 				rowBtn.MouseButton2Click:Connect(function()
 					Win.SetAutoload(isAuto and nil or name)
-					NEMESIS.Notify({
+					PERDITION.Notify({
 						title = "Autoload",
 						content = isAuto and "cleared" or (name .. " loads on start"),
 						duration = 2,
@@ -5476,19 +5481,19 @@ function NEMESIS.Window(opts)
 				local name = "config" .. n
 				if Win.SaveConfig(name) then
 					setCurrent(name)
-					NEMESIS.Notify({ title = "Config created", content = name, duration = 2 })
+					PERDITION.Notify({ title = "Config created", content = name, duration = 2 })
 				end
 				closePanel()
 			end)
 			actionBtn("SAVE", 1 / 3, nil, function()
 				if Win.SaveConfig(cfgCurrent) then
-					NEMESIS.Notify({ title = "Config saved", content = cfgCurrent, duration = 2 })
+					PERDITION.Notify({ title = "Config saved", content = cfgCurrent, duration = 2 })
 				end
 				closePanel()
 			end)
 			actionBtn("DEL", 2 / 3, DANGER, function()
 				Win.DeleteConfig(cfgCurrent)
-				NEMESIS.Notify({ title = "Config deleted", content = cfgCurrent, duration = 2 })
+				PERDITION.Notify({ title = "Config deleted", content = cfgCurrent, duration = 2 })
 				local left = Win.ListConfigs()
 				setCurrent(left[1] or "default")
 				closePanel()
@@ -5517,11 +5522,11 @@ function NEMESIS.Window(opts)
 	-- palette, then updates THEME so anything built later uses the new one
 	local THEME_COLOR_PROPS = { "BackgroundColor3", "TextColor3", "ImageColor3", "PlaceholderColor3", "ScrollBarImageColor3", "Color" }
 	function Win.SetTheme(theme)
-		local palette = (type(theme) == "string") and NEMESIS.Themes[theme] or theme
+		local palette = (type(theme) == "string") and PERDITION.Themes[theme] or theme
 		if type(palette) ~= "table" then return false end
 
 		local keys = {}
-		for k in pairs(NEMESIS.Themes.Dark) do keys[#keys + 1] = k end
+		for k in pairs(PERDITION.Themes.Dark) do keys[#keys + 1] = k end
 		table.sort(keys)
 		local oldByHex = {}
 		for _, k in ipairs(keys) do
@@ -5734,14 +5739,14 @@ function NEMESIS.Window(opts)
 				AutomaticSize = Enum.AutomaticSize.X,
 				BackgroundColor3 = THEME.Topbar,
 				Font = FONT_MED,
-				Text = "  " .. tostring(text or "NEMESIS") .. "  ",
+				Text = "  " .. tostring(text or "PERDITION") .. "  ",
 				TextColor3 = THEME.Text,
 				TextSize = 13,
 				Parent = screenGui,
 			}, { corner(8), accentProp(stroke(accent, 1, 0.4), "Color", accent) })
 			makeDraggable(watermark, watermark)
 		end
-		watermark.Text = "  " .. tostring(text or "NEMESIS") .. "  "
+		watermark.Text = "  " .. tostring(text or "PERDITION") .. "  "
 		watermark.Visible = true
 	end
 
@@ -5819,7 +5824,7 @@ function NEMESIS.Window(opts)
 	end
 
 	-- Win.ResetLook(): restore the menu's original default appearance
-	local origAccent = opts.accent or Color3.fromRGB(140, 90, 255)
+	local origAccent = opts.accent or Color3.fromRGB(255, 59, 91)
 	local origLogo = opts.logoColor or THEME.Text
 	function Win.ResetLook()
 		Win.SetRainbow(false)
@@ -5845,7 +5850,7 @@ function NEMESIS.Window(opts)
 	end
 
 	-- small live setters
-	function Win.SetTitle(t) if wordmark then wordmark.Text = string.upper(tostring(t or "NEMESIS")) end end
+	function Win.SetTitle(t) if wordmark then wordmark.Text = string.upper(tostring(t or "PERDITION")) end end
 	function Win.SetGame(t) gameLabel.Text = tostring(t or "") end
 	function Win.SetStatus(t) statusLabel.Text = tostring(t or "") end
 
@@ -6755,7 +6760,7 @@ function NEMESIS.Window(opts)
 		ZIndex = 7,
 		Parent = root,
 	})
-	-- the exact curved corner grip from the original NEMESIS (a Roblox-hosted
+	-- the exact curved corner grip from the original PERDITION (a Roblox-hosted
 	-- asset, so it resolves on any executor), 9-sliced so it stretches cleanly
 	local resizeIcon = Create("ImageLabel", {
 		Name = "Icon",
@@ -7175,7 +7180,7 @@ function NEMESIS.Window(opts)
 		feelSec.Toggle({ text = "Animations", icon = "zap", default = true, desc = "Turn off for instant, motion-free UI.",
 			callback = function(on) Win.SetAnimations(on) end })
 		feelSec.Toggle({ text = "Watermark", icon = "tag", default = false, desc = "A small draggable badge on screen.",
-			callback = function(on) Win.SetWatermark(on, opts.title or "NEMESIS") end })
+			callback = function(on) Win.SetWatermark(on, opts.title or "PERDITION") end })
 		feelSec.Slider({ text = "UI scale", icon = "maximize", min = 60, max = 140, default = 100, suffix = "%",
 			desc = "Shrink or grow the whole menu.",
 			callback = function(v) Win.SetScale(v / 100) end })
@@ -7220,7 +7225,7 @@ function NEMESIS.Window(opts)
 			if id ~= "" and logoImage then
 				local img = string.match(id, "^%d+$") and ("rbxassetid://" .. id) or id
 				pcall(function() logoImage.Image = img end)
-				NEMESIS.Notify({ title = "Logo", content = "Applied.", duration = 2, icon = "check" })
+				PERDITION.Notify({ title = "Logo", content = "Applied.", duration = 2, icon = "check" })
 			end
 		end })
 
@@ -7232,7 +7237,7 @@ function NEMESIS.Window(opts)
 			local id = tostring(bgInput.Get() or ""):gsub("%s+", "")
 			if id ~= "" then
 				Win.SetBackgroundImage(id, bgOpacity)
-				NEMESIS.Notify({ title = "Background", content = "Applied.", duration = 2, icon = "image" })
+				PERDITION.Notify({ title = "Background", content = "Applied.", duration = 2, icon = "image" })
 			end
 		end })
 		bgSec.Dropdown({ text = "Fit", icon = "maximize", options = { "Crop", "Stretch", "Fit", "Tile" }, default = "Crop",
@@ -7276,11 +7281,11 @@ function NEMESIS.Window(opts)
 		resetSec.Label("Put the menu back to its default look (theme, accent, font, colours, transparency, background).")
 		resetSec.Button({ text = "Reset to default", button = "Reset", icon = "rotate-ccw", callback = function()
 			if Win.ResetLook then Win.ResetLook() end
-			NEMESIS.Notify({ title = "Reset", content = "Menu restored to default.", duration = 2, icon = "rotate-ccw" })
+			PERDITION.Notify({ title = "Reset", content = "Menu restored to default.", duration = 2, icon = "rotate-ccw" })
 		end })
 
 		local aboutSec = S.Section("ABOUT")
-		aboutSec.Paragraph({ title = "NEMESIS " .. NEMESIS.Version, content = "UI library for Roblox executors." })
+		aboutSec.Paragraph({ title = "PERDITION " .. PERDITION.Version, content = "UI library for Roblox executors." })
 		aboutSec.Button({ text = "Unload menu", button = "Unload", icon = "trash-2", callback = function() Win.Destroy() end })
 	end
 
@@ -7298,7 +7303,7 @@ function NEMESIS.Window(opts)
 
 		local httpReq = (syn and syn.request) or (type(request) == "function" and request) or (http and http.request) or (http_request)
 		local HttpService = game:GetService("HttpService")
-		local geminiKey = tostring(NEMESIS.AIKey or "")
+		local geminiKey = tostring(PERDITION.AIKey or "")
 		local geminiModel = "gemini-2.0-flash"
 		local history = {}   -- Gemini format: { role="user"/"model", parts={{text=...}} }
 		local busy = false
@@ -7313,7 +7318,7 @@ function NEMESIS.Window(opts)
 		}, { corner(6), stroke(THEME.ElementStroke, 1, 0.4), padXY(10, 0) })
 		keyBox.FocusLost:Connect(function()
 			geminiKey = tostring(keyBox.Text or ""):gsub("^%s+", ""):gsub("%s+$", "")
-			NEMESIS.AIKey = geminiKey
+			PERDITION.AIKey = geminiKey
 		end)
 
 		-- messages (scrolling conversation)
@@ -7436,8 +7441,8 @@ function NEMESIS.Window(opts)
 	end
 
 	Win.Instance = root
-	Win.Notify = NEMESIS.Notify
+	Win.Notify = PERDITION.Notify
 	return Win
 end
 
-return NEMESIS
+return PERDITION

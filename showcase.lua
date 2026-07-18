@@ -1,5 +1,5 @@
 --[[
-	NEMESIS - full showcase
+	PERDITION - full showcase
 	Loadstring this in your executor to see every element, every mode, and the
 	programmatic API in one window.
 
@@ -11,15 +11,15 @@
 ]]
 
 -- ?_=os.time() busts the GitHub / executor cache so you always pull the latest
-local NEMESIS = loadstring(game:HttpGet("https://raw.githubusercontent.com/SyncOfficialSpec/NEMESIS/main/source.lua?_=" .. tostring(os.time())))()
+local PERDITION = loadstring(game:HttpGet("https://raw.githubusercontent.com/SyncOfficialSpec/NEMESIS/main/source.lua?_=" .. tostring(os.time())))()
 
 local function notify(title, content, duration)
-	NEMESIS.Notify({ title = title, content = content, duration = duration or 3 })
+	PERDITION.Notify({ title = title, content = content, duration = duration or 3 })
 end
 
-local Win = NEMESIS.Window({
-	title = "NEMESIS",
-	accent = Color3.fromRGB(140, 90, 255),   -- purple accent
+local Win = PERDITION.Window({
+	title = "PERDITION",
+	accent = Color3.fromRGB(255, 59, 91),   -- purple accent
 	columns = 2,                              -- panels per page (desktop)
 	toggleKey = Enum.KeyCode.RightShift,
 	game = "Showcase",                        -- sidebar footer, first line
@@ -97,7 +97,7 @@ s_co.ColorPicker({ text = "Double color", gradient = true, default = Color3.from
 s_co.ColorPicker({ text = "Multi color", multi = true, colors = { Color3.fromRGB(255, 80, 80), Color3.fromRGB(255, 220, 60), Color3.fromRGB(80, 220, 255) }, flag = "sc_c_multi" })
 s_co.Label("Right-click a swatch to copy its hex. In gradient mode you get two swatches; right-click a saved swatch to remove it.")
 s_co.Divider({ text = "MENU THEME" })
-s_co.ColorPicker({ text = "Menu accent (live)", default = Color3.fromRGB(140, 90, 255), flag = "sc_accent",
+s_co.ColorPicker({ text = "Menu accent (live)", default = Color3.fromRGB(255, 59, 91), flag = "sc_accent",
 	callback = function(color) Win.SetAccent(color) end })
 
 -- Page: Lists (Divider + Listbox)
@@ -129,12 +129,12 @@ local s_pick = WG.Section("PICKERS")
 s_pick.SegmentedPicker({ text = "Mode", options = { "Legit", "Rage", "Semi" }, default = "Rage", callback = function(v) notify("Mode", v, 1.2) end })
 s_pick.GradientPicker({ text = "ESP gradient", colors = { Color3.fromRGB(255, 60, 90), Color3.fromRGB(90, 120, 255) } })
 s_pick.Button({ text = "Confirm dialog", button = "Open", callback = function()
-	NEMESIS.Modal({ title = "Are you sure?", content = "This will reset all of your settings to default.", confirmText = "Reset", onConfirm = function() notify("Modal", "confirmed", 1.5) end })
+	PERDITION.Modal({ title = "Are you sure?", content = "This will reset all of your settings to default.", confirmText = "Reset", onConfirm = function() notify("Modal", "confirmed", 1.5) end })
 end })
-s_pick.Button({ text = "Toast", button = "Show", callback = function() NEMESIS.Toast({ content = "Saved to config", icon = "check", duration = 2.5 }) end })
+s_pick.Button({ text = "Toast", button = "Show", callback = function() PERDITION.Toast({ content = "Saved to config", icon = "check", duration = 2.5 }) end })
 
 local s_deco = WG.Section("DECORATIVE")
-s_deco.ShimmerLabel({ text = "NEMESIS PREMIUM", bold = true })
+s_deco.ShimmerLabel({ text = "PERDITION PREMIUM", bold = true })
 s_deco.Spacer({ height = 6 })
 s_deco.FAQ({ items = {
 	{ question = "How do I bind a key?", answer = "Click a keybind pill, then press any key or mouse button." },
@@ -152,7 +152,7 @@ s_deco.ScrollHint({ text = "Scroll for more" })
 local Info = Elements.Page("Info", { icon = "info" })
 local s_info = Info.Section("ABOUT")
 s_info.Paragraph({ title = "Standalone pages", content = "Pages added with Tab.Page (instead of Group.Page) render below the groups, like this one." })
-s_info.Label("Every flag value lives in NEMESIS.Flags, keyed by its flag name.")
+s_info.Label("Every flag value lives in PERDITION.Flags, keyed by its flag name.")
 
 -- TAB 2 : LAYOUT  (groups, dividers, and the two-column grid)
 local Layout = Win.Tab("Layout", "columns-2")
@@ -235,7 +235,7 @@ s_note.Button({ text = "Short notification", button = "2s", callback = function(
 s_note.Button({ text = "Long notification", button = "6s", callback = function() notify("Reminder", "This one sticks around for six seconds.", 6) end })
 s_note.Input({ text = "Custom message", placeholder = "type then press Send", flag = "sc_note_msg" })
 s_note.Button({ text = "Send custom", button = "Send", callback = function()
-	local msg = NEMESIS.Flags.sc_note_msg
+	local msg = PERDITION.Flags.sc_note_msg
 	notify("Custom", (msg ~= nil and msg ~= "" and msg) or "Type something in the box above.", 3)
 end })
 
@@ -258,6 +258,6 @@ s_save.Button({ text = "Autoload showcase.json", button = "Mark", callback = fun
 end })
 
 local s_credits = Cfg.Section("ABOUT")
-s_credits.Paragraph({ title = "NEMESIS", content = "idk" })
+s_credits.Paragraph({ title = "PERDITION", content = "idk" })
 
-NEMESIS.Notify({ title = "NEMESIS", content = "Showcase loaded. Explore every tab.", duration = 5 })
+PERDITION.Notify({ title = "PERDITION", content = "Showcase loaded. Explore every tab.", duration = 5 })

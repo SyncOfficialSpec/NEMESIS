@@ -3206,7 +3206,7 @@ function Elements.BarChart(parent, accent, opts)
 		local labelRoom = hasLabels and 16 or 0
 		for i, v in ipairs(vals) do
 			local h = math.max(3, v / maxv * (plot.AbsoluteSize.Y - 8 - labelRoom))
-			local barGrad = Create("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(178, 178, 178)) })
+			local barGrad = Create("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(178, 178, 178)), Transparency = NumberSequence.new(0.85, 1) })
 			local bar = Create("Frame", {
 				AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new((i - 0.5) / n, 0, 1, -labelRoom),
 				Size = UDim2.new(0, bw, 0, animate and 0 or h), BackgroundColor3 = barColor, ZIndex = 2, Parent = plot,
@@ -3225,10 +3225,19 @@ function Elements.BarChart(parent, accent, opts)
 		valLbl.Text = prefix .. tostring(vals[#vals] or 0) .. suffix
 	end
 	local chart = {}
-	function chart.Set(s) if s then if s.Points then vals = cleanNumbers(s.Points) end if s.text or s.Name then end end redraw(true) end
+	function chart.Set(s)
+		if s and s.Points then
+			vals = cleanNumbers(s.Points)
+			labels = {}
+			for i, v in ipairs(s.Points) do if type(v) == "table" then labels[i] = v.Label or v.label end end
+			hasLabels = next(labels) ~= nil
+		end
+		redraw(true)
+	end
 	function chart.Push(v) vals[#vals + 1] = tonumber(v) or 0; if #vals > (opts.maxPoints or 16) then table.remove(vals, 1) end redraw(true) end
 	function chart.Replay() redraw(true) end
 	task.defer(function() redraw(true) end)
+	plot:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() redraw(false) end)
 	return chart
 end
 
@@ -3335,7 +3344,7 @@ function Elements.Chart(parent, accent, opts)
 			local seg = 1
 			for c = 1, count do
 				local f = cols[c]
-				if not f then f = Create("Frame", { AnchorPoint = Vector2.new(0, 1), BorderSizePixel = 0, BackgroundColor3 = lineColor, BackgroundTransparency = 0.12, Parent = fillHolder }, { Create("UIGradient", { Rotation = 90, Transparency = NumberSequence.new(0, 0.78) }) }); cols[c] = f end
+				if not f then f = Create("Frame", { AnchorPoint = Vector2.new(0, 1), BorderSizePixel = 0, BackgroundColor3 = lineColor, BackgroundTransparency = 0.12, Parent = fillHolder }, { Create("UIGradient", { Rotation = 90, Color = ColorSequence.new(lineColor, lineColor), Transparency = NumberSequence.new(0, 0.78) }) }); cols[c] = f end
 				local left = fillX + (c - 1) * colW
 				local cw = math.min(colW, rxs[rn] - left)
 				local cx = left + cw / 2
@@ -3415,6 +3424,10 @@ function Elements.StackedChart(parent, accent, opts)
 	end
 	local body = Create("Frame", { Position = UDim2.new(0, 0, 0, 22), Size = UDim2.new(1, 0, 1, -22), BackgroundTransparency = 1, Parent = plot })
 	local function redraw(animate)
+		-- grow / shrink the card to the current row count so rows added via Set are
+		-- not silently clipped by the card's fixed construction-time height
+		local wantH = 44 + 34 * math.max(#rows, 1) + 24
+		tween(card, { Size = UDim2.new(1, -ROW_PAD * 2, 0, wantH) }, animate and TI.SYDE_REFLOW or TweenInfo.new(0))
 		for _, c in ipairs(body:GetChildren()) do c:Destroy() end
 		for ri, r in ipairs(rows) do
 			local rowVals = r.Values or r.values or r
@@ -3436,6 +3449,7 @@ function Elements.StackedChart(parent, accent, opts)
 	function chart.Set(s) if s and s.Rows then rows = s.Rows end redraw(true) end
 	function chart.Replay() redraw(true) end
 	task.defer(function() redraw(true) end)
+	plot:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() redraw(false) end)
 	return chart
 end
 

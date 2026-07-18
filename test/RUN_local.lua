@@ -6094,23 +6094,62 @@ function NEMESIS.Window(opts)
 				dragConn = RunService.RenderStepped:Connect(stepDrag)
 			end
 			-- subtle tilt toward the cursor while hovering a panel (from the Syde-style card)
+			-- fake-3D hover: the card leans toward the cursor (rotation) while a soft
+			-- drop-shadow shifts the opposite way and a highlight sweeps toward the
+			-- cursor. the shadow + highlight are SIBLING layers (ImageLabels, which the
+			-- masonry ChildAdded ignores) so they never disturb the card's own layout.
 			local function wireTilt(card)
 				local tc
+				local shadow = Create("ImageLabel", {
+					BackgroundTransparency = 1, Image = loadArt(RF_SHADOW.name) or "",
+					ImageColor3 = Color3.fromRGB(0, 0, 0), ImageTransparency = 1,
+					ScaleType = Enum.ScaleType.Slice, SliceCenter = RF_SHADOW.slice,
+					ZIndex = 0, Visible = false, Parent = columnsHolder,
+				})
+				local glow = Create("ImageLabel", {
+					BackgroundTransparency = 1, Image = loadArt("cal1_glow_dot.png") or "",
+					ImageColor3 = Color3.fromRGB(255, 255, 255), ImageTransparency = 1,
+					ZIndex = 5, Visible = false, Parent = columnsHolder,
+				})
+				card.Destroying:Connect(function() pcall(function() shadow:Destroy() end); pcall(function() glow:Destroy() end) end)
+				local function place()
+					local sc = uiScale()
+					local m = UserInputService:GetMouseLocation()
+					local p, s = card.AbsolutePosition, card.AbsoluteSize
+					if s.X < 1 then return end
+					local dx = math.clamp((m.X - (p.X + s.X / 2)) / (s.X / 2), -1, 1)
+					local dy = math.clamp((m.Y - (p.Y + s.Y / 2)) / (s.Y / 2), -1, 1)
+					-- lean toward the cursor
+					card.Rotation = card.Rotation + (dx * 3.5 - card.Rotation) * 0.22
+					local cx, cy = card.Position.X.Offset, card.Position.Y.Offset
+					local cw, ch = s.X / sc, s.Y / sc
+					-- shadow: sits opposite the cursor + a base drop, so the card reads as lifted
+					local pad = RF_SHADOW.pad
+					shadow.Size = UDim2.fromOffset(cw + pad * 2, ch + pad * 2)
+					shadow.Position = UDim2.fromOffset(cx - pad - dx * 14, cy - pad - dy * 10 + 10)
+					-- highlight: a soft light that follows the cursor across the surface
+					local gsz = math.max(cw, ch) * 1.1
+					glow.Size = UDim2.fromOffset(gsz, gsz)
+					glow.Position = UDim2.fromOffset(cx + cw / 2 + dx * cw * 0.35 - gsz / 2, cy + ch / 2 + dy * ch * 0.35 - gsz / 2)
+				end
 				card.MouseEnter:Connect(function()
 					if reducedMotion or dragCard then return end
+					shadow.Visible = true; glow.Visible = true
+					place()
+					tween(shadow, { ImageTransparency = 0.4 }, TI.FAST)
+					tween(glow, { ImageTransparency = 0.9 }, TI.FAST)
 					if tc then tc:Disconnect() end
 					tc = RunService.RenderStepped:Connect(function()
 						if dragCard or not card.Parent then return end
-						local m = UserInputService:GetMouseLocation()
-						local p, s = card.AbsolutePosition, card.AbsoluteSize
-						if s.X < 1 then return end
-						local dx = math.clamp((m.X - (p.X + s.X / 2)) / (s.X / 2), -1, 1)
-						card.Rotation = card.Rotation + (dx * 3 - card.Rotation) * 0.2
+						place()
 					end)
 				end)
 				card.MouseLeave:Connect(function()
 					if tc then tc:Disconnect(); tc = nil end
 					tween(card, { Rotation = 0 }, TI.FAST)
+					tween(shadow, { ImageTransparency = 1 }, TI.FAST)
+					tween(glow, { ImageTransparency = 1 }, TI.FAST)
+					task.delay(0.3, function() if shadow.ImageTransparency >= 0.99 then shadow.Visible = false; glow.Visible = false end end)
 				end)
 			end
 			local function wireCard(card)

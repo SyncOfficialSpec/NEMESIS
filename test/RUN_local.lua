@@ -3044,20 +3044,22 @@ function Elements.ColorPicker(parent, accent, opts)
 			-- centre-anchored: convert the top-left target to a centre point
 			local cx, cy = sx + pw / 2, sy + ph / 2
 			cpOpenPos = Vector2.new(cx, cy)
-			panel.Position = UDim2.fromOffset(cx, cy + 10)
+			panel.Position = UDim2.fromOffset(cx, cy + 14)
 			panel.GroupTransparency = 1
-			if cpScale then cpScale.Scale = 0.92 end
+			if cpScale then cpScale.Scale = 0.9 end
 			backdrop.Visible = true
 			panel.Visible = true
-			-- match Syde's settings panel: grow (0.92 -> 1) + fade + slide up, all on EXPAND
-			tween(panel, { GroupTransparency = 0, Position = UDim2.fromOffset(cx, cy) }, TI.EXPAND)
-			if cpScale then tween(cpScale, { Scale = 1 }, TI.EXPAND) end
+			-- Syde grow (0.9 -> 1) + fade + slide up, matching the settings panel
+			local CP_OPEN = TweenInfo.new(0.42, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)
+			tween(panel, { GroupTransparency = 0, Position = UDim2.fromOffset(cx, cy) }, CP_OPEN)
+			if cpScale then tween(cpScale, { Scale = 1 }, CP_OPEN) end
 		else
 			if _ddCurrent == cpHandle then _ddCurrent = nil end
-			tween(panel, { GroupTransparency = 1 }, TI.FAST)
-			if cpScale then tween(cpScale, { Scale = 0.94 }, TI.FAST) end
+			local CP_CLOSE = TweenInfo.new(0.26, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)
+			tween(panel, { GroupTransparency = 1 }, CP_CLOSE)
+			if cpScale then tween(cpScale, { Scale = 0.93 }, CP_CLOSE) end
 			backdrop.Visible = false
-			task.delay(0.18, function()
+			task.delay(0.28, function()
 				if not opened then panel.Visible = false end
 			end)
 		end
@@ -6155,9 +6157,10 @@ function PERDITION.Window(opts)
 			if not iconPicker.opened then return end
 			iconPicker.opened = false
 			if _overlayCurrent == iconPicker then _overlayCurrent = nil end
-			tween(pScale, { Scale = 0.94 }, TI.FAST)
-			tween(card, { Position = openPosDown }, TI.FAST)
-			task.delay(0.16, function() if not iconPicker.opened then card.Visible = false; backdrop.Visible = false end end)
+			local IP_CLOSE = TweenInfo.new(0.26, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)
+			tween(pScale, { Scale = 0.93 }, IP_CLOSE)
+			tween(card, { Position = openPosDown }, IP_CLOSE)
+			task.delay(0.28, function() if not iconPicker.opened then card.Visible = false; backdrop.Visible = false end end)
 		end
 		function applyNow()
 			if pending and currentSubmit then pcall(currentSubmit, pending) end
@@ -6177,9 +6180,10 @@ function PERDITION.Window(opts)
 			updatePreview()
 			render("")
 			card.Position = openPosDown
-			pScale.Scale = 0.94
-			tween(card, { Position = openPos }, TI.EXPAND)
-			tween(pScale, { Scale = 1 }, TI.EXPAND)
+			pScale.Scale = 0.9
+			local IP_OPEN = TweenInfo.new(0.42, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)
+			tween(card, { Position = openPos }, IP_OPEN)
+			tween(pScale, { Scale = 1 }, IP_OPEN)
 			task.defer(function() pcall(function() searchBox:CaptureFocus() end) end)
 		end
 		backdrop.MouseButton1Click:Connect(iconPicker.close)

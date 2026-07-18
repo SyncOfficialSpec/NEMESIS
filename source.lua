@@ -4048,9 +4048,15 @@ function makeSection(host, accent, title, startClosed)
 		Parent = host,
 	}, {
 		corner(10),
-		stroke(THEME.Stroke, 1, 0.7),
+		-- Gen2-fanmade pill look on the panel (same finish as the Gen2 tab pills,
+		-- just a rectangular shape): a glossy vertical sheen over the fill plus a
+		-- top-lit white stroke that's brightest along the top edge and fades down,
+		-- giving the panel that raised-glass feel.
+		Create("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(200, 200, 200)) }),
 		Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
+	local panelStroke = Create("UIStroke", { Color = Color3.fromRGB(255, 255, 255), Transparency = 0.66, Thickness = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = card })
+	Create("UIGradient", { Rotation = 90, Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0.85) }), Parent = panelStroke })
 
 	local bodyWrap = Create("Frame", {
 		Size = UDim2.new(1, 0, 0, 0),
@@ -4589,24 +4595,29 @@ function NEMESIS.Window(opts)
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 	})
-	-- Gen2-fanmade tab bar: individual pill tabs (no shared track, no sliding
-	-- indicator). Inactive pills are a translucent dark inset with a glossy
-	-- vertical sheen and a top-lit stroke; the active pill turns solid dark with
-	-- bright title text. Colours are Gen2's exact values.
-	local GEN2_PILL_OFF = Color3.fromRGB(24, 24, 24)   -- CardInset (inactive fill)
-	local GEN2_PILL_ON = Color3.fromRGB(46, 46, 46)    -- active pill fill
-	local GEN2_TAB_TITLE = Color3.fromRGB(247, 247, 247)
-	local GEN2_TAB_SUB = Color3.fromRGB(152, 152, 152)
-	local INDICATOR_TEXT = GEN2_TAB_TITLE   -- kept name: active tab text colour
 	local dockTrack = Create("Frame", {
 		AutomaticSize = Enum.AutomaticSize.X,
-		Size = UDim2.new(0, 0, 1, 0),
-		BackgroundTransparency = 1,
+		Size = UDim2.new(0, 0, 0, 38),
+		BackgroundColor3 = THEME.Element,
+		BackgroundTransparency = 0.25,
 		Parent = tabBar,
+	}, { corner(19), stroke(THEME.Stroke, 1, 0.6) })
+	local INDICATOR_TEXT = Color3.fromRGB(26, 27, 30)
+	local dockIndicator = Create("Frame", {
+		Position = UDim2.fromOffset(4, 4),
+		Size = UDim2.fromOffset(0, 30),
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ZIndex = 2,
+		Parent = dockTrack,
+	}, {
+		corner(15),
+		Create("UIGradient", {
+			Rotation = 105,
+			Color = ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(226, 226, 228)),
+		}),
 	})
-	-- kept for compatibility with the old sliding-indicator calls; the Gen2 look
-	-- has no moving pill, so this stays hidden and moveIndicator is a no-op
-	local dockIndicator = Create("Frame", { BackgroundTransparency = 1, Visible = false, Parent = dockTrack })
 	local dockButtons = Create("Frame", {
 		AutomaticSize = Enum.AutomaticSize.X,
 		Size = UDim2.new(0, 0, 1, 0),
@@ -4614,16 +4625,40 @@ function NEMESIS.Window(opts)
 		ZIndex = 3,
 		Parent = dockTrack,
 	}, {
+		padXY(4, 4),
 		Create("UIListLayout", {
 			FillDirection = Enum.FillDirection.Horizontal,
 			VerticalAlignment = Enum.VerticalAlignment.Center,
-			Padding = UDim.new(0, 8),
+			Padding = UDim.new(0, 2),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 	})
-	-- Gen2 tabs colour themselves in place (each pill has its own fill), so there
-	-- is no sliding indicator to move. Kept as a no-op for the existing callers.
 	local function moveIndicator(animate)
+		local target = activeTab and activeTab.pill
+		if not target then
+			dockIndicator.BackgroundTransparency = 1
+			return
+		end
+		local x, w = 4, 0
+		pcall(function()
+			x = target.AbsolutePosition.X - dockTrack.AbsolutePosition.X
+			w = target.AbsoluteSize.X
+		end)
+		if w <= 0 then
+			-- text layout not measured yet (throttled executors): no slide, the
+			-- pill tints alone carry the state until a real measure arrives
+			dockIndicator.BackgroundTransparency = 1
+			return
+		end
+		local goalPos = UDim2.fromOffset(x, 4)
+		local goalSize = UDim2.fromOffset(w, 30)
+		if animate then
+			tween(dockIndicator, { Position = goalPos, Size = goalSize, BackgroundTransparency = 0 }, TI.TAB)
+		else
+			dockIndicator.Position = goalPos
+			dockIndicator.Size = goalSize
+			dockIndicator.BackgroundTransparency = 0
+		end
 	end
 
 	-- icon button factory (top bar / content header / footer)
@@ -5147,13 +5182,10 @@ function NEMESIS.Window(opts)
 	-- paint a top-tab segment for its active/inactive state (smoothly when animate)
 	local function paintTab(tab, active, animate)
 		local info = animate and TI.FAST or TweenInfo.new(0)
-		tween(tab.button, { BackgroundColor3 = active and GEN2_PILL_ON or GEN2_PILL_OFF, BackgroundTransparency = active and 0 or 0.35 }, info)
-		tween(tab.label, { TextColor3 = active and GEN2_TAB_TITLE or GEN2_TAB_SUB }, info)
+		local idle = THEME.SubText
+		tween(tab.label, { TextColor3 = active and INDICATOR_TEXT or idle }, info)
 		if tab.icon then
-			tween(tab.icon, { ImageColor3 = active and GEN2_TAB_TITLE or GEN2_TAB_SUB }, info)
-		end
-		if tab.pillStroke then
-			tween(tab.pillStroke, { Transparency = active and 0.55 or 0.68 }, info)
+			tween(tab.icon, { ImageColor3 = active and INDICATOR_TEXT or idle }, info)
 		end
 	end
 
@@ -6126,30 +6158,24 @@ function NEMESIS.Window(opts)
 
 		tabBarOrder = tabBarOrder + 1
 		local btn = Create("TextButton", {
-			Size = UDim2.new(0, 0, 0, 44),
+			Size = UDim2.new(0, 0, 0, 30),
 			AutomaticSize = Enum.AutomaticSize.X,
-			BackgroundColor3 = GEN2_PILL_OFF,
-			BackgroundTransparency = 0.35,
+			BackgroundTransparency = 1,
 			AutoButtonColor = false,
 			Text = "",
 			LayoutOrder = tabBarOrder,
 			ZIndex = 3,
 			Parent = dockButtons,
 		}, {
-			Create("UICorner", { CornerRadius = UDim.new(1, 0) }),
-			Create("UIPadding", { PaddingLeft = UDim.new(0, 22), PaddingRight = UDim.new(0, 22) }),
+			corner(15),
+			Create("UIPadding", { PaddingLeft = UDim.new(0, 14), PaddingRight = UDim.new(0, 14) }),
 			Create("UIListLayout", {
 				FillDirection = Enum.FillDirection.Horizontal,
 				VerticalAlignment = Enum.VerticalAlignment.Center,
-				Padding = UDim.new(0, 8),
+				Padding = UDim.new(0, 7),
 				SortOrder = Enum.SortOrder.LayoutOrder,
 			}),
-			-- glossy vertical sheen over the fill (Gen2's white -> grey gradient)
-			Create("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(200, 200, 200)) }),
 		})
-		-- top-lit white stroke: brighter along the top edge, fading toward the bottom
-		local pillStroke = Create("UIStroke", { Color = Color3.fromRGB(255, 255, 255), Transparency = 0.68, Thickness = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = btn })
-		Create("UIGradient", { Rotation = 90, Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0.75) }), Parent = pillStroke })
 		local tabIcon
 		local tabIconName = icon
 		-- created on first use so a tab with no icon can still gain one via the
@@ -6157,9 +6183,9 @@ function NEMESIS.Window(opts)
 		local function ensureTabIcon()
 			if not tabIcon then
 				tabIcon = Create("ImageLabel", {
-					Size = UDim2.new(0, 18, 0, 18),
+					Size = UDim2.new(0, 15, 0, 15),
 					BackgroundTransparency = 1,
-					ImageColor3 = (activeTab == tab) and GEN2_TAB_TITLE or GEN2_TAB_SUB,
+					ImageColor3 = (activeTab == tab) and INDICATOR_TEXT or THEME.SubText,
 					LayoutOrder = 1,
 					ZIndex = 4,
 					Parent = btn,
@@ -6176,8 +6202,8 @@ function NEMESIS.Window(opts)
 			BackgroundTransparency = 1,
 			Font = FONT_MED,
 			Text = tostring(name or "Tab"),
-			TextColor3 = GEN2_TAB_SUB,
-			TextSize = 16,
+			TextColor3 = THEME.SubText,
+			TextSize = 13,
 			LayoutOrder = 2,
 			ZIndex = 4,
 			Parent = btn,
@@ -6187,19 +6213,16 @@ function NEMESIS.Window(opts)
 		tab.pill = btn
 		tab.label = label
 		tab.icon = tabIcon
-		tab.pillStroke = pillStroke
 		btn.MouseEnter:Connect(function()
 			if activeTab ~= tab then
-				tween(btn, { BackgroundTransparency = 0.18 }, TI.HOVER)
-				tween(label, { TextColor3 = GEN2_TAB_TITLE }, TI.HOVER)
-				if tabIcon then tween(tabIcon, { ImageColor3 = GEN2_TAB_TITLE }, TI.HOVER) end
+				tween(label, { TextColor3 = THEME.Text }, TI.HOVER)
+				if tabIcon then tween(tabIcon, { ImageColor3 = THEME.Text }, TI.HOVER) end
 			end
 		end)
 		btn.MouseLeave:Connect(function()
 			if activeTab ~= tab then
-				tween(btn, { BackgroundTransparency = 0.35 }, TI.HOVEROFF)
-				tween(label, { TextColor3 = GEN2_TAB_SUB }, TI.HOVEROFF)
-				if tabIcon then tween(tabIcon, { ImageColor3 = GEN2_TAB_SUB }, TI.HOVEROFF) end
+				tween(label, { TextColor3 = THEME.SubText }, TI.HOVEROFF)
+				if tabIcon then tween(tabIcon, { ImageColor3 = THEME.SubText }, TI.HOVEROFF) end
 			end
 		end)
 		btn.MouseButton1Click:Connect(function() showTab(tab) end)

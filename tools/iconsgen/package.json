@@ -1,0 +1,10 @@
+{
+  "name": "nemesis-iconsgen",
+  "private": true,
+  "version": "2.0.0",
+  "description": "Rasterize + pack the full Lucide set into NEMESIS spritesheets",
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "lucide-static": "latest"
+  }
+}

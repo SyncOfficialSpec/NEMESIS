@@ -135,10 +135,11 @@ end
 -- Icons: NEMESIS ships its own Lucide atlas (white 48px sprites packed into
 -- spritesheets under assets/icons, regenerate with tools/iconsgen). The index
 -- maps a name to {sheet, x, y}; sheets download once, cache on disk, and load
--- through getcustomasset, same as the logo. Versioned filenames (v1) bust both
+-- through getcustomasset, same as the logo. Versioned filenames (v2) bust both
 -- the GitHub CDN and the executor's asset cache whenever the atlas changes.
+-- v2 = the complete Lucide 1.25.0 set, 1997 icons across 5 sheets.
 local ICONS_BASE = "https://raw.githubusercontent.com/SyncOfficialSpec/NEMESIS/main/assets/icons/"
-local ICONS_VER = "v1"
+local ICONS_VER = "v2"
 local ICON_PX = 48
 
 -- table = loaded. A single failed fetch used to be cached as a permanent

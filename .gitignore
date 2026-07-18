@@ -1,0 +1,5 @@
+
+# icon generator build artifacts (regenerate with tools/iconsgen)
+tools/iconsgen/node_modules/
+tools/iconsgen/png48/
+tools/iconsgen/sheets/

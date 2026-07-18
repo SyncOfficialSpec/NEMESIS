@@ -4930,36 +4930,38 @@ function PERDITION.Window(opts)
 	end)
 	local avatar = Create("ImageLabel", {
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 12, 0.5, 1),
-		Size = UDim2.new(0, 30, 0, 30),
+		Position = UDim2.new(0, 13, 0.5, 0),
+		Size = UDim2.new(0, 34, 0, 34),
 		BackgroundColor3 = THEME.Element,
-		Image = profId and ("rbxthumb://type=AvatarHeadShot&id=%d&w=60&h=60"):format(profId) or "",
+		Image = profId and ("rbxthumb://type=AvatarHeadShot&id=%d&w=100&h=100"):format(profId) or "",
+		ScaleType = Enum.ScaleType.Crop,
 		Parent = sbFooter,
-	}, { corner(8), stroke(THEME.ElementStroke, 1, 0.4) })
+	}, { corner(10), stroke(THEME.ElementStroke, 1, 0.3) })
+	-- online status dot, ringed in the footer ground so it reads as a badge
 	local statusDot = Create("Frame", {
 		AnchorPoint = Vector2.new(1, 1),
 		Position = UDim2.new(1, 1, 1, 1),
-		Size = UDim2.new(0, 9, 0, 9),
+		Size = UDim2.new(0, 11, 0, 11),
 		BackgroundColor3 = THEME.Good,
 		BorderSizePixel = 0,
 		ZIndex = 3,
 		Parent = avatar,
-	}, { corner(5), stroke(THEME.Sidebar, 2, 0) })
+	}, { corner(6), stroke(THEME.Sidebar, 2.5, 0) })
 	local gameLabel = Create("TextLabel", {
-		Position = UDim2.new(0, 50, 0, 8),
-		Size = UDim2.new(1, -110, 0, 16),
+		Position = UDim2.new(0, 56, 0, 7),
+		Size = UDim2.new(1, -132, 0, 17),
 		BackgroundTransparency = 1,
 		Font = FONT_SEMI,
 		Text = tostring(profName or opts.game or "PERDITION"),
 		TextColor3 = THEME.Text,
-		TextSize = 13,
+		TextSize = 14,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Parent = sbFooter,
 	})
 	local statusLabel = Create("TextLabel", {
-		Position = UDim2.new(0, 50, 0, 25),
-		Size = UDim2.new(1, -110, 0, 14),
+		Position = UDim2.new(0, 56, 0, 26),
+		Size = UDim2.new(1, -132, 0, 15),
 		BackgroundTransparency = 1,
 		Font = FONT,
 		Text = tostring(profUser or opts.status or ""),
@@ -4969,22 +4971,27 @@ function PERDITION.Window(opts)
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Parent = sbFooter,
 	})
+	-- live fps chip: a green pulse dot + mono readout in a bordered pill
 	local fpsChip = Create("Frame", {
 		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -10, 0.5, 1),
-		Size = UDim2.new(0, 52, 0, 18),
+		Position = UDim2.new(1, -12, 0.5, 0),
+		Size = UDim2.new(0, 66, 0, 22),
 		BackgroundColor3 = THEME.Element,
 		Parent = sbFooter,
+	}, { corner(7), stroke(THEME.ElementStroke, 1, 0.4) })
+	local fpsDot = Create("Frame", {
+		AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0),
+		Size = UDim2.new(0, 5, 0, 5), BackgroundColor3 = THEME.Good, BorderSizePixel = 0, Parent = fpsChip,
 	}, { corner(3) })
 	local fpsLabel = Create("TextLabel", {
-		Size = UDim2.new(1, -8, 1, 0),
-		Position = UDim2.new(0, 4, 0, 0),
+		Size = UDim2.new(1, -22, 1, 0),
+		Position = UDim2.new(0, 17, 0, 0),
 		BackgroundTransparency = 1,
 		Font = FONT_MONO,
 		Text = "",
 		TextColor3 = THEME.SubText,
 		TextSize = 12,
-		TextXAlignment = Enum.TextXAlignment.Right,
+		TextXAlignment = Enum.TextXAlignment.Center,
 		Parent = fpsChip,
 	})
 	local fpsConn

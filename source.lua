@@ -5851,11 +5851,18 @@ function NEMESIS.Window(opts)
 	local function ensureIconPicker()
 		if iconPicker then return iconPicker end
 
-		local CAP = 150   -- most result cells rendered at once (search to narrow)
-		local pool = {}   -- reused result cells so typing never churns instances
-		local visibleCount = 0
+		-- Virtualised grid: the WHOLE Lucide set browses by scrolling, but only the
+		-- cells in view (plus a small buffer) are ever instantiated, so opening and
+		-- scrolling stay cheap no matter how many icons match.
+		local CELL, GAP = 48, 8
+		local PAD_L, PAD_R, PAD_T, PAD_B = 14, 8, 6, 8
+		local pool = {}            -- reused cells; float to cover the visible window
+		local curMatches = {}      -- ALL current matches, in display order
+		local layoutCols = 7
+		local nameSet = nil        -- name membership set, built once the index loads
 		local pending = nil        -- currently highlighted icon name
 		local currentSubmit = nil  -- callback for the slot being edited
+		local createCell, layout   -- forward decls (layout builds cells via createCell)
 		local openPos = UDim2.new(0.5, 0, 0.5, 0)
 		local openPosDown = UDim2.new(0.5, 0, 0.5, 14)
 
@@ -5904,13 +5911,10 @@ function NEMESIS.Window(opts)
 			Font = FONT, PlaceholderText = "Search icons", Text = "", TextColor3 = THEME.Text, PlaceholderColor3 = THEME.Faint, TextSize = 13,
 			TextXAlignment = Enum.TextXAlignment.Left, ClearTextOnFocus = false, Parent = searchWrap })
 
-		-- results grid
+		-- results grid (manual layout + virtualisation, no UIGridLayout)
 		local results = Create("ScrollingFrame", { Position = UDim2.new(0, 0, 0, 154), Size = UDim2.new(1, 0, 1, -212), BackgroundTransparency = 1, BorderSizePixel = 0,
 			ScrollBarThickness = 3, ScrollBarImageColor3 = THEME.Faint, ScrollBarImageTransparency = 0.4, CanvasSize = UDim2.new(0, 0, 0, 0),
-			AutomaticCanvasSize = Enum.AutomaticSize.Y, ZIndex = 41001, Parent = card }, {
-			Create("UIGridLayout", { CellSize = UDim2.new(0, 48, 0, 48), CellPadding = UDim2.new(0, 8, 0, 8), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Left }),
-			Create("UIPadding", { PaddingLeft = UDim.new(0, 14), PaddingRight = UDim.new(0, 8), PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 8) }),
-		})
+			AutomaticCanvasSize = Enum.AutomaticSize.None, ScrollingDirection = Enum.ScrollingDirection.Y, ZIndex = 41001, Parent = card })
 		local emptyLabel = Create("TextLabel", { Position = UDim2.new(0, 0, 0, 154), Size = UDim2.new(1, 0, 0, 40), BackgroundTransparency = 1, Font = FONT, Text = "", TextColor3 = THEME.SubText, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Center, Visible = false, ZIndex = 41002, Parent = card })
 
 		-- footer: match count + Apply
@@ -5920,21 +5924,24 @@ function NEMESIS.Window(opts)
 		local applyBtn = Create("TextButton", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 96, 0, 34), BackgroundColor3 = accent, AutoButtonColor = false, Font = FONT_SEMI, Text = "Apply", TextColor3 = accentTextColor(accent), TextSize = 13, Parent = footer }, { corner(9) })
 		accentProp(applyBtn, "BackgroundColor3", accent)
 
-		local function paintCells()
-			for i = 1, visibleCount do
-				local c = pool[i]
-				local sel = (c.name ~= nil and c.name == pending)
-				c.selected = sel
-				if sel then
-					c.button.BackgroundColor3 = accent
-					c.stroke.Color = accent; c.stroke.Transparency = 0
-					c.img.ImageColor3 = accentTextColor(accent)
-				else
-					c.button.BackgroundColor3 = THEME.Element
-					c.stroke.Color = THEME.ElementStroke; c.stroke.Transparency = 0.4
-					c.img.ImageColor3 = THEME.SubText
-				end
+		local function styleCell(c, sel)
+			c.selected = sel
+			if sel then
+				c.button.BackgroundColor3 = accent
+				c.stroke.Color = accent; c.stroke.Transparency = 0
+				c.img.ImageColor3 = accentTextColor(accent)
+			else
+				c.button.BackgroundColor3 = THEME.Element
+				c.stroke.Color = THEME.ElementStroke; c.stroke.Transparency = 0.4
+				c.img.ImageColor3 = THEME.SubText
 			end
+		end
+
+		-- how many columns fit the results width right now
+		local function colsNow()
+			local w = results.AbsoluteSize.X
+			if w <= 0 then w = 418 end   -- before the first frame lays out
+			return math.max(1, math.floor((w - PAD_L - PAD_R + GAP) / (CELL + GAP)))
 		end
 
 		local function updatePreview()
@@ -5947,11 +5954,11 @@ function NEMESIS.Window(opts)
 		local function selectIcon(name)
 			pending = name
 			updatePreview()
-			paintCells()
+			layout()
 		end
 
-		local function createCell()
-			local b = Create("TextButton", { Size = UDim2.new(0, 48, 0, 48), BackgroundColor3 = THEME.Element, AutoButtonColor = false, Text = "", Parent = results }, { corner(10) })
+		function createCell()
+			local b = Create("TextButton", { Size = UDim2.new(0, CELL, 0, CELL), BackgroundColor3 = THEME.Element, AutoButtonColor = false, Text = "", Visible = false, Parent = results }, { corner(10) })
 			local st = stroke(THEME.ElementStroke, 1, 0.4); st.Parent = b
 			local img = Create("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, 25, 0, 25), BackgroundTransparency = 1, ImageColor3 = THEME.SubText, Parent = b })
 			local cell = { button = b, img = img, stroke = st, name = nil, selected = false }
@@ -5969,13 +5976,45 @@ function NEMESIS.Window(opts)
 			return cell
 		end
 
+		-- place only the cells whose rows are on screen; the pool floats to cover
+		-- the visible window, so 2000 matches cost the same as 20.
+		function layout()
+			local cols = layoutCols
+			local n = #curMatches
+			local pitch = CELL + GAP
+			local viewH = results.AbsoluteSize.Y; if viewH <= 0 then viewH = 286 end
+			local top = results.CanvasPosition.Y
+			local firstRow = math.max(0, math.floor((top - PAD_T) / pitch) - 1)
+			local rowsToShow = math.ceil(viewH / pitch) + 3
+			local firstIdx = firstRow * cols + 1
+			local lastIdx = math.min(n, (firstRow + rowsToShow) * cols)
+			local used = 0
+			for idx = firstIdx, lastIdx do
+				used = used + 1
+				local c = pool[used] or createCell()
+				local name = curMatches[idx]
+				local row = math.floor((idx - 1) / cols)
+				local col = (idx - 1) % cols
+				local pos = UDim2.new(0, PAD_L + col * pitch, 0, PAD_T + row * pitch)
+				if c.button.Position ~= pos then c.button.Position = pos end
+				if c.name ~= name then c.name = name; applyIcon(c.img, resolveIcon(name)) end
+				styleCell(c, name == pending)
+				if not c.button.Visible then c.button.Visible = true end
+			end
+			for i = used + 1, #pool do
+				if pool[i].button.Visible then pool[i].button.Visible = false end
+				pool[i].name = nil
+			end
+		end
+
 		local retryToken = 0
 		local function render(query)
 			local names = allIconNames()
 			if not names then
 				-- atlas index not fetched yet: show a note and retry shortly
 				for i = 1, #pool do pool[i].button.Visible = false; pool[i].name = nil end
-				visibleCount = 0
+				curMatches = {}
+				results.CanvasSize = UDim2.new(0, 0, 0, 0)
 				emptyLabel.Text = "Loading icons"
 				emptyLabel.Visible = true
 				countLabel.Text = ""
@@ -5984,17 +6023,14 @@ function NEMESIS.Window(opts)
 				task.delay(0.4, function() if iconPicker.opened and my == retryToken then render(searchBox.Text) end end)
 				return
 			end
+			if not nameSet then nameSet = {}; for _, n in ipairs(names) do nameSet[n] = true end end
 			local q = string.lower(tostring(query or "")):gsub("^%s+", ""):gsub("%s+$", "")
-			local matches, total = {}, 0
+			local matches = {}
 			if q == "" then
+				-- whole set, current icon pinned to the top so it's easy to find
 				local seen = {}
-				if type(pending) == "string" and pending ~= "" then matches[1] = pending; seen[pending] = true; total = 1 end
-				for _, n in ipairs(names) do
-					if not seen[n] then
-						total = total + 1
-						if #matches < CAP then matches[#matches + 1] = n end
-					end
-				end
+				if type(pending) == "string" and nameSet[pending] then matches[1] = pending; seen[pending] = true end
+				for _, n in ipairs(names) do if not seen[n] then matches[#matches + 1] = n end end
 			else
 				local starts, contains = {}, {}
 				for _, n in ipairs(names) do
@@ -6002,33 +6038,30 @@ function NEMESIS.Window(opts)
 					if f == 1 then starts[#starts + 1] = n
 					elseif f then contains[#contains + 1] = n end
 				end
-				total = #starts + #contains
-				for _, n in ipairs(starts) do if #matches < CAP then matches[#matches + 1] = n end end
-				for _, n in ipairs(contains) do if #matches < CAP then matches[#matches + 1] = n end end
+				for _, n in ipairs(starts) do matches[#matches + 1] = n end
+				for _, n in ipairs(contains) do matches[#matches + 1] = n end
 			end
-			for i, n in ipairs(matches) do
-				local c = pool[i] or createCell()
-				c.name = n
-				c.button.LayoutOrder = i
-				applyIcon(c.img, resolveIcon(n))
-				c.button.Visible = true
-			end
-			for i = #matches + 1, #pool do pool[i].button.Visible = false; pool[i].name = nil end
-			visibleCount = #matches
-			paintCells()
+			curMatches = matches
+			layoutCols = colsNow()
+			local n = #matches
+			local rows = math.ceil(n / layoutCols)
+			local canvasH = (rows > 0) and (PAD_T + rows * (CELL + GAP) - GAP + PAD_B) or 0
+			results.CanvasSize = UDim2.new(0, 0, 0, canvasH)
 			results.CanvasPosition = Vector2.new(0, 0)
-			if #matches == 0 then
-				emptyLabel.Text = 'No icons match "' .. q .. '"'
-				emptyLabel.Visible = true
-			else
-				emptyLabel.Visible = false
-			end
-			if total > #matches then
-				countLabel.Text = "showing " .. #matches .. " of " .. total
-			else
-				countLabel.Text = total .. (total == 1 and " icon" or " icons")
-			end
+			layout()
+			emptyLabel.Visible = (n == 0)
+			if n == 0 then emptyLabel.Text = 'No icons match "' .. q .. '"' end
+			countLabel.Text = n .. (n == 1 and " icon" or " icons")
 		end
+
+		-- re-place the visible cells as the user scrolls; re-flow columns on resize
+		results:GetPropertyChangedSignal("CanvasPosition"):Connect(function()
+			if iconPicker and iconPicker.opened then layout() end
+		end)
+		results:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+			if not (iconPicker and iconPicker.opened) then return end
+			if colsNow() ~= layoutCols then render(searchBox.Text) else layout() end
+		end)
 
 		local searchToken = 0
 		searchBox:GetPropertyChangedSignal("Text"):Connect(function()
@@ -6060,11 +6093,12 @@ function NEMESIS.Window(opts)
 			closeOpenDropdown()
 			_overlayCurrent = iconPicker
 			iconPicker.opened = true
+			pending = current
 			searchBox.Text = ""
 			backdrop.Visible = true
 			card.Visible = true
+			updatePreview()
 			render("")
-			selectIcon(current)
 			card.Position = openPosDown
 			pScale.Scale = 0.94
 			tween(card, { Position = openPos }, TI.EXPAND)

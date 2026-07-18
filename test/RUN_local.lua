@@ -4049,18 +4049,20 @@ end
 -- Collapsible content section ("GENERAL", "HITBOX", …)
 function makeSection(host, accent, title, startClosed)
 	local sectionSetOpen   -- set below when the section has a collapsible header
-	-- PERDITION professional panel: a flat, elevated graphite plate with a clean
-	-- 1px border and a whisper-faint top-interior highlight (the crafted bevel),
-	-- an ember accent rule + hairline in the header. No gloss - modern and editorial.
+	-- PERDITION section panel: a clean graphite plate with an ember-underlined
+	-- header. Flat and modern (no gloss); the accent lives in the marker rule and
+	-- the signature ember->transparent underline. Layout is deliberately minimal
+	-- (header + body only, no laid-out decoration rows) so the collapsible
+	-- AutomaticSize chain resolves reliably.
 	local card = Create("Frame", {
 		BackgroundColor3 = THEME.Group,
 		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		Parent = host,
 	}, {
-		corner(12),
-		stroke(THEME.ElementStroke, 1, 0.4),
-		Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Center }),
+		corner(13),
+		stroke(THEME.ElementStroke, 1, 0.45),
+		Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
 
 	local bodyWrap = Create("Frame", {
@@ -4068,7 +4070,7 @@ function makeSection(host, accent, title, startClosed)
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundTransparency = 1,
 		ClipsDescendants = true,
-		LayoutOrder = 3,
+		LayoutOrder = 2,
 		Parent = card,
 	})
 	local body = Create("Frame", {
@@ -4082,37 +4084,36 @@ function makeSection(host, accent, title, startClosed)
 			HorizontalAlignment = Enum.HorizontalAlignment.Center,
 			Padding = UDim.new(0, 6),
 		}),
-		Create("UIPadding", { PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 14) }),
+		Create("UIPadding", { PaddingTop = UDim.new(0, 10), PaddingBottom = UDim.new(0, 14) }),
 	})
 
 	if title and title ~= "" then
 		local header = Create("TextButton", {
 			Name = "SectionHeader",
-			Size = UDim2.new(1, 0, 0, 34),
+			Size = UDim2.new(1, 0, 0, 36),
 			BackgroundTransparency = 1,
 			AutoButtonColor = false,
 			Text = "",
 			LayoutOrder = 1,
 			Parent = card,
 		}, { padXY(ROW_PAD, 0) })
-		-- top-interior highlight: a faint 1px light line at the card's top edge,
-		-- inset past the rounded corners; the detail that makes it read as crafted
+		-- faint top bevel: a 1px light line at the card's top interior edge
 		Create("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 0),
 			Size = UDim2.new(1, -6, 0, 1), BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-			BackgroundTransparency = 0.86, BorderSizePixel = 0, ZIndex = 3, Parent = header,
+			BackgroundTransparency = 0.9, BorderSizePixel = 0, ZIndex = 3, Parent = header,
 		})
 		-- ember accent rule before the title
 		local marker = Create("Frame", {
 			AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0),
-			Size = UDim2.new(0, 3, 0, 13), BackgroundColor3 = accent, BorderSizePixel = 0, Parent = header,
+			Size = UDim2.new(0, 3, 0, 14), BackgroundColor3 = accent, BorderSizePixel = 0, Parent = header,
 		}, { corner(2) })
 		accentProp(marker, "BackgroundColor3", accent)
 		Create("TextLabel", {
 			BackgroundTransparency = 1,
 			AnchorPoint = Vector2.new(0, 0.5),
-			Position = UDim2.new(0, 12, 0.5, 0),
-			Size = UDim2.new(1, -38, 1, 0),
+			Position = UDim2.new(0, 13, 0.5, 0),
+			Size = UDim2.new(1, -40, 1, 0),
 			Font = FONT_SEMI,
 			Text = string.upper(tostring(title)),
 			TextColor3 = THEME.SubText,
@@ -4124,11 +4125,22 @@ function makeSection(host, accent, title, startClosed)
 		local chev = iconChevron(header, 15, THEME.Faint, "chevron-down")
 		chev.AnchorPoint = Vector2.new(1, 0.5)
 		chev.Position = UDim2.new(1, 0, 0.5, 0)
-		-- hairline separating the header from the body
-		Create("Frame", {
-			Size = UDim2.new(1, -24, 0, 1), BackgroundColor3 = THEME.Stroke,
-			BackgroundTransparency = 0.35, BorderSizePixel = 0, LayoutOrder = 2, Parent = card,
+		-- signature ember underline: an ember->transparent hairline at the header
+		-- base. Absolutely placed (not a layout row) so it never disturbs collapse.
+		local underline = Create("Frame", {
+			AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, 0),
+			Size = UDim2.new(1, -4, 0, 1), BackgroundColor3 = accent, BorderSizePixel = 0, ZIndex = 2, Parent = header,
 		})
+		Create("UIGradient", {
+			Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.1),
+				NumberSequenceKeypoint.new(0.45, 0.6),
+				NumberSequenceKeypoint.new(0.8, 1),
+				NumberSequenceKeypoint.new(1, 1),
+			}),
+			Parent = underline,
+		})
+		accentProp(underline, "BackgroundColor3", accent)
 		local open = true
 		local SEC_SLIDE = TweenInfo.new(0.36, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
 		sectionSetOpen = function(want, animate)

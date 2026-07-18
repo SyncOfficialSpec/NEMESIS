@@ -5917,6 +5917,17 @@ function NEMESIS.Window(opts)
 			AutomaticCanvasSize = Enum.AutomaticSize.None, ScrollingDirection = Enum.ScrollingDirection.Y, ZIndex = 41001, Parent = card })
 		local emptyLabel = Create("TextLabel", { Position = UDim2.new(0, 0, 0, 154), Size = UDim2.new(1, 0, 0, 40), BackgroundTransparency = 1, Font = FONT, Text = "", TextColor3 = THEME.SubText, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Center, Visible = false, ZIndex = 41002, Parent = card })
 
+		-- scroll fades: the grid melts into the card at the top/bottom edges, and
+		-- each edge only shows when there's actually more to scroll toward
+		local pickTopFade = Create("Frame", { Position = UDim2.new(0, 0, 0, 154), Size = UDim2.new(1, -4, 0, 22), BackgroundColor3 = THEME.Group, BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 41003, Parent = card }, { Create("UIGradient", { Rotation = 90, Transparency = numSeq(0, 1) }) })
+		local pickBotFade = Create("Frame", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 0, 436), Size = UDim2.new(1, -4, 0, 26), BackgroundColor3 = THEME.Group, BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 41003, Parent = card }, { Create("UIGradient", { Rotation = 90, Transparency = numSeq(1, 0) }) })
+		local function updatePickerFades()
+			local pos = results.CanvasPosition.Y
+			local maxScroll = math.max(0, results.CanvasSize.Y.Offset - results.AbsoluteSize.Y)
+			pickTopFade.BackgroundTransparency = 1 - math.clamp(pos / 20, 0, 1)
+			pickBotFade.BackgroundTransparency = 1 - math.clamp((maxScroll - pos) / 20, 0, 1)
+		end
+
 		-- footer: match count + Apply
 		Create("Frame", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 12, 1, -58), Size = UDim2.new(1, -24, 0, 1), BackgroundColor3 = THEME.Stroke, BackgroundTransparency = 0.4, BorderSizePixel = 0, Parent = card })
 		local footer = Create("Frame", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(1, 0, 0, 58), BackgroundTransparency = 1, Parent = card }, { padXY(16, 0) })
@@ -6049,6 +6060,7 @@ function NEMESIS.Window(opts)
 			results.CanvasSize = UDim2.new(0, 0, 0, canvasH)
 			results.CanvasPosition = Vector2.new(0, 0)
 			layout()
+			task.defer(updatePickerFades)
 			emptyLabel.Visible = (n == 0)
 			if n == 0 then emptyLabel.Text = 'No icons match "' .. q .. '"' end
 			countLabel.Text = n .. (n == 1 and " icon" or " icons")
@@ -6056,7 +6068,7 @@ function NEMESIS.Window(opts)
 
 		-- re-place the visible cells as the user scrolls; re-flow columns on resize
 		results:GetPropertyChangedSignal("CanvasPosition"):Connect(function()
-			if iconPicker and iconPicker.opened then layout() end
+			if iconPicker and iconPicker.opened then layout(); updatePickerFades() end
 		end)
 		results:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
 			if not (iconPicker and iconPicker.opened) then return end

@@ -3668,7 +3668,7 @@ function Elements.SlideButton(parent, accent, opts)
 		AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 2, 0.5, 0), Size = UDim2.new(0, 30, 0, 30),
 		BackgroundColor3 = THEME.Knob, AutoButtonColor = false, Text = "", ZIndex = 4, Parent = track,
 	}, { corner(8) })
-	local darkGlyph = Color3.fromRGB(24, 25, 28)
+	local darkGlyph = accentTextColor(THEME.Knob)   -- contrast against the knob on any theme
 	do
 		local aspec = resolveIcon("chevrons-right") or resolveIcon("chevron-right")
 		if aspec then
@@ -3887,7 +3887,8 @@ function Elements.Changelog(parent, accent, opts)
 		local row = Create("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = i + 1, Parent = card })
 		local ix = 0
 		if tag then
-			local chip = Create("TextLabel", { Size = UDim2.new(0, 0, 0, 16), AutomaticSize = Enum.AutomaticSize.X, BackgroundColor3 = tagColors[string.lower(tostring(tag))] or accent, Font = FONT_SEMI, Text = " " .. string.upper(tostring(tag)) .. " ", TextColor3 = Color3.fromRGB(15, 15, 18), TextSize = 10, Parent = row }, { corner(3) })
+			local chipBg = tagColors[string.lower(tostring(tag))] or accent
+			local chip = Create("TextLabel", { Size = UDim2.new(0, 0, 0, 16), AutomaticSize = Enum.AutomaticSize.X, BackgroundColor3 = chipBg, Font = FONT_SEMI, Text = " " .. string.upper(tostring(tag)) .. " ", TextColor3 = accentTextColor(chipBg), TextSize = 10, Parent = row }, { corner(3) })
 			ix = 6
 			chip:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() end)
 			ix = 60
@@ -6827,7 +6828,7 @@ function PERDITION.Window(opts)
 		Size = UDim2.new(0, 22, 0, 22),
 		BackgroundTransparency = 1,
 		Image = "rbxassetid://86527207319523",
-		ImageColor3 = Color3.fromRGB(228, 231, 240),
+		ImageColor3 = THEME.Faint,
 		ImageTransparency = 0.45,   -- idle: small + faded until hovered
 		ScaleType = Enum.ScaleType.Slice,
 		SliceCenter = Rect.new(51, 52, 51, 52),
@@ -6874,7 +6875,7 @@ function PERDITION.Window(opts)
 			tween(resizeIcon, {
 				Size = UDim2.new(0, 30 + n.X * 26, 0, 30 + n.Y * 26),
 				ImageTransparency = 0,
-				ImageColor3 = Color3.fromRGB(228, 231, 240),
+				ImageColor3 = THEME.Faint,
 			}, TweenInfo.new(duration or 0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out))
 		end
 		-- while dragging to resize: keep stretching toward the cursor, accent tint
@@ -6891,7 +6892,7 @@ function PERDITION.Window(opts)
 			tween(resizeIcon, {
 				Size = UDim2.new(0, 22, 0, 22),
 				ImageTransparency = 0.45,
-				ImageColor3 = Color3.fromRGB(228, 231, 240),
+				ImageColor3 = THEME.Faint,
 			}, TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out))
 		end
 		local function stopLoop()

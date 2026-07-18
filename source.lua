@@ -429,6 +429,26 @@ end
 -- re-theme walk matches instances by current colour value, so keys that share
 -- a value must share it in every preset).
 PERDITION.Themes = {
+	-- Paper & Ink: warm editorial light theme, oxblood accent. The default identity.
+	Paper = {
+		Background = Color3.fromRGB(241, 235, 221),    -- warm paper (window / content well)
+		Sidebar = Color3.fromRGB(236, 228, 211),       -- sidebar
+		Topbar = Color3.fromRGB(236, 228, 211),        -- top bar (must equal Sidebar)
+		SidebarActive = Color3.fromRGB(248, 243, 233), -- active page card (raised)
+		SidebarHover = Color3.fromRGB(230, 222, 203),
+		Group = Color3.fromRGB(246, 241, 229),         -- section card plate
+		Element = Color3.fromRGB(251, 246, 236),       -- fields / chips / wells
+		ElementHover = Color3.fromRGB(242, 236, 221),
+		Stroke = Color3.fromRGB(216, 207, 188),        -- structural hairlines
+		ElementStroke = Color3.fromRGB(203, 192, 168), -- control hairlines
+		RowDivider = Color3.fromRGB(228, 220, 201),
+		Text = Color3.fromRGB(33, 29, 22),             -- ink
+		SubText = Color3.fromRGB(107, 99, 85),
+		Faint = Color3.fromRGB(163, 154, 130),
+		ToggleOff = Color3.fromRGB(218, 209, 189),
+		Knob = Color3.fromRGB(33, 29, 22),             -- dark ink knob on the light ground
+		Good = Color3.fromRGB(62, 158, 99),
+	},
 	Dark = {
 		Background = Color3.fromRGB(10, 11, 13),      -- window / content well (darkest plate)
 		Sidebar = Color3.fromRGB(14, 15, 18),         -- sidebar card
@@ -488,8 +508,8 @@ PERDITION.Themes = {
 	},
 }
 
-local THEME = { Accent = Color3.fromRGB(255, 59, 91) }
-for k, v in pairs(PERDITION.Themes.Dark) do THEME[k] = v end
+local THEME = { Accent = Color3.fromRGB(156, 42, 32) }   -- oxblood (Paper & Ink)
+for k, v in pairs(PERDITION.Themes.Paper) do THEME[k] = v end
 
 -- Type: Inter carries the words, Roboto Mono carries every numeric readout so
 -- digits never shift width while a value slides. Mono falls back to Inter on
@@ -1723,10 +1743,10 @@ function Elements.Toggle(parent, accent, opts)
 	local box = Create("Frame", {
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, 0, 0.5, 0),
-		Size = UDim2.new(0, 18, 0, 18),
+		Size = UDim2.new(0, 38, 0, 21),
 		BackgroundColor3 = THEME.ToggleOff,
 		Parent = row,
-	}, { corner(5), stroke(THEME.ElementStroke, 1, 0.35) })
+	}, { corner(11), stroke(THEME.ElementStroke, 1, 0.35) })
 	if lampArt then
 		lamp = Create("ImageLabel", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
@@ -1750,25 +1770,21 @@ function Elements.Toggle(parent, accent, opts)
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Parent = box,
-	}, { corner(5), fillGrad })
+	}, { corner(11), fillGrad })
 	hitboxProp(fill, "BackgroundColor3", accent)
 	hitboxGrad(fillGrad, accent)
-	local check
-	local checkSpec = resolveIcon("check")
-	if checkSpec then
-		check = Create("ImageLabel", {
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.new(0.5, 0, 0.5, 0),
-			Size = UDim2.new(0, 12, 0, 12),
-			BackgroundTransparency = 1,
-			ImageColor3 = accentTextColor(accent),
-			ImageTransparency = 1,
-			ZIndex = 2,
-			Parent = box,
-		})
-		applyIcon(check, checkSpec)
-		onHitbox(function(c) pcall(function() check.ImageColor3 = accentTextColor(c) end) end)
-	end
+	local check   -- pill toggle has no check glyph
+	-- sliding knob: dark on the light off-track, flips to the accent's contrast
+	-- colour when it rides the filled pill (so it reads on any theme)
+	local knob = Create("Frame", {
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 3, 0.5, 0),
+		Size = UDim2.new(0, 15, 0, 15),
+		BackgroundColor3 = THEME.Knob,
+		BorderSizePixel = 0,
+		ZIndex = 3,
+		Parent = box,
+	}, { corner(99) })
 	local click = Create("TextButton", {
 		BackgroundTransparency = 1,
 		Size = UDim2.new(1, ROW_PAD * 2, 1, 0),
@@ -1784,11 +1800,12 @@ function Elements.Toggle(parent, accent, opts)
 		-- fades, glow lamp fades, box tints, title brightens/dims)
 		local info = animate and TI.SYDE or TweenInfo.new(0)
 		local fadeInfo = animate and TI.SYDE_FADE or TweenInfo.new(0)
-		tween(box, { BackgroundColor3 = state and hitbox or THEME.ToggleOff }, info)
 		tween(fill, { BackgroundTransparency = state and 0 or 1 }, fadeInfo)
-		if check then
-			tween(check, { ImageTransparency = state and 0 or 1 }, info)
-		end
+		tween(knob, {
+			Position = UDim2.new(0, state and 20 or 3, 0.5, 0),
+			BackgroundColor3 = state and accentTextColor(hitbox) or THEME.Knob,
+		}, info)
+		if check then tween(check, { ImageTransparency = state and 0 or 1 }, info) end
 		if lamp then
 			tween(lamp, { ImageTransparency = state and 0.7 or 1 }, info)
 		end
@@ -4055,11 +4072,8 @@ function makeSection(host, accent, title, startClosed)
 		AutomaticSize = Enum.AutomaticSize.Y,
 		Parent = host,
 	}, {
-		corner(13),
-		stroke(THEME.ElementStroke, 1, 0.45),
-		-- gentle top-lit depth (NOT a gloss): ~7% darker toward the base so the
-		-- plate reads as lifted rather than flat. Subtle enough to stay editorial.
-		Create("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(236, 236, 240)) }),
+		corner(11),
+		stroke(THEME.ElementStroke, 1, 0.35),
 		Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
 
@@ -4095,13 +4109,7 @@ function makeSection(host, accent, title, startClosed)
 			LayoutOrder = 1,
 			Parent = card,
 		}, { padXY(ROW_PAD, 0) })
-		-- faint top bevel: a 1px light line at the card's top interior edge
-		Create("Frame", {
-			AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 0),
-			Size = UDim2.new(1, -6, 0, 1), BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-			BackgroundTransparency = 0.9, BorderSizePixel = 0, ZIndex = 3, Parent = header,
-		})
-		-- ember accent rule before the title
+		-- oxblood accent rule before the title
 		local marker = Create("Frame", {
 			AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0),
 			Size = UDim2.new(0, 3, 0, 14), BackgroundColor3 = accent, BorderSizePixel = 0, Parent = header,
@@ -4123,22 +4131,13 @@ function makeSection(host, accent, title, startClosed)
 		local chev = iconChevron(header, 15, THEME.Faint, "chevron-down")
 		chev.AnchorPoint = Vector2.new(1, 0.5)
 		chev.Position = UDim2.new(1, 0, 0.5, 0)
-		-- signature ember underline: an ember->transparent hairline at the header
-		-- base. Absolutely placed (not a layout row) so it never disturbs collapse.
-		local underline = Create("Frame", {
+		-- thin rule under the header, separating it from the body (absolutely
+		-- placed so it never disturbs the collapse layout)
+		Create("Frame", {
 			AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, 0),
-			Size = UDim2.new(1, -4, 0, 1), BackgroundColor3 = accent, BorderSizePixel = 0, ZIndex = 2, Parent = header,
+			Size = UDim2.new(1, -2, 0, 1), BackgroundColor3 = THEME.RowDivider,
+			BorderSizePixel = 0, ZIndex = 2, Parent = header,
 		})
-		Create("UIGradient", {
-			Transparency = NumberSequence.new({
-				NumberSequenceKeypoint.new(0, 0.1),
-				NumberSequenceKeypoint.new(0.45, 0.6),
-				NumberSequenceKeypoint.new(0.8, 1),
-				NumberSequenceKeypoint.new(1, 1),
-			}),
-			Parent = underline,
-		})
-		accentProp(underline, "BackgroundColor3", accent)
 		local open = true
 		local SEC_SLIDE = TweenInfo.new(0.36, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
 		sectionSetOpen = function(want, animate)
@@ -4574,15 +4573,21 @@ function PERDITION.Window(opts)
 		})
 		if not brandAsset and logoSpec then applyIcon(logoImage, logoSpec) end
 	else
+		-- oxblood brand dot before the editorial wordmark
+		local brandDot = Create("Frame", {
+			AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 16, 0.5, 0),
+			Size = UDim2.new(0, 6, 0, 6), BackgroundColor3 = accent, BorderSizePixel = 0, Parent = topbar,
+		}, { corner(3) })
+		accentProp(brandDot, "BackgroundColor3", accent)
 		wordmark = Create("TextLabel", {
-			Position = UDim2.new(0, 16, 0.5, 0),
+			Position = UDim2.new(0, 30, 0.5, 0),
 			AnchorPoint = Vector2.new(0, 0.5),
 			Size = UDim2.new(0, 170, 1, 0),
 			BackgroundTransparency = 1,
 			Font = FONT_BOLD,
 			Text = string.upper(tostring(opts.title or "PERDITION")),
 			TextColor3 = THEME.Text,
-			TextSize = 17,
+			TextSize = 16,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			Parent = topbar,
 		})
@@ -4651,46 +4656,27 @@ function PERDITION.Window(opts)
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 	})
+	-- tab dock (Paper & Ink): underline tabs. No track or pill; a thin oxblood
+	-- rule slides beneath the active tab. Active label reads ink, its icon reads
+	-- accent; idle tabs are muted.
 	local dockTrack = Create("Frame", {
 		AutomaticSize = Enum.AutomaticSize.X,
-		Size = UDim2.new(0, 0, 0, 38),
-		BackgroundColor3 = THEME.Element,
-		BackgroundTransparency = 0.25,
+		Size = UDim2.new(0, 0, 0, 36),
+		BackgroundTransparency = 1,
 		Parent = tabBar,
-	}, { corner(19), stroke(THEME.Stroke, 1, 0.6) })
-	local INDICATOR_TEXT = Color3.fromRGB(26, 27, 30)
+	})
+	local INDICATOR_TEXT = THEME.Text   -- active tab label colour (ink)
 	local dockIndicator = Create("Frame", {
-		Position = UDim2.fromOffset(4, 4),
-		Size = UDim2.fromOffset(0, 30),
-		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, 4, 1, 0),
+		Size = UDim2.fromOffset(0, 2),
+		BackgroundColor3 = accent,
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		ZIndex = 2,
+		ZIndex = 4,
 		Parent = dockTrack,
-	}, {
-		corner(15),
-		Create("UIGradient", {
-			Rotation = 105,
-			Color = ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(226, 226, 228)),
-		}),
-	})
-	-- ember bloom that rides behind the sliding indicator: a soft accent-tinted
-	-- 9-slice glow so the active tab carries a subtle halo as the pill travels
-	local dockGlow = Create("ImageLabel", {
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0, 4, 0, 19),
-		Size = UDim2.new(0, 0, 0, 30),
-		BackgroundTransparency = 1,
-		Image = loadArt(RF_SHADOW.name) or "",
-		ImageColor3 = accent,
-		ImageTransparency = 0.45,
-		ScaleType = Enum.ScaleType.Slice,
-		SliceCenter = RF_SHADOW.slice,
-		Visible = false,
-		ZIndex = 1,
-		Parent = dockTrack,
-	})
-	accentProp(dockGlow, "ImageColor3", accent)
+	}, { corner(1) })
+	accentProp(dockIndicator, "BackgroundColor3", accent)
 	local dockButtons = Create("Frame", {
 		AutomaticSize = Enum.AutomaticSize.X,
 		Size = UDim2.new(0, 0, 1, 0),
@@ -4698,48 +4684,30 @@ function PERDITION.Window(opts)
 		ZIndex = 3,
 		Parent = dockTrack,
 	}, {
-		padXY(4, 4),
 		Create("UIListLayout", {
 			FillDirection = Enum.FillDirection.Horizontal,
 			VerticalAlignment = Enum.VerticalAlignment.Center,
-			Padding = UDim.new(0, 2),
+			Padding = UDim.new(0, 10),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 	})
-	local GLOW_PAD = 13
 	local function moveIndicator(animate)
 		local target = activeTab and activeTab.pill
-		if not target then
-			dockIndicator.BackgroundTransparency = 1
-			dockGlow.Visible = false
-			return
-		end
+		if not target then dockIndicator.BackgroundTransparency = 1; return end
 		local x, w = 4, 0
 		pcall(function()
 			x = target.AbsolutePosition.X - dockTrack.AbsolutePosition.X
 			w = target.AbsoluteSize.X
 		end)
-		if w <= 0 then
-			-- text layout not measured yet (throttled executors): no slide, the
-			-- pill tints alone carry the state until a real measure arrives
-			dockIndicator.BackgroundTransparency = 1
-			dockGlow.Visible = false
-			return
-		end
-		local goalPos = UDim2.fromOffset(x, 4)
-		local goalSize = UDim2.fromOffset(w, 30)
-		local glowPos = UDim2.fromOffset(x + w / 2, 19)
-		local glowSize = UDim2.fromOffset(w + GLOW_PAD * 2, 30 + GLOW_PAD * 2)
-		dockGlow.Visible = true
+		if w <= 0 then dockIndicator.BackgroundTransparency = 1; return end
+		local goalPos = UDim2.new(0, x, 1, 0)
+		local goalSize = UDim2.fromOffset(w, 2)
 		if animate then
 			tween(dockIndicator, { Position = goalPos, Size = goalSize, BackgroundTransparency = 0 }, TI.TAB)
-			tween(dockGlow, { Position = glowPos, Size = glowSize }, TI.TAB)
 		else
 			dockIndicator.Position = goalPos
 			dockIndicator.Size = goalSize
 			dockIndicator.BackgroundTransparency = 0
-			dockGlow.Position = glowPos
-			dockGlow.Size = glowSize
 		end
 	end
 
@@ -5265,9 +5233,10 @@ function PERDITION.Window(opts)
 	local function paintTab(tab, active, animate)
 		local info = animate and TI.FAST or TweenInfo.new(0)
 		local idle = THEME.SubText
+		-- underline tabs: the active label reads ink, its icon reads accent
 		tween(tab.label, { TextColor3 = active and INDICATOR_TEXT or idle }, info)
 		if tab.icon then
-			tween(tab.icon, { ImageColor3 = active and INDICATOR_TEXT or idle }, info)
+			tween(tab.icon, { ImageColor3 = active and accent or idle }, info)
 		end
 	end
 
@@ -5901,11 +5870,11 @@ function PERDITION.Window(opts)
 	end
 
 	-- Win.ResetLook(): restore the menu's original default appearance
-	local origAccent = opts.accent or Color3.fromRGB(255, 59, 91)
+	local origAccent = opts.accent or Color3.fromRGB(156, 42, 32)
 	local origLogo = opts.logoColor or THEME.Text
 	function Win.ResetLook()
 		Win.SetRainbow(false)
-		Win.SetTheme("Dark")
+		Win.SetTheme("Paper")
 		Win.SetAccent(origAccent)
 		Win.SetFont(nil)
 		Win.SetTransparency(0)
@@ -6249,25 +6218,24 @@ function PERDITION.Window(opts)
 			ZIndex = 3,
 			Parent = dockButtons,
 		}, {
-			corner(15),
-			Create("UIPadding", { PaddingLeft = UDim.new(0, 14), PaddingRight = UDim.new(0, 14) }),
+			Create("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }),
 			Create("UIListLayout", {
 				FillDirection = Enum.FillDirection.Horizontal,
 				VerticalAlignment = Enum.VerticalAlignment.Center,
-				Padding = UDim.new(0, 7),
+				Padding = UDim.new(0, 8),
 				SortOrder = Enum.SortOrder.LayoutOrder,
 			}),
 		})
 		local tabIcon
 		local tabIconName = icon
 		-- created on first use so a tab with no icon can still gain one via the
-		-- right-click editor; colour matches the tab's current active state
+		-- right-click editor; the active tab's icon reads accent
 		local function ensureTabIcon()
 			if not tabIcon then
 				tabIcon = Create("ImageLabel", {
 					Size = UDim2.new(0, 15, 0, 15),
 					BackgroundTransparency = 1,
-					ImageColor3 = (activeTab == tab) and INDICATOR_TEXT or THEME.SubText,
+					ImageColor3 = (activeTab == tab) and accent or THEME.SubText,
 					LayoutOrder = 1,
 					ZIndex = 4,
 					Parent = btn,
@@ -6282,10 +6250,10 @@ function PERDITION.Window(opts)
 			Size = UDim2.new(0, 0, 1, 0),
 			AutomaticSize = Enum.AutomaticSize.X,
 			BackgroundTransparency = 1,
-			Font = FONT_MED,
-			Text = tostring(name or "Tab"),
+			Font = FONT_SEMI,
+			Text = string.upper(tostring(name or "Tab")),
 			TextColor3 = THEME.SubText,
-			TextSize = 13,
+			TextSize = 12,
 			LayoutOrder = 2,
 			ZIndex = 4,
 			Parent = btn,
@@ -7232,7 +7200,7 @@ function PERDITION.Window(opts)
 
 		local themeSec = S.Section("THEME")
 		themeSec.Dropdown({ text = "Menu theme", icon = "sun-moon",
-			options = { "Dark", "Midnight", "Abyss" }, default = "Dark",
+			options = { "Paper", "Dark", "Midnight", "Abyss" }, default = "Paper",
 			callback = function(v) Win.SetTheme(v) end })
 		themeSec.ColorPicker({ text = "Accent color", icon = "droplet", default = accent,
 			-- pass the full value: a Color3 in Single, a ColorSequence in Multi (so the

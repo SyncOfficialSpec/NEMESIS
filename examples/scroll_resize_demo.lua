@@ -17,7 +17,7 @@ end
 
 local Win = PERDITION.Window({
 	title = "PERDITION",
-	accent = Color3.fromRGB(255, 59, 91),
+	accent = Color3.fromRGB(156, 42, 32),
 	game = "Demo",
 	status = "Connected",
 	configs = { "Default", "Legit", "Rage" },
@@ -51,7 +51,7 @@ local s_pred = Aim.Section("PREDICTION")
 s_pred.Slider({ text = "Hit chance", min = 0, max = 100, default = 80, suffix = "%" })
 s_pred.Slider({ text = "Air resistance", min = 0, max = 5, default = 1.2, increment = 0.1 })
 s_pred.Toggle({ text = "Resolver", default = true })
-s_pred.ColorPicker({ text = "FOV color", default = Color3.fromRGB(255, 59, 91) })
+s_pred.ColorPicker({ text = "FOV color", default = Color3.fromRGB(156, 42, 32) })
 s_pred.Paragraph({ title = "Note", content = "Prediction only matters for projectile weapons. Hit-scan ignores these values entirely." })
 
 local s_extra = Aim.Section("EXTRA")

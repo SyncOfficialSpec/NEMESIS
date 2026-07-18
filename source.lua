@@ -4414,7 +4414,7 @@ function PERDITION.Window(opts)
 	local TOPBAR_H = 52
 	local SIDEBAR_W = IS_MOBILE and 148 or 176
 	local FOOTER_H = 96
-	local RADIUS = 12
+	local RADIUS = 14
 
 	local root = Create("Frame", {
 		Name = "Window",
@@ -4639,6 +4639,23 @@ function PERDITION.Window(opts)
 			Color = ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(226, 226, 228)),
 		}),
 	})
+	-- ember bloom that rides behind the sliding indicator: a soft accent-tinted
+	-- 9-slice glow so the active tab carries a subtle halo as the pill travels
+	local dockGlow = Create("ImageLabel", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0, 4, 0, 19),
+		Size = UDim2.new(0, 0, 0, 30),
+		BackgroundTransparency = 1,
+		Image = loadArt(RF_SHADOW.name) or "",
+		ImageColor3 = accent,
+		ImageTransparency = 0.45,
+		ScaleType = Enum.ScaleType.Slice,
+		SliceCenter = RF_SHADOW.slice,
+		Visible = false,
+		ZIndex = 1,
+		Parent = dockTrack,
+	})
+	accentProp(dockGlow, "ImageColor3", accent)
 	local dockButtons = Create("Frame", {
 		AutomaticSize = Enum.AutomaticSize.X,
 		Size = UDim2.new(0, 0, 1, 0),
@@ -4654,10 +4671,12 @@ function PERDITION.Window(opts)
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 	})
+	local GLOW_PAD = 13
 	local function moveIndicator(animate)
 		local target = activeTab and activeTab.pill
 		if not target then
 			dockIndicator.BackgroundTransparency = 1
+			dockGlow.Visible = false
 			return
 		end
 		local x, w = 4, 0
@@ -4669,16 +4688,23 @@ function PERDITION.Window(opts)
 			-- text layout not measured yet (throttled executors): no slide, the
 			-- pill tints alone carry the state until a real measure arrives
 			dockIndicator.BackgroundTransparency = 1
+			dockGlow.Visible = false
 			return
 		end
 		local goalPos = UDim2.fromOffset(x, 4)
 		local goalSize = UDim2.fromOffset(w, 30)
+		local glowPos = UDim2.fromOffset(x + w / 2, 19)
+		local glowSize = UDim2.fromOffset(w + GLOW_PAD * 2, 30 + GLOW_PAD * 2)
+		dockGlow.Visible = true
 		if animate then
 			tween(dockIndicator, { Position = goalPos, Size = goalSize, BackgroundTransparency = 0 }, TI.TAB)
+			tween(dockGlow, { Position = glowPos, Size = glowSize }, TI.TAB)
 		else
 			dockIndicator.Position = goalPos
 			dockIndicator.Size = goalSize
 			dockIndicator.BackgroundTransparency = 0
+			dockGlow.Position = glowPos
+			dockGlow.Size = glowSize
 		end
 	end
 

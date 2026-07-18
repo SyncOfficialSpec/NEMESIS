@@ -6105,7 +6105,7 @@ function NEMESIS.Window(opts)
 						local p, s = card.AbsolutePosition, card.AbsoluteSize
 						if s.X < 1 then return end
 						local dx = math.clamp((m.X - (p.X + s.X / 2)) / (s.X / 2), -1, 1)
-						card.Rotation = card.Rotation + (dx * 2 - card.Rotation) * 0.18
+						card.Rotation = card.Rotation + (dx * 3 - card.Rotation) * 0.2
 					end)
 				end)
 				card.MouseLeave:Connect(function()
@@ -6115,6 +6115,17 @@ function NEMESIS.Window(opts)
 			end
 			local function wireCard(card)
 				wireTilt(card)
+				-- also arm the drag from the header's own input (a real mouse fires GUI
+				-- object events even where the global input is sunk by the GUI)
+				local header = card:FindFirstChild("SectionHeader")
+				if header then
+					header.InputBegan:Connect(function(input)
+						if not canvasDrag or dragCard then return end
+						if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+							armedCard = card; armStart = UserInputService:GetMouseLocation()
+						end
+					end)
+				end
 			end
 			-- arm a drag from a global mouse-down when the cursor is over a panel header
 			-- (the screenGui has IgnoreGuiInset = true, so GetMouseLocation shares GUI space)

@@ -2141,7 +2141,7 @@ function Elements.Dropdown(parent, accent, opts)
 	end
 
 	-- open / close (fades the floating panel; tracks the field each frame)
-	local trackConn
+	local trackConn, outsideConn
 	local function fadePanel(opening)
 		tween(panel, { BackgroundTransparency = opening and 0 or 1 }, FADE)
 		tween(panelStroke, { Transparency = opening and 0.15 or 1 }, FADE)
@@ -2164,7 +2164,15 @@ function Elements.Dropdown(parent, accent, opts)
 		panelScale.Scale = s
 		local logicalH = math.clamp(#options * (OPT_H + 3) + 9, OPT_H + 12, PANEL_MAXH)
 		panel.Size = UDim2.fromOffset(fs.X / s, logicalH)
-		panel.Position = UDim2.fromOffset(fp.X, fp.Y + fs.Y + 6)
+		-- open below the field, but flip above when it would spill past the bottom,
+		-- then clamp fully into the viewport so the option list is never cut off
+		local renderedH = logicalH * s
+		local vp = viewportSize()
+		local px, py = fp.X, fp.Y + fs.Y + 6
+		if py + renderedH > vp.Y - 8 then py = fp.Y - renderedH - 6 end
+		px = math.clamp(px, 8, math.max(8, vp.X - fs.X - 8))
+		py = math.clamp(py, 8, math.max(8, vp.Y - renderedH - 8))
+		panel.Position = UDim2.fromOffset(px, py)
 	end
 	local ddHandle = {}
 	local function setOpen(b)
@@ -2183,10 +2191,23 @@ function Elements.Dropdown(parent, accent, opts)
 			track()
 			if trackConn then trackConn:Disconnect() end
 			trackConn = RunService.RenderStepped:Connect(track)
+			-- click anywhere outside the panel or the field closes the dropdown
+			if outsideConn then outsideConn:Disconnect() end
+			outsideConn = UserInputService.InputBegan:Connect(function(input)
+				if not panel.Parent then if outsideConn then outsideConn:Disconnect(); outsideConn = nil end return end
+				if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+				local p = input.Position
+				local function inside(inst)
+					local ap, as = inst.AbsolutePosition, inst.AbsoluteSize
+					return p.X >= ap.X and p.X <= ap.X + as.X and p.Y >= ap.Y and p.Y <= ap.Y + as.Y
+				end
+				if not inside(panel) and not inside(field) then setOpen(false) end
+			end)
 			fadePanel(true)
 		else
 			if _ddCurrent == ddHandle then _ddCurrent = nil end
 			if trackConn then trackConn:Disconnect(); trackConn = nil end
+			if outsideConn then outsideConn:Disconnect(); outsideConn = nil end
 			fadePanel(false)
 			task.delay(0.18, function() if not open then panel.Visible = false end end)
 		end

@@ -4395,6 +4395,9 @@ function NEMESIS.Window(opts)
 		Position = UDim2.new(0, 190, 0.5, 0),
 		Size = UDim2.new(1, -(190 + 176), 1, 0),
 		BackgroundTransparency = 1,
+		-- confine the tab dock between the logo and the right-side icons so a wide
+		-- dock (many tabs / long names) clips instead of bleeding over them
+		ClipsDescendants = true,
 		Parent = topbar,
 	}, {
 		Create("UIListLayout", {
@@ -4594,7 +4597,7 @@ function NEMESIS.Window(opts)
 	-- the search bar that animates in over the tab area
 	local searchBar = Create("Frame", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 45, 0.5, 0),
+		Position = UDim2.new(0.5, 7, 0.5, 0),
 		Size = UDim2.new(0, 360, 0, 30),
 		BackgroundColor3 = THEME.Element,
 		BackgroundTransparency = 1,
@@ -4905,6 +4908,9 @@ function NEMESIS.Window(opts)
 	-- search: the field deploys over the tab strip, tabs fade out underneath
 	local searchOpen = false
 	local function sQuint(t) return TweenInfo.new(t, Enum.EasingStyle.Quint, Enum.EasingDirection.Out) end
+	-- the search bar centres over the tab area (+7 from topbar centre) and never
+	-- grows wider than the tab area, so it can't cover the right-side icon cluster
+	local function searchGeom() return math.clamp(tabArea.AbsoluteSize.X - 16, 120, 360) end
 	searchSetCount = function(txt)
 		searchCount.Text = txt
 	end
@@ -4913,16 +4919,17 @@ function NEMESIS.Window(opts)
 		searchOpen = true
 		tween(tabBar, { GroupTransparency = 1 }, sQuint(0.14))
 		task.delay(0.15, function() if searchOpen then tabBar.Visible = false end end)
+		local sw = searchGeom()
 		searchBar.Visible = true
 		searchBar.BackgroundTransparency = 1
-		searchBar.Size = UDim2.new(0, 360, 0, 0)
-		searchBar.Position = UDim2.new(0.5, 45, 0.5, 0)
+		searchBar.Size = UDim2.new(0, sw, 0, 0)
+		searchBar.Position = UDim2.new(0.5, 7, 0.5, 0)
 		searchBox.TextTransparency = 1
 		searchBarIcon.ImageTransparency = 1
 		searchCount.TextTransparency = 1
 		if searchBarStroke then searchBarStroke.Transparency = 1 end
 		pcall(function() searchBox:CaptureFocus() end)
-		tween(searchBar, { BackgroundTransparency = 0, Size = UDim2.new(0, 360, 0, 30) }, sQuint(0.22))
+		tween(searchBar, { BackgroundTransparency = 0, Size = UDim2.new(0, sw, 0, 30) }, sQuint(0.22))
 		tween(searchBox, { TextTransparency = 0 }, sQuint(0.22))
 		tween(searchBarIcon, { ImageTransparency = 0.2 }, sQuint(0.22))
 		tween(searchCount, { TextTransparency = 0.2 }, sQuint(0.22))
@@ -4931,7 +4938,7 @@ function NEMESIS.Window(opts)
 	local function closeSearch()
 		if not searchOpen then return end
 		searchOpen = false
-		tween(searchBar, { BackgroundTransparency = 1, Size = UDim2.new(0, 360, 0, 0) }, sQuint(0.14))
+		tween(searchBar, { BackgroundTransparency = 1, Size = UDim2.new(0, searchGeom(), 0, 0) }, sQuint(0.14))
 		tween(searchBox, { TextTransparency = 1 }, sQuint(0.12))
 		tween(searchBarIcon, { ImageTransparency = 1 }, sQuint(0.12))
 		tween(searchCount, { TextTransparency = 1 }, sQuint(0.12))

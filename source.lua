@@ -1310,9 +1310,10 @@ local function rowText(parent, text, desc, reserveScale, reservePx, icon)
 	reserveScale = reserveScale or 0
 	reservePx = reservePx or 48
 	local indent = 0
+	local iconImg
 	local iconSpec = resolveIcon(icon)
 	if iconSpec then
-		local img = Create("ImageLabel", {
+		iconImg = Create("ImageLabel", {
 			AnchorPoint = Vector2.new(0, 0.5),
 			Position = UDim2.new(0, 0, 0.5, 0),
 			Size = UDim2.new(0, 16, 0, 16),
@@ -1320,7 +1321,7 @@ local function rowText(parent, text, desc, reserveScale, reservePx, icon)
 			ImageColor3 = THEME.SubText,
 			Parent = parent,
 		})
-		applyIcon(img, iconSpec)
+		applyIcon(iconImg, iconSpec)
 		indent = 24
 	end
 	local lblSize = UDim2.new(1 - reserveScale, -reservePx - indent, 1, 0)
@@ -1360,7 +1361,7 @@ local function rowText(parent, text, desc, reserveScale, reservePx, icon)
 			TextTruncate = Enum.TextTruncate.AtEnd,
 			Parent = col,
 		})
-		return col
+		return col, iconImg
 	end
 	return Create("TextLabel", {
 		BackgroundTransparency = 1,
@@ -1374,7 +1375,7 @@ local function rowText(parent, text, desc, reserveScale, reservePx, icon)
 		TextYAlignment = Enum.TextYAlignment.Center,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		Parent = parent,
-	})
+	}), iconImg
 end
 
 -- Update the title of a rowText result (a plain TextLabel, or the title label
@@ -1730,7 +1731,20 @@ function Elements.Toggle(parent, accent, opts)
 	onHitbox(function(c) hitbox = c end)
 	local state = opts.default and true or false
 	local row = newRow(parent, opts.desc and 50 or ROW_H)
-	local rowLabel = rowText(row, opts.text, opts.desc, 0, 32, opts.icon)
+	local rowLabel, rowIconImg = rowText(row, opts.text, opts.desc, 0, 32, opts.icon)
+
+	-- filled-icon effect: when ON, the row icon lights up (white) inside a filled
+	-- accent rounded chip, the SF Symbols "filled badge" look
+	local iconBg
+	if rowIconImg then
+		rowIconImg.ZIndex = 2
+		iconBg = Create("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 8, 0.5, 0),
+			Size = UDim2.new(0, 24, 0, 24), BackgroundColor3 = hitbox, BackgroundTransparency = 1,
+			BorderSizePixel = 0, ZIndex = 1, Parent = row,
+		}, { corner(7) })
+		hitboxProp(iconBg, "BackgroundColor3", hitbox)
+	end
 
 	-- machined checkbox: recessed off-state well, accent fill + check when on,
 	-- with a soft lamp glow behind the lit box
@@ -1810,6 +1824,12 @@ function Elements.Toggle(parent, accent, opts)
 		end
 		if titleLabel then
 			tween(titleLabel, { TextTransparency = state and 0 or 0.35 }, info)
+		end
+		if rowIconImg then
+			tween(rowIconImg, { ImageColor3 = state and accentTextColor(hitbox) or THEME.SubText }, info)
+		end
+		if iconBg then
+			tween(iconBg, { BackgroundTransparency = state and 0.1 or 1 }, fadeInfo)
 		end
 	end
 	click.MouseEnter:Connect(function() if not state then tween(box, { BackgroundColor3 = THEME.ElementHover }, TI.HOVER) end end)

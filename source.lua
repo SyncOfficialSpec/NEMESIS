@@ -4044,29 +4044,26 @@ end
 -- Collapsible content section ("GENERAL", "HITBOX", …)
 function makeSection(host, accent, title, startClosed)
 	local sectionSetOpen   -- set below when the section has a collapsible header
+	-- PERDITION professional panel: a flat, elevated graphite plate with a clean
+	-- 1px border and a whisper-faint top-interior highlight (the crafted bevel),
+	-- an ember accent rule + hairline in the header. No gloss - modern and editorial.
 	local card = Create("Frame", {
 		BackgroundColor3 = THEME.Group,
 		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		Parent = host,
 	}, {
-		corner(10),
-		-- Gen2-fanmade pill look on the panel (same finish as the Gen2 tab pills,
-		-- just a rectangular shape): a glossy vertical sheen over the fill plus a
-		-- top-lit white stroke that's brightest along the top edge and fades down,
-		-- giving the panel that raised-glass feel.
-		Create("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(200, 200, 200)) }),
-		Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder }),
+		corner(12),
+		stroke(THEME.ElementStroke, 1, 0.4),
+		Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Center }),
 	})
-	local panelStroke = Create("UIStroke", { Color = Color3.fromRGB(255, 255, 255), Transparency = 0.66, Thickness = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = card })
-	Create("UIGradient", { Rotation = 90, Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0.85) }), Parent = panelStroke })
 
 	local bodyWrap = Create("Frame", {
 		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundTransparency = 1,
 		ClipsDescendants = true,
-		LayoutOrder = 2,
+		LayoutOrder = 3,
 		Parent = card,
 	})
 	local body = Create("Frame", {
@@ -4080,34 +4077,53 @@ function makeSection(host, accent, title, startClosed)
 			HorizontalAlignment = Enum.HorizontalAlignment.Center,
 			Padding = UDim.new(0, 6),
 		}),
-		Create("UIPadding", { PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 16) }),
+		Create("UIPadding", { PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 14) }),
 	})
 
 	if title and title ~= "" then
 		local header = Create("TextButton", {
 			Name = "SectionHeader",
-			Size = UDim2.new(1, 0, 0, 30),
+			Size = UDim2.new(1, 0, 0, 34),
 			BackgroundTransparency = 1,
 			AutoButtonColor = false,
 			Text = "",
 			LayoutOrder = 1,
 			Parent = card,
 		}, { padXY(ROW_PAD, 0) })
+		-- top-interior highlight: a faint 1px light line at the card's top edge,
+		-- inset past the rounded corners; the detail that makes it read as crafted
+		Create("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 0),
+			Size = UDim2.new(1, -6, 0, 1), BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+			BackgroundTransparency = 0.86, BorderSizePixel = 0, ZIndex = 3, Parent = header,
+		})
+		-- ember accent rule before the title
+		local marker = Create("Frame", {
+			AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0),
+			Size = UDim2.new(0, 3, 0, 13), BackgroundColor3 = accent, BorderSizePixel = 0, Parent = header,
+		}, { corner(2) })
+		accentProp(marker, "BackgroundColor3", accent)
 		Create("TextLabel", {
 			BackgroundTransparency = 1,
 			AnchorPoint = Vector2.new(0, 0.5),
-			Position = UDim2.new(0, 0, 0.5, 0),
-			Size = UDim2.new(1, -30, 1, 0),
+			Position = UDim2.new(0, 12, 0.5, 0),
+			Size = UDim2.new(1, -38, 1, 0),
 			Font = FONT_SEMI,
 			Text = string.upper(tostring(title)),
 			TextColor3 = THEME.SubText,
-			TextSize = 12,
+			TextSize = 11,
 			TextXAlignment = Enum.TextXAlignment.Left,
+			TextTruncate = Enum.TextTruncate.AtEnd,
 			Parent = header,
 		})
-		local chev = iconChevron(header, 15, THEME.SubText, "chevron-down")
+		local chev = iconChevron(header, 15, THEME.Faint, "chevron-down")
 		chev.AnchorPoint = Vector2.new(1, 0.5)
 		chev.Position = UDim2.new(1, 0, 0.5, 0)
+		-- hairline separating the header from the body
+		Create("Frame", {
+			Size = UDim2.new(1, -24, 0, 1), BackgroundColor3 = THEME.Stroke,
+			BackgroundTransparency = 0.35, BorderSizePixel = 0, LayoutOrder = 2, Parent = card,
+		})
 		local open = true
 		local SEC_SLIDE = TweenInfo.new(0.36, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
 		sectionSetOpen = function(want, animate)

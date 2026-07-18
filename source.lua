@@ -2560,27 +2560,27 @@ function Elements.ColorPicker(parent, accent, opts)
 	local row = newRow(parent, ROW_H)
 	rowText(row, opts.text, opts.desc, 0, 76, opts.icon)
 
+	-- soft colour glow behind the swatch (gen2 look); made before sw1 so it renders behind it
+	local swGlowArt = loadArt("cal1_glow_dot.png")
+	local sw1Glow = swGlowArt and Create("ImageLabel", {
+		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 3, 0.5, 0), Size = UDim2.new(0, 50, 0, 34),
+		BackgroundTransparency = 1, Image = swGlowArt, ImageColor3 = slotColor(1), ImageTransparency = 0.5, Parent = row,
+	}) or nil
 	local sw1 = Create("TextButton", {
 		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0),
-		Size = UDim2.new(0, 34, 0, 18), BackgroundColor3 = slotColor(1),
+		Size = UDim2.new(0, 36, 0, 20), BackgroundColor3 = slotColor(1),
 		Text = "", AutoButtonColor = false, Parent = row,
-	}, { corner(3), stroke(THEME.ElementStroke, 1, 0.2) })
-	-- in Multi mode the row swatch previews the whole gradient, not a flat colour
-	local sw1Grad = Create("UIGradient", { Enabled = false, Parent = sw1 })
+	}, { corner(6), stroke(THEME.ElementStroke, 1, 0.25) })
+	-- vertical gradient fill: lighter top -> colour bottom in Single, the full gradient in Multi
+	local sw1Grad = Create("UIGradient", { Rotation = 90, Parent = sw1 })
 	local sw2 = Create("TextButton", {
 		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -24, 0.5, 0),
 		Size = UDim2.new(0, 20, 0, 18), BackgroundColor3 = slotColor(2),
 		Text = "", AutoButtonColor = false, Visible = false, Parent = row,
 	}, { corner(3), stroke(THEME.ElementStroke, 1, 0.2) })
 	local function layoutSwatches()
-		if isGradient then
-			sw2.Visible = true
-			sw1.Size = UDim2.new(0, 20, 0, 18)
-			sw2.Position = UDim2.new(1, -24, 0.5, 0)
-		else
-			sw2.Visible = false
-			sw1.Size = UDim2.new(0, 34, 0, 18)
-		end
+		sw2.Visible = false
+		sw1.Size = UDim2.new(0, 36, 0, 20)
 	end
 	layoutSwatches()
 
@@ -2593,10 +2593,20 @@ function Elements.ColorPicker(parent, accent, opts)
 	local opened = false
 	local railDragIdx = nil
 
+	local function paintSwatch()
+		if mode == "Multi" then
+			sw1Grad.Color = multiSequence()
+			if sw1Glow then sw1Glow.ImageColor3 = stopColor(1) end
+		else
+			local c1 = slotColor(1)
+			sw1Grad.Color = ColorSequence.new(accentLight(c1), c1)
+			if sw1Glow then sw1Glow.ImageColor3 = c1 end
+		end
+	end
 	local function commit()
 		sw1.BackgroundColor3 = slotColor(1)
 		sw2.BackgroundColor3 = slotColor(2)
-		if mode == "Multi" then sw1Grad.Enabled = true; sw1Grad.Color = multiSequence() else sw1Grad.Enabled = false end
+		paintSwatch()
 		local value, al
 		if mode == "Multi" then
 			value = multiSequence()
@@ -2622,6 +2632,7 @@ function Elements.ColorPicker(parent, accent, opts)
 		if mode == "Multi" then
 			sw1.BackgroundColor3 = stopColor(1)
 		elseif active == 1 then sw1.BackgroundColor3 = col else sw2.BackgroundColor3 = col end
+		paintSwatch()
 		if svBase then svBase.BackgroundColor3 = Color3.fromHSV(c.h, 1, 1) end
 		if svDot then svDot.Position = UDim2.new(c.s, 0, 1 - c.v, 0) end
 		if hueDot then hueDot.Position = UDim2.new(c.h, 0, 0.5, 0) end
@@ -2971,20 +2982,20 @@ function Elements.ColorPicker(parent, accent, opts)
 			-- centre-anchored: convert the top-left target to a centre point
 			local cx, cy = sx + pw / 2, sy + ph / 2
 			cpOpenPos = Vector2.new(cx, cy)
-			panel.Position = UDim2.fromOffset(cx, cy + 12)
+			panel.Position = UDim2.fromOffset(cx, cy + 10)
 			panel.GroupTransparency = 1
-			if cpScale then cpScale.Scale = 0.85 end
+			if cpScale then cpScale.Scale = 0.92 end
 			backdrop.Visible = true
 			panel.Visible = true
-			-- Syde open: the panel grows up from a smaller box while fading in
+			-- match Syde's settings panel: grow (0.92 -> 1) + fade + slide up, all on EXPAND
 			tween(panel, { GroupTransparency = 0, Position = UDim2.fromOffset(cx, cy) }, TI.EXPAND)
-			if cpScale then tween(cpScale, { Scale = 1 }, TI.SYDE_SIZE) end
+			if cpScale then tween(cpScale, { Scale = 1 }, TI.EXPAND) end
 		else
 			if _ddCurrent == cpHandle then _ddCurrent = nil end
-			tween(panel, { GroupTransparency = 1, Position = UDim2.fromOffset(cpOpenPos.X, cpOpenPos.Y + 8) }, TI.EXPAND)
-			if cpScale then tween(cpScale, { Scale = 0.9 }, TI.EXPAND) end
+			tween(panel, { GroupTransparency = 1 }, TI.FAST)
+			if cpScale then tween(cpScale, { Scale = 0.94 }, TI.FAST) end
 			backdrop.Visible = false
-			task.delay(0.22, function()
+			task.delay(0.18, function()
 				if not opened then panel.Visible = false end
 			end)
 		end

@@ -22,7 +22,7 @@
 
 local PERDITION = {}
 PERDITION.Flags = {}
-PERDITION.Version = "3.0.0"
+PERDITION.Version = "4.0.0"
 
 -- Services (cloneref-safe)
 local function getService(name)
@@ -608,14 +608,22 @@ local FONT = Font.new(INTER, Enum.FontWeight.Medium)
 local FONT_MED = Font.new(INTER, Enum.FontWeight.Medium)
 local FONT_SEMI = Font.new(INTER, Enum.FontWeight.SemiBold)
 local FONT_BOLD = Font.new(INTER, Enum.FontWeight.Bold)
-local FONT_MONO
+local FONT_MONO, FONT_MONO_SEMI, FONT_MONO_BOLD
 do
-	local ok, f = pcall(Font.new, "rbxasset://fonts/families/RobotoMono.json", Enum.FontWeight.Medium)
-	FONT_MONO = ok and f or FONT_MED
+	-- GLYPH: RobotoMono is the structural voice (labels / codes / values).
+	-- Inter survives for long prose only. Mono falls back to Inter on
+	-- executors with stripped font sets.
+	local MONO = "rbxasset://fonts/families/RobotoMono.json"
+	local okM, m = pcall(Font.new, MONO, Enum.FontWeight.Medium)
+	local okS, s = pcall(Font.new, MONO, Enum.FontWeight.SemiBold)
+	local okB, b = pcall(Font.new, MONO, Enum.FontWeight.Bold)
+	FONT_MONO = okM and m or FONT_MED
+	FONT_MONO_SEMI = okS and s or FONT_SEMI
+	FONT_MONO_BOLD = okB and b or FONT_BOLD
 end
 
 -- Inline-row layout metrics (scaled by the window's UIScale at runtime)
-local ROW_H = 36          -- height of a setting row (instrument grid)
+local ROW_H = 34          -- height of a setting row (GLYPH instrument grid)
 local ROW_PAD = 12        -- horizontal inset inside a row / section
 -- Right-side control widths are a FRACTION of the row, so they fit any column
 -- count (1 / 2 / 3) and resize. Label takes the complementary fraction.
@@ -4000,7 +4008,7 @@ function Elements.SegmentedPicker(parent, accent, opts)
 	local track = Create("Frame", {
 		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0.55, 0, 0, 24),
 		BackgroundColor3 = THEME.Element, ClipsDescendants = true, Parent = row,
-	}, { corner(7), stroke(THEME.ElementStroke, 1, 0.4) })
+	}, { corner(3), stroke(THEME.ElementStroke, 1, 0.4) })
 	local thumb = Create("Frame", { Size = UDim2.new(1 / n, -6, 1, -6), Position = UDim2.new(0, 3, 0, 3), BackgroundColor3 = accent, BackgroundTransparency = 0.12, ZIndex = 1, Parent = track }, { corner(5) })
 	accentProp(thumb, "BackgroundColor3", accent)
 	local sel = 1
@@ -4535,7 +4543,7 @@ function PERDITION.Window(opts)
 	local TOPBAR_H = 52
 	local SIDEBAR_W = IS_MOBILE and 148 or 176
 	local FOOTER_H = 96
-	local RADIUS = 14
+	local RADIUS = 4   -- GLYPH: window radius (cards 3 / controls 2 at their own sites)
 
 	local root = Create("Frame", {
 		Name = "Window",
@@ -4616,6 +4624,33 @@ function PERDITION.Window(opts)
 		end)
 	end)
 
+	-- GLYPH registration marks: 1px crop-ticks pinned just outside the four
+	-- window corners. Pure identity, no tweens; they ride the shadow holder.
+	do
+		local TICK_L, TICK_O = 7, 5   -- tick length / gap outside the corner
+		local function tick(w, h, pos)
+			local t = Create("Frame", {
+				Position = pos, Size = UDim2.new(0, w, 0, h),
+				BackgroundColor3 = THEME.Faint, BackgroundTransparency = 0.25,
+				BorderSizePixel = 0, ZIndex = 0, Parent = rootShadowHolder,
+			})
+			paintRole(t, "BackgroundColor3", "mute")
+			return t
+		end
+		-- top-left
+		tick(TICK_L, 1, UDim2.new(0, -TICK_O - TICK_L, 0, -TICK_O))
+		tick(1, TICK_L, UDim2.new(0, -TICK_O, 0, -TICK_O - TICK_L))
+		-- top-right
+		tick(TICK_L, 1, UDim2.new(1, TICK_O, 0, -TICK_O))
+		tick(1, TICK_L, UDim2.new(1, TICK_O, 0, -TICK_O - TICK_L))
+		-- bottom-left
+		tick(TICK_L, 1, UDim2.new(0, -TICK_O - TICK_L, 1, TICK_O - 1))
+		tick(1, TICK_L, UDim2.new(0, -TICK_O, 1, TICK_O))
+		-- bottom-right
+		tick(TICK_L, 1, UDim2.new(1, TICK_O, 1, TICK_O - 1))
+		tick(1, TICK_L, UDim2.new(1, TICK_O, 1, TICK_O))
+	end
+
 	-- Top bar: logo + wordmark | top tabs | search + min/close
 	local topbar = Create("Frame", {
 		Size = UDim2.new(1, 0, 0, TOPBAR_H),
@@ -4660,30 +4695,47 @@ function PERDITION.Window(opts)
 		})
 		if not brandAsset and logoSpec then applyIcon(logoImage, logoSpec) end
 	else
-		-- oxblood brand dot before the editorial wordmark
+		-- GLYPH: square LED brand dot + lowercase mono wordmark + version tag.
+		-- Tagged GlyphMono so Win.SetFont never swaps the structural voice.
 		local brandDot = Create("Frame", {
 			AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 16, 0.5, 0),
 			Size = UDim2.new(0, 6, 0, 6), BackgroundColor3 = accent, BorderSizePixel = 0, Parent = topbar,
-		}, { corner(3) })
+		})
 		accentProp(brandDot, "BackgroundColor3", accent)
+		local titleText = string.lower(tostring(opts.title or "perdition"))
+		local wmW = math.max(40, math.min(#titleText, 18) * 9 + 2)   -- mono 15px ~ 9px/char
 		wordmark = Create("TextLabel", {
 			Position = UDim2.new(0, 30, 0.5, 0),
 			AnchorPoint = Vector2.new(0, 0.5),
-			Size = UDim2.new(0, 170, 1, 0),
+			Size = UDim2.new(0, wmW, 1, 0),
 			BackgroundTransparency = 1,
-			Font = FONT_BOLD,
-			Text = string.upper(tostring(opts.title or "PERDITION")),
+			Font = FONT_MONO_BOLD,
+			Text = titleText,
 			TextColor3 = THEME.Text,
-			TextSize = 16,
+			TextSize = 15,
+			TextTruncate = Enum.TextTruncate.AtEnd,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			Parent = topbar,
 		})
+		wordmark:SetAttribute("GlyphMono", true)
+		Create("TextLabel", {
+			Position = UDim2.new(0, 30 + wmW + 8, 0.5, 1),
+			AnchorPoint = Vector2.new(0, 0.5),
+			Size = UDim2.new(0, 90, 1, 0),
+			BackgroundTransparency = 1,
+			Font = FONT_MONO,
+			Text = "prd–" .. tostring(PERDITION.Version or "4.0.0"),
+			TextColor3 = THEME.Faint,
+			TextSize = 10,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Parent = topbar,
+		}):SetAttribute("GlyphMono", true)
 	end
 	local logoGrad  -- kept for Win.SetLogoGradient compatibility
 	-- a machined tick separating the brand from the tabs
 	Create("Frame", {
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 16 + WORDMARK_W + 14, 0.5, 0),
+		Position = UDim2.new(0, 218, 0.5, 0),
 		Size = UDim2.new(0, 1, 0, 16),
 		BackgroundColor3 = THEME.Stroke,
 		BorderSizePixel = 0,
@@ -4705,8 +4757,8 @@ function PERDITION.Window(opts)
 	-- inside it stay centred and reflow automatically as the window resizes
 	local tabArea = Create("Frame", {
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 190, 0.5, 0),
-		Size = UDim2.new(1, -(190 + 176), 1, 0),
+		Position = UDim2.new(0, 226, 0.5, 0),
+		Size = UDim2.new(1, -(226 + 176), 1, 0),
 		BackgroundTransparency = 1,
 		-- confine the tab dock between the logo and the right-side icons so a wide
 		-- dock (many tabs / long names) clips instead of bleeding over them
@@ -4725,6 +4777,9 @@ function PERDITION.Window(opts)
 	local tabs = {}
 	local activeTab
 	local tabBarOrder = 0
+	-- GLYPH: rich-text labels with theme-baked spans (part codes) register a
+	-- rebuild here so SetTheme can refresh their colours after the hex-walk
+	local richRefresh = {}
 
 	-- tab dock: rounded track holding pill tabs; a sliding indicator pill marks
 	-- the open tab and glides between pills
@@ -4787,15 +4842,10 @@ function PERDITION.Window(opts)
 			w = target.AbsoluteSize.X
 		end)
 		if w <= 0 then dockIndicator.BackgroundTransparency = 1; return end
-		local goalPos = UDim2.new(0, x, 1, 0)
-		local goalSize = UDim2.fromOffset(w, 2)
-		if animate then
-			tween(dockIndicator, { Position = goalPos, Size = goalSize, BackgroundTransparency = 0 }, TI.TAB)
-		else
-			dockIndicator.Position = goalPos
-			dockIndicator.Size = goalSize
-			dockIndicator.BackgroundTransparency = 0
-		end
+		-- GLYPH instant law: the indicator snaps, it never glides
+		dockIndicator.Position = UDim2.new(0, x, 1, 0)
+		dockIndicator.Size = UDim2.fromOffset(w, 2)
+		dockIndicator.BackgroundTransparency = 0
 	end
 
 	-- icon button factory (top bar / content header / footer)
@@ -4971,7 +5021,7 @@ function PERDITION.Window(opts)
 		BackgroundColor3 = THEME.Sidebar,
 		BorderSizePixel = 0,
 		Parent = body,
-	}, { corner(12), stroke(THEME.Stroke, 1, 0.5) })
+	}, { corner(4), stroke(THEME.Stroke, 1, 0) })
 
 	-- scroll region (tab sidebars stack here, one visible at a time), leaving
 	-- room for the status footer pinned to the card's bottom
@@ -5023,7 +5073,7 @@ function PERDITION.Window(opts)
 		Image = profId and ("rbxthumb://type=AvatarHeadShot&id=%d&w=100&h=100"):format(profId) or "",
 		ScaleType = Enum.ScaleType.Crop,
 		Parent = sbFooter,
-	}, { corner(10), stroke(THEME.ElementStroke, 1, 0.3) })
+	}, { corner(3), stroke(THEME.ElementStroke, 1, 0.3) })
 	-- online status dot, ringed in the footer ground so it reads as a badge
 	local statusDot = Create("Frame", {
 		AnchorPoint = Vector2.new(1, 1),
@@ -5033,7 +5083,7 @@ function PERDITION.Window(opts)
 		BorderSizePixel = 0,
 		ZIndex = 3,
 		Parent = avatar,
-	}, { corner(6), stroke(THEME.Sidebar, 2.5, 0) })
+	}, { stroke(THEME.Sidebar, 2.5, 0) })
 	local gameLabel = Create("TextLabel", {
 		Position = UDim2.new(0, 56, 0, 7),
 		Size = UDim2.new(1, -132, 0, 17),
@@ -5069,7 +5119,7 @@ function PERDITION.Window(opts)
 	local fpsDot = Create("Frame", {
 		AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0),
 		Size = UDim2.new(0, 5, 0, 5), BackgroundColor3 = THEME.Good, BorderSizePixel = 0, Parent = fpsChip,
-	}, { corner(3) })
+	})
 	local fpsLabel = Create("TextLabel", {
 		Size = UDim2.new(1, -22, 1, 0),
 		Position = UDim2.new(0, 17, 0, 0),
@@ -5081,6 +5131,7 @@ function PERDITION.Window(opts)
 		TextXAlignment = Enum.TextXAlignment.Center,
 		Parent = fpsChip,
 	})
+	fpsLabel:SetAttribute("GlyphMono", true)
 	local fpsConn
 	local sessConn   -- Settings SESSION heartbeat; torn down in Win.Destroy
 	do
@@ -5093,7 +5144,7 @@ function PERDITION.Window(opts)
 				acc = acc + (tonumber(dt) or 0)
 				if acc >= 0.5 then
 					local fps = math.floor(frames / acc + 0.5)
-					fpsLabel.Text = tostring(fps) .. " fps"
+					fpsLabel.Text = "fps " .. tostring(fps)
 					frames, acc = 0, 0
 				end
 			end)
@@ -5189,10 +5240,92 @@ function PERDITION.Window(opts)
 		task.defer(function() updateFades(body) end)
 	end
 
-	-- open animation (Syde-style): the window unfolds from a smaller centred box
-	-- to full size on a smooth Quint curve (the shadow holder mirrors the size)
-	root.Size = UDim2.new(0, math.floor(W * 0.82), 0, math.floor(H * 0.82))
-	tween(root, { Size = UDim2.new(0, W, 0, H) }, TI.OPEN)
+	-- GLYPH reveal: the window snaps in under 100ms from a hair under full
+	-- size (structure arrives with intent; no unfold theatrics). With boot
+	-- enabled (default, skip via Window({ boot = false })) a dot-matrix
+	-- wordmark card plays first: one 80ms glitch, scanline sweep, then the
+	-- snap. Key-gated windows skip boot (the gate is its own reveal).
+	local bootDone = false
+	local function revealWindow()
+		if bootDone then return end
+		bootDone = true
+		root.Visible = true
+		root.Size = UDim2.new(0, math.floor(W * 0.985), 0, math.floor(H * 0.985))
+		tween(root, { Size = UDim2.new(0, W, 0, H) }, TweenInfo.new(0.09, Enum.EasingStyle.Quint, Enum.EasingDirection.Out))
+	end
+	local function playBoot(onDone)
+		local art = loadArt("gly1_wordmark.png")
+		if not art then return false end   -- no asset pipeline: just snap in
+		local card = Create("CanvasGroup", {
+			Name = "BootCard",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0.5, 0),
+			Size = UDim2.new(0, W, 0, H),
+			BackgroundColor3 = THEME.Background,
+			GroupTransparency = 0,
+			Parent = screenGui,
+		}, { corner(RADIUS), stroke(THEME.Stroke, 1, 0) })
+		paintRole(card, "BackgroundColor3", "ground")
+		local wm = Create("ImageLabel", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0.5, -10),
+			Size = UDim2.new(0, 265, 0, 35),
+			BackgroundTransparency = 1,
+			Image = art,
+			ImageColor3 = seqPrimary(accent),
+			ImageTransparency = 1,
+			ScaleType = Enum.ScaleType.Fit,
+			Parent = card,
+		})
+		accentProp(wm, "ImageColor3", accent)
+		local status = Create("TextLabel", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0.5, 22),
+			Size = UDim2.new(1, 0, 0, 14),
+			BackgroundTransparency = 1,
+			Font = FONT_MONO,
+			Text = string.format("sys ok \u{00B7} %d icons \u{00B7} v%s", #allIconNames(), tostring(PERDITION.Version or "4.0.0")),
+			TextColor3 = THEME.Faint,
+			TextSize = 10,
+			Parent = card,
+		})
+		status:SetAttribute("GlyphMono", true)
+		paintRole(status, "TextColor3", "mute")
+		local scan = Create("Frame", {
+			Size = UDim2.new(1, 0, 0, 1),
+			Position = UDim2.new(0, 0, 0, 0),
+			BackgroundColor3 = seqPrimary(accent),
+			BackgroundTransparency = 0.55,
+			BorderSizePixel = 0,
+			Parent = card,
+		})
+		accentProp(scan, "BackgroundColor3", accent)
+		task.spawn(function()
+			-- 80ms glitch: two visibility flickers + 2px horizontal jitter
+			local basePos = card.Position
+			for i = 1, 2 do
+				card.Visible = false task.wait(0.02)
+				card.Visible = true
+				card.Position = basePos + UDim2.new(0, (i % 2 == 0) and 2 or -2, 0, 0)
+				task.wait(0.02)
+			end
+			card.Position = basePos
+			tween(wm, { ImageTransparency = 0 }, TweenInfo.new(0.12))
+			tween(scan, { Position = UDim2.new(0, 0, 1, 0) }, TweenInfo.new(0.38, Enum.EasingStyle.Linear))
+			task.wait(0.55)
+			tween(card, { GroupTransparency = 1 }, TweenInfo.new(0.12))
+			task.wait(0.14)
+			pcall(function() card:Destroy() end)
+			onDone()
+		end)
+		return true
+	end
+	root.Visible = false
+	if opts.boot ~= false and not opts.key and not reducedMotion then
+		if not playBoot(revealWindow) then revealWindow() end
+	else
+		revealWindow()
+	end
 
 	-- Navigation state
 
@@ -5283,19 +5416,22 @@ function PERDITION.Window(opts)
 		breadcrumb.Text = table.concat(parts, string.format('  <font color="#%s">\u{203A}</font>  ', hexOf(THEME.Faint)))
 	end
 
-	local SIDEBAR_PAGE_TEXT = Color3.fromRGB(168, 173, 180)  -- inactive sub-tab label
 	local function applyPageVisual(tab, page, animate)
 		for _, p in ipairs(tab.pages) do
 			local on = (p == page)
 			p.row.BackgroundColor3 = THEME.SidebarActive
-			if animate then
-				tween(p.row, { BackgroundTransparency = on and 0 or 1 }, TI.EXP)
-				tween(p.label, { TextColor3 = on and THEME.Text or SIDEBAR_PAGE_TEXT }, TI.EXP)
-				if p.icon then tween(p.icon, { ImageColor3 = on and accent or THEME.SubText }, TI.EXP) end
-			else
-				p.row.BackgroundTransparency = on and 0 or 1
-				p.label.TextColor3 = on and THEME.Text or SIDEBAR_PAGE_TEXT
-				if p.icon then p.icon.ImageColor3 = on and accent or THEME.SubText end
+			-- GLYPH: state snaps; the LED gets one 70ms blip as its only cue
+			p.row.BackgroundTransparency = on and 0 or 1
+			p.label.TextColor3 = on and THEME.Text or THEME.SubText
+			if p.icon then p.icon.ImageColor3 = on and accent or THEME.SubText end
+			if p.led then
+				p.led.BackgroundColor3 = on and seqPrimary(accent) or THEME.ElementStroke
+				if on and animate then
+					p.led.Size = UDim2.new(0, 3, 0, 3)
+					tween(p.led, { Size = UDim2.new(0, 5, 0, 5) }, TweenInfo.new(0.07, Enum.EasingStyle.Quad, Enum.EasingDirection.Out))
+				else
+					p.led.Size = UDim2.new(0, 5, 0, 5)
+				end
 			end
 			p.active = on
 		end
@@ -5706,6 +5842,7 @@ function PERDITION.Window(opts)
 			end
 		end)
 		pcall(rePaint)   -- role-registered (v4) instances recolour directly
+		for _, fn in ipairs(richRefresh) do pcall(fn) end
 
 		-- rebuild the colour-embedding rich text + active page tint
 		if activeTab and activeTab.activePage then
@@ -5733,9 +5870,11 @@ function PERDITION.Window(opts)
 			for _, inst in ipairs(screenGui:GetDescendants()) do
 				if inst:IsA("TextLabel") or inst:IsA("TextButton") or inst:IsA("TextBox") then
 					-- labels that preview a specific font (the font picker rows) keep
-					-- their own typeface so the swap never flattens the list
+					-- their own typeface so the swap never flattens the list.
+					-- GlyphMono marks v4 structural mono (wordmark, codes, values):
+					-- the mono voice is load-bearing and never swaps either.
 					local keep = false
-					pcall(function() keep = inst:GetAttribute("NemesisKeepFont") == true end)
+					pcall(function() keep = inst:GetAttribute("NemesisKeepFont") == true or inst:GetAttribute("GlyphMono") == true end)
 					if not keep then
 						pcall(function()
 							local cur = inst.FontFace
@@ -5998,7 +6137,7 @@ function PERDITION.Window(opts)
 	end
 
 	-- small live setters
-	function Win.SetTitle(t) if wordmark then wordmark.Text = string.upper(tostring(t or "PERDITION")) end end
+	function Win.SetTitle(t) if wordmark then wordmark.Text = string.lower(tostring(t or "perdition")) end end
 	function Win.SetGame(t) gameLabel.Text = tostring(t or "") end
 	function Win.SetStatus(t) statusLabel.Text = tostring(t or "") end
 
@@ -6354,14 +6493,15 @@ function PERDITION.Window(opts)
 			Size = UDim2.new(0, 0, 1, 0),
 			AutomaticSize = Enum.AutomaticSize.X,
 			BackgroundTransparency = 1,
-			Font = FONT_SEMI,
-			Text = string.upper(tostring(name or "Tab")),
+			Font = FONT_MONO_SEMI,
+			Text = string.lower(tostring(name or "Tab")),
 			TextColor3 = THEME.SubText,
 			TextSize = 12,
 			LayoutOrder = 2,
 			ZIndex = 4,
 			Parent = btn,
 		})
+		label:SetAttribute("GlyphMono", true)
 
 		tab.button = btn
 		tab.pill = btn
@@ -6426,7 +6566,16 @@ function PERDITION.Window(opts)
 				AutoButtonColor = false,
 				Text = "",
 				Parent = parentFrame or tab.sidebarFrame,
-			}, { corner(8) })
+			}, { corner(2) })
+			-- GLYPH LED: square dot at the row's right edge; pops accent when active
+			local rowLed = Create("Frame", {
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, -12, 0.5, 0),
+				Size = UDim2.new(0, 5, 0, 5),
+				BackgroundColor3 = THEME.ElementStroke,
+				BorderSizePixel = 0,
+				Parent = row,
+			})
 			local rowIcon
 			local rowIconName = popts.icon
 			local label
@@ -6449,18 +6598,25 @@ function PERDITION.Window(opts)
 				return rowIcon
 			end
 			if rowIconSpec then applyIcon(ensureRowIcon(), rowIconSpec) end
+			local pageCode = string.format("p\u{2013}%02d", #tab.pages + 1)
+			local pageLower = string.lower(tostring(pname or "Page"))
 			label = Create("TextLabel", {
 				BackgroundTransparency = 1,
 				Position = UDim2.new(0, labelX, 0, 0),
-				Size = UDim2.new(1, -labelX - 10, 1, 0),
-				Font = FONT_MED,
-				Text = tostring(pname or "Page"),
-				TextColor3 = SIDEBAR_PAGE_TEXT,
-				TextSize = 13,
+				Size = UDim2.new(1, -labelX - 24, 1, 0),
+				Font = FONT_MONO,
+				RichText = true,
+				Text = string.format('<font color="#%s">%s</font>  %s', hexOf(THEME.Faint), pageCode, pageLower),
+				TextColor3 = THEME.SubText,
+				TextSize = 12,
 				TextXAlignment = Enum.TextXAlignment.Left,
 				TextTruncate = Enum.TextTruncate.AtEnd,
 				Parent = row,
 			})
+			label:SetAttribute("GlyphMono", true)
+			richRefresh[#richRefresh + 1] = function()
+				label.Text = string.format('<font color="#%s">%s</font>  %s', hexOf(THEME.Faint), pageCode, pageLower)
+			end
 			local pageBody = Create("ScrollingFrame", {
 				Size = UDim2.new(1, 0, 1, 0),
 				BackgroundTransparency = 1,
@@ -6703,7 +6859,7 @@ function PERDITION.Window(opts)
 			local page = {
 				name = tostring(pname or "Page"),
 				group = groupName,
-				row = row, label = label, icon = rowIcon,
+				row = row, label = label, icon = rowIcon, led = rowLed,
 				body = pageBody, columnsHolder = columnsHolder, active = false,
 			}
 			table.insert(tab.pages, page)
@@ -6759,6 +6915,7 @@ function PERDITION.Window(opts)
 		function Tab.Group(gname, ...)
 			if gname == Tab then gname = ... end -- tolerate Tab:Group("X")
 			groupCount = groupCount + 1
+			local gnum = groupCount   -- captured by value for the header + its refresh
 			-- hairline separating this group from the previous one
 			if groupCount > 1 then
 				Create("Frame", {
@@ -6797,13 +6954,18 @@ function PERDITION.Window(opts)
 				Position = UDim2.new(0, 0, 0.5, 0),
 				Size = UDim2.new(1, -22, 1, 0),
 				BackgroundTransparency = 1,
-				Font = FONT_SEMI,
-				Text = string.upper(tostring(gname or "Group")),
+				Font = FONT_MONO_SEMI,
+				RichText = true,
+				Text = string.format('<font color="#%s">g\u{2013}%02d</font>  %s', hexOf(THEME.Faint), gnum, string.lower(tostring(gname or "Group"))),
 				TextColor3 = THEME.SubText,
-				TextSize = 12,
+				TextSize = 11,
 				TextXAlignment = Enum.TextXAlignment.Left,
 				Parent = header,
 			})
+			headerLabel:SetAttribute("GlyphMono", true)
+			richRefresh[#richRefresh + 1] = function()
+				headerLabel.Text = string.format('<font color="#%s">g\u{2013}%02d</font>  %s', hexOf(THEME.Faint), gnum, string.lower(tostring(gname or "Group")))
+			end
 			Create("Frame", {
 				AnchorPoint = Vector2.new(0, 1),
 				Position = UDim2.new(0, 0, 1, 0),

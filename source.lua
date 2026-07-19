@@ -7796,6 +7796,10 @@ function PERDITION.Window(opts)
 		pcall(buildAI)
 	end
 
+	-- internal panels (settings / AI) took their cfg numbers during construction;
+	-- the user's own sections count from 01 (the spec sheet is theirs)
+	sectionSeq = 0
+
 	Win.Instance = root
 	Win.Notify = PERDITION.Notify
 	return Win

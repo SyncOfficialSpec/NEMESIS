@@ -1779,39 +1779,43 @@ function Elements.Button(parent, accent, opts)
 		Parent = row,
 	})
 	rowText(row, opts.text, opts.desc, 0, 90, opts.icon)
-	local chipStroke = stroke(THEME.ElementStroke, 1, 0.35)
+	-- GLYPH chip: square, mono micro-label, hairline. The confirm blip (accent
+	-- seam flash) is the one hue moment - it stays, now decaying faster.
+	local chipStroke = stroke(THEME.ElementStroke, 1, 0)
 	local chip = Create("TextLabel", {
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, 0, 0.5, 0),
 		Size = UDim2.new(0, 70, 0, 22),
 		BackgroundColor3 = THEME.Element,
-		Font = FONT_SEMI,
-		Text = tostring(opts.button or "Run"),
+		Font = FONT_MONO_SEMI,
+		Text = string.lower(tostring(opts.button or "Run")),
 		TextColor3 = THEME.Text,
-		TextSize = 12,
+		TextSize = 11,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		Parent = row,
-	}, { corner(6), chipStroke })
-	click.MouseEnter:Connect(function() tween(chip, { BackgroundColor3 = THEME.ElementHover }, TI.HOVER) end)
-	click.MouseLeave:Connect(function() tween(chip, { BackgroundColor3 = THEME.Element }, TI.HOVEROFF) end)
+	}, { corner(2), chipStroke })
+	chip:SetAttribute("GlyphMono", true)
+	paintRole(chip, "BackgroundColor3", "well")
+	click.MouseEnter:Connect(function() chip.BackgroundColor3 = THEME.ElementHover end)
+	click.MouseLeave:Connect(function() chip.BackgroundColor3 = THEME.Element end)
 	click.MouseButton1Down:Connect(function()
-		tween(chip, { Position = UDim2.new(1, 0, 0.5, 1) }, TI.TICK)
+		chip.Position = UDim2.new(1, 0, 0.5, 1)
 	end)
 	click.MouseButton1Up:Connect(function()
-		tween(chip, { Position = UDim2.new(1, 0, 0.5, 0) }, TI.TICK)
+		chip.Position = UDim2.new(1, 0, 0.5, 0)
 	end)
 	local control = { Instance = row }
 	function control.Fire()
 		-- confirmation blip: the seam flashes accent and decays
-		chipStroke.Color = accent
+		chipStroke.Color = seqPrimary(accent)
 		chipStroke.Transparency = 0
-		tween(chipStroke, { Transparency = 0.35 }, TI.EXP)
-		task.delay(0.16, function()
-			pcall(function() chipStroke.Color = THEME.ElementStroke end)
+		tween(chipStroke, { Transparency = 1 }, TweenInfo.new(0.25))
+		task.delay(0.26, function()
+			pcall(function() chipStroke.Color = THEME.ElementStroke; chipStroke.Transparency = 0 end)
 		end)
 		if type(opts.callback) == "function" then pcall(opts.callback) end
 	end
-	function control.SetText(t) chip.Text = tostring(t) end
+	function control.SetText(t) chip.Text = string.lower(tostring(t)) end
 	click.MouseButton1Click:Connect(control.Fire)
 	return control
 end
@@ -3667,20 +3671,21 @@ function Elements.RippleButton(parent, accent, opts)
 		Size = UDim2.new(1, ROW_PAD * 2, 1, 0), Position = UDim2.new(0, -ROW_PAD, 0, 0),
 		BackgroundColor3 = THEME.Element, BackgroundTransparency = 1, AutoButtonColor = false, Text = "",
 		ClipsDescendants = true, Parent = row,
-	}, { corner(8) })
+	}, { corner(2) })
 	local label = rowText(row, opts.text or "Action", opts.desc, 0, 0, opts.icon)
-	surface.MouseEnter:Connect(function() tween(surface, { BackgroundTransparency = 0.85 }, TI.HOVER) end)
-	surface.MouseLeave:Connect(function() tween(surface, { BackgroundTransparency = 1 }, TI.HOVEROFF) end)
+	surface.MouseEnter:Connect(function() surface.BackgroundTransparency = 0.85 end)
+	surface.MouseLeave:Connect(function() surface.BackgroundTransparency = 1 end)
 	surface.InputBegan:Connect(function(input)
 		if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
 		local lx = input.Position.X - surface.AbsolutePosition.X
 		local ly = input.Position.Y - surface.AbsolutePosition.Y
+		-- GLYPH: a hard square shockwave, not a round ripple
 		local ripple = Create("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(lx, ly), Size = UDim2.fromOffset(0, 0),
-			BackgroundColor3 = accent, BackgroundTransparency = 0.5, ZIndex = 5, Parent = surface,
-		}, { corner(200) })
+			BackgroundColor3 = seqPrimary(accent), BackgroundTransparency = 0.6, ZIndex = 5, Parent = surface,
+		})
 		local far = math.max(surface.AbsoluteSize.X, surface.AbsoluteSize.Y) * 2
-		tween(ripple, { Size = UDim2.fromOffset(far, far), BackgroundTransparency = 1 }, TweenInfo.new(0.55, Enum.EasingStyle.Quad, Enum.EasingDirection.Out))
+		tween(ripple, { Size = UDim2.fromOffset(far, far), BackgroundTransparency = 1 }, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out))
 		task.delay(0.6, function() if ripple then ripple:Destroy() end end)
 	end)
 	surface.MouseButton1Click:Connect(function() if type(opts.callback) == "function" then pcall(opts.callback) end end)
@@ -3703,7 +3708,7 @@ function Elements.HoldButton(parent, accent, opts)
 		Size = UDim2.new(1, ROW_PAD * 2, 1, 0), Position = UDim2.new(0, -ROW_PAD, 0, 0),
 		BackgroundColor3 = THEME.Element, BackgroundTransparency = 1, AutoButtonColor = false, Text = "",
 		ClipsDescendants = true, Parent = row,
-	}, { corner(8) })
+	}, { corner(2) })
 	local fillGrad = Create("UIGradient", {})
 	local fill = Create("Frame", { Size = UDim2.new(0, 0, 1, 0), BackgroundColor3 = accent, BackgroundTransparency = 0.6, ZIndex = 0, Parent = surface }, { fillGrad })
 	accentProp(fill, "BackgroundColor3", accent); accentGrad(fillGrad, accent)
@@ -3749,21 +3754,22 @@ function Elements.SlideButton(parent, accent, opts)
 	local track = Create("TextButton", {
 		AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(1, 0, 0, 34),
 		BackgroundColor3 = THEME.Element, AutoButtonColor = false, Text = "", ClipsDescendants = true, Parent = row,
-	}, { corner(10), stroke(THEME.ElementStroke, 1, 0.4) })
+	}, { corner(2), stroke(THEME.ElementStroke, 1, 0.4) })
 	local fillGrad = Create("UIGradient", {})
 	local fill = Create("Frame", {
 		Size = UDim2.new(0, 32, 1, 0), BackgroundColor3 = accent, BackgroundTransparency = 0.15, BorderSizePixel = 0, Parent = track,
-	}, { corner(10), fillGrad })
+	}, { corner(2), fillGrad })
 	accentProp(fill, "BackgroundColor3", accent); accentGrad(fillGrad, accent)
 	local prompt = Create("TextLabel", {
 		Size = UDim2.new(1, -44, 1, 0), Position = UDim2.new(0, 40, 0, 0), BackgroundTransparency = 1,
-		Font = FONT_MED, Text = opts.text or "Slide to confirm", TextColor3 = THEME.SubText, TextSize = 13,
+		Font = FONT_MONO, Text = string.lower(tostring(opts.text or "Slide to confirm")), TextColor3 = THEME.SubText, TextSize = 12,
 		TextXAlignment = Enum.TextXAlignment.Center, Parent = track,
 	})
+	prompt:SetAttribute("GlyphMono", true)
 	local knob = Create("TextButton", {
 		AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 2, 0.5, 0), Size = UDim2.new(0, 30, 0, 30),
 		BackgroundColor3 = THEME.Knob, AutoButtonColor = false, Text = "", ZIndex = 4, Parent = track,
-	}, { corner(8) })
+	}, { corner(2) })
 	local darkGlyph = accentTextColor(THEME.Knob)   -- contrast against the knob on any theme
 	do
 		local aspec = resolveIcon("chevrons-right") or resolveIcon("chevron-right")
@@ -3792,13 +3798,13 @@ function Elements.SlideButton(parent, accent, opts)
 	end
 	local function reset(animate)
 		confirmed = false
-		prompt.Text = opts.text or "Slide to confirm"
+		prompt.Text = string.lower(tostring(opts.text or "Slide to confirm"))
 		place(0, animate)
 	end
 	local function confirm()
 		if confirmed then return end
 		confirmed = true
-		prompt.Text = opts.confirmText or "Confirmed"
+		prompt.Text = string.lower(tostring(opts.confirmText or "Confirmed"))
 		prompt.TextTransparency = 0
 		place(maxX(), true)
 		if type(opts.callback) == "function" then pcall(opts.callback) end
@@ -3825,7 +3831,7 @@ function Elements.SlideButton(parent, accent, opts)
 	end)
 	local control = {}
 	function control.Reset() reset(true) end
-	function control.SetText(t) opts.text = tostring(t); if not confirmed then prompt.Text = opts.text end end
+	function control.SetText(t) opts.text = tostring(t); if not confirmed then prompt.Text = string.lower(opts.text) end end
 	task.defer(function() place(0, false) end)
 	return control
 end

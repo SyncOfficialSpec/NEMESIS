@@ -1838,55 +1838,27 @@ function Elements.Toggle(parent, accent, opts)
 		hitboxProp(iconBg, "BackgroundColor3", hitbox)
 	end
 
-	-- machined checkbox: recessed off-state well, accent fill + check when on,
-	-- with a soft lamp glow behind the lit box
-	local lampArt = loadArt("cal1_glow_dot.png")
-	local lamp
+	-- GLYPH LED toggle: an 18px square instrument well. Off = dead mono dot;
+	-- on = accent LED with one 70ms pop. No slide, no fill fade - the state
+	-- snaps, only the diode acknowledges.
 	local box = Create("Frame", {
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, 0, 0.5, 0),
-		Size = UDim2.new(0, 38, 0, 21),
+		Size = UDim2.new(0, 18, 0, 18),
 		BackgroundColor3 = THEME.ToggleOff,
 		Parent = row,
-	}, { corner(11), stroke(THEME.ElementStroke, 1, 0.35) })
-	if lampArt then
-		lamp = Create("ImageLabel", {
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.new(0.5, 0, 0.5, 0),
-			Size = UDim2.new(0, 30, 0, 30),
-			BackgroundTransparency = 1,
-			Image = lampArt,
-			ImageColor3 = accent,
-			ImageTransparency = 1,
-			ZIndex = 0,
-			Parent = box,
-		})
-		onHitbox(function(c) pcall(function() lamp.ImageColor3 = c end) end)
-	end
-	-- Syde-style fill: a full-size accent overlay that FADES in/out (no grow),
-	-- with a subtle gradient sheen. The box itself also tints to accent.
-	local fillGrad = Create("UIGradient", { Rotation = 90 })
-	local fill = Create("Frame", {
-		Size = UDim2.new(1, 0, 1, 0),
-		BackgroundColor3 = accent,
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		Parent = box,
-	}, { corner(11), fillGrad })
-	hitboxProp(fill, "BackgroundColor3", accent)
-	hitboxGrad(fillGrad, accent)
-	local check   -- pill toggle has no check glyph
-	-- sliding knob: dark on the light off-track, flips to the accent's contrast
-	-- colour when it rides the filled pill (so it reads on any theme)
-	local knob = Create("Frame", {
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 3, 0.5, 0),
-		Size = UDim2.new(0, 15, 0, 15),
-		BackgroundColor3 = THEME.Knob,
+	}, { corner(2), stroke(THEME.ElementStroke, 1, 0) })
+	paintRole(box, "BackgroundColor3", "off")
+	local boxStroke = box:FindFirstChildOfClass("UIStroke")
+	local led = Create("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.5, 0),
+		Size = UDim2.new(0, 4, 0, 4),
+		BackgroundColor3 = THEME.ElementStroke,
 		BorderSizePixel = 0,
 		ZIndex = 3,
 		Parent = box,
-	}, { corner(99) })
+	})
 	local click = Create("TextButton", {
 		BackgroundTransparency = 1,
 		Size = UDim2.new(1, ROW_PAD * 2, 1, 0),
@@ -1897,20 +1869,26 @@ function Elements.Toggle(parent, accent, opts)
 
 	local titleLabel = (rowLabel and rowLabel:IsA("TextLabel")) and rowLabel or nil
 	local control = {}
+	local LED_POP = TweenInfo.new(0.07, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 	local function render(animate)
-		-- Syde toggle: everything eases over 0.7s Exponential (fill fades, check
-		-- fades, glow lamp fades, box tints, title brightens/dims)
-		local info = animate and TI.SYDE or TweenInfo.new(0)
-		local fadeInfo = animate and TI.SYDE_FADE or TweenInfo.new(0)
-		tween(fill, { BackgroundTransparency = state and 0 or 1 }, fadeInfo)
-		tween(knob, {
-			Position = UDim2.new(0, state and 20 or 3, 0.5, 0),
-			BackgroundColor3 = state and accentTextColor(hitbox) or THEME.Knob,
-		}, info)
-		if check then tween(check, { ImageTransparency = state and 0 or 1 }, info) end
-		if lamp then
-			tween(lamp, { ImageTransparency = state and 0.7 or 1 }, info)
+		-- GLYPH instant law: colour snaps at any tempo; the only motion is the
+		-- LED blip when it lights (skipped for instant/config restores)
+		led.BackgroundColor3 = state and seqPrimary(hitbox) or THEME.ElementStroke
+		if boxStroke then
+			boxStroke.Color = state and seqPrimary(hitbox) or THEME.ElementStroke
+			boxStroke.Transparency = state and 0.45 or 0
 		end
+		if state then
+			if animate then
+				led.Size = UDim2.new(0, 4, 0, 4)
+				tween(led, { Size = UDim2.new(0, 8, 0, 8) }, LED_POP)
+			else
+				led.Size = UDim2.new(0, 8, 0, 8)
+			end
+		else
+			led.Size = UDim2.new(0, 4, 0, 4)
+		end
+		local info = animate and TI.FAST or TweenInfo.new(0)
 		if titleLabel then
 			tween(titleLabel, { TextTransparency = state and 0 or 0.35 }, info)
 		end
@@ -1918,11 +1896,11 @@ function Elements.Toggle(parent, accent, opts)
 			tween(rowIconImg, { ImageColor3 = state and accentTextColor(hitbox) or THEME.SubText }, info)
 		end
 		if iconBg then
-			tween(iconBg, { BackgroundTransparency = state and 0.1 or 1 }, fadeInfo)
+			tween(iconBg, { BackgroundTransparency = state and 0.1 or 1 }, info)
 		end
 	end
-	click.MouseEnter:Connect(function() if not state then tween(box, { BackgroundColor3 = THEME.ElementHover }, TI.HOVER) end end)
-	click.MouseLeave:Connect(function() if not state then tween(box, { BackgroundColor3 = THEME.ToggleOff }, TI.HOVEROFF) end end)
+	click.MouseEnter:Connect(function() if not state then box.BackgroundColor3 = THEME.ElementHover end end)
+	click.MouseLeave:Connect(function() if not state then box.BackgroundColor3 = THEME.ToggleOff end end)
 	function control.Set(v, silent, instant)
 		state = v and true or false
 		if opts.flag then PERDITION.Flags[opts.flag] = state end
@@ -3296,16 +3274,18 @@ function Elements.Checkbox(parent, accent, opts)
 	onHitbox(function(c) hitbox = c end)
 	local state = opts.default and true or false
 	local row = newRow(parent, ROW_H)
+	-- GLYPH LED well (same diode language as Toggle): dead dot off, accent
+	-- diode on with a 70ms pop, hairline tints while lit
 	local box = Create("Frame", {
 		AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(0, 18, 0, 18),
 		BackgroundColor3 = THEME.ToggleOff, Parent = row,
-	}, { corner(5), stroke(THEME.ElementStroke, 1, 0.35) })
-	local checkSpec = resolveIcon("check")
-	local check = checkSpec and Create("ImageLabel", {
-		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, 12, 0, 12),
-		BackgroundTransparency = 1, ImageColor3 = accentTextColor(accent), ImageTransparency = 1, ZIndex = 2, Parent = box,
+	}, { corner(2), stroke(THEME.ElementStroke, 1, 0) })
+	paintRole(box, "BackgroundColor3", "off")
+	local boxStroke = box:FindFirstChildOfClass("UIStroke")
+	local led = Create("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0),
+		Size = UDim2.new(0, 4, 0, 4), BackgroundColor3 = THEME.ElementStroke, BorderSizePixel = 0, Parent = box,
 	})
-	if check then applyIcon(check, checkSpec); onHitbox(function(c) check.ImageColor3 = accentTextColor(c) end) end
 	Create("TextLabel", {
 		Position = UDim2.new(0, 28, 0, 0), Size = UDim2.new(1, -28, 1, 0), BackgroundTransparency = 1,
 		Font = FONT_MED, Text = tostring(opts.text or "Checkbox"), TextColor3 = THEME.Text, TextSize = 13,
@@ -3313,10 +3293,23 @@ function Elements.Checkbox(parent, accent, opts)
 	})
 	tagSearch(row, opts.text)
 	local control = {}
+	local LED_POP = TweenInfo.new(0.07, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 	local function render(animate)
-		local info = animate and TI.SYDE or TweenInfo.new(0)
-		tween(box, { BackgroundColor3 = state and hitbox or THEME.ToggleOff }, info)
-		if check then tween(check, { ImageTransparency = state and 0 or 1 }, info) end
+		led.BackgroundColor3 = state and seqPrimary(hitbox) or THEME.ElementStroke
+		if boxStroke then
+			boxStroke.Color = state and seqPrimary(hitbox) or THEME.ElementStroke
+			boxStroke.Transparency = state and 0.45 or 0
+		end
+		if state then
+			if animate then
+				led.Size = UDim2.new(0, 4, 0, 4)
+				tween(led, { Size = UDim2.new(0, 8, 0, 8) }, LED_POP)
+			else
+				led.Size = UDim2.new(0, 8, 0, 8)
+			end
+		else
+			led.Size = UDim2.new(0, 4, 0, 4)
+		end
 	end
 	function control.Set(v, fire)
 		state = v and true or false
@@ -4013,20 +4006,22 @@ function Elements.SegmentedPicker(parent, accent, opts)
 		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0.55, 0, 0, 24),
 		BackgroundColor3 = THEME.Element, ClipsDescendants = true, Parent = row,
 	}, { corner(3), stroke(THEME.ElementStroke, 1, 0.4) })
-	local thumb = Create("Frame", { Size = UDim2.new(1 / n, -6, 1, -6), Position = UDim2.new(0, 3, 0, 3), BackgroundColor3 = accent, BackgroundTransparency = 0.12, ZIndex = 1, Parent = track }, { corner(5) })
-	accentProp(thumb, "BackgroundColor3", accent)
+	-- GLYPH: the selected segment is an inverted plate (paper on ink), not an
+	-- accent fill - hue stays rationed. Position snaps; nothing slides.
+	local thumb = Create("Frame", { Size = UDim2.new(1 / n, -6, 1, -6), Position = UDim2.new(0, 3, 0, 3), BackgroundColor3 = THEME.Text, BackgroundTransparency = 0, ZIndex = 1, Parent = track }, { corner(2) })
+	paintRole(thumb, "BackgroundColor3", "ink")
 	local sel = 1
 	for i, o in ipairs(options) do if o == (opts.default or opts.CurrentOption) then sel = i end end
 	local btns = {}
 	local control = {}
 	local function paint(animate)
-		local info = animate and TI.EXPAND or TweenInfo.new(0)
 		control.CurrentOption = options[sel]
-		tween(thumb, { Position = UDim2.new((sel - 1) / n, 3, 0, 3) }, info)
-		for i, b in ipairs(btns) do tween(b, { TextColor3 = i == sel and accentTextColor(accent) or THEME.SubText }, TI.FAST) end
+		thumb.Position = UDim2.new((sel - 1) / n, 3, 0, 3)
+		for i, b in ipairs(btns) do paintRole(b, "TextColor3", i == sel and "knob" or "sub") end
 	end
 	for i, o in ipairs(options) do
-		local b = Create("TextButton", { Size = UDim2.new(1 / n, 0, 1, 0), Position = UDim2.new((i - 1) / n, 0, 0, 0), BackgroundTransparency = 1, AutoButtonColor = false, Font = FONT_MED, Text = tostring(o), TextColor3 = THEME.SubText, TextSize = 12, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 2, Parent = track })
+		local b = Create("TextButton", { Size = UDim2.new(1 / n, 0, 1, 0), Position = UDim2.new((i - 1) / n, 0, 0, 0), BackgroundTransparency = 1, AutoButtonColor = false, Font = FONT_MONO, Text = string.lower(tostring(o)), TextColor3 = THEME.SubText, TextSize = 11, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 2, Parent = track })
+		b:SetAttribute("GlyphMono", true)
 		btns[i] = b
 		b.MouseButton1Click:Connect(function() sel = i; paint(true); if opts.flag then PERDITION.Flags[opts.flag] = options[sel] end if type(opts.callback) == "function" then pcall(opts.callback, options[sel]) end end)
 	end

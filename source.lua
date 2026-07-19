@@ -1544,7 +1544,7 @@ function Elements.Label(parent, accent, text)
 		AutomaticSize = Enum.AutomaticSize.Y,
 		Parent = parent,
 	}, {
-		corner(8),
+		corner(3),
 		Create("UIPadding", {
 			PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10),
 			PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8),
@@ -1585,9 +1585,10 @@ function Elements.Divider(parent, accent, opts)
 		local lbl = Create("TextLabel", {
 			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0),
 			Size = UDim2.new(0, 0, 0, 15), AutomaticSize = Enum.AutomaticSize.X,
-			BackgroundTransparency = 1, Font = FONT_SEMI, Text = string.upper(tostring(label)),
-			TextColor3 = THEME.SubText, TextSize = 12, Parent = row,
+			BackgroundTransparency = 1, Font = FONT_MONO_SEMI, Text = string.lower(tostring(label)),
+			TextColor3 = THEME.SubText, TextSize = 11, Parent = row,
 		})
+		lbl:SetAttribute("GlyphMono", true)
 		local left = Create("Frame", {
 			AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(0, 0, 0, 1),
 			BackgroundColor3 = THEME.RowDivider, BorderSizePixel = 0, Parent = row,
@@ -3285,10 +3286,11 @@ function Elements.Stat(parent, accent, opts)
 	rowText(row, opts.text or opts.label or "Stat", opts.desc, 0.4, 12, opts.icon)
 	local val = Create("TextLabel", {
 		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0.5, 0, 1, 0),
-		BackgroundTransparency = 1, Font = FONT_BOLD, Text = tostring(opts.value or "0"),
-		TextColor3 = accent, TextSize = 16, TextXAlignment = Enum.TextXAlignment.Right,
+		BackgroundTransparency = 1, Font = FONT_MONO_BOLD, Text = tostring(opts.value or "0"),
+		TextColor3 = accent, TextSize = 14, TextXAlignment = Enum.TextXAlignment.Right,
 		TextTruncate = Enum.TextTruncate.AtEnd, Parent = row,
 	})
+	val:SetAttribute("GlyphMono", true)
 	accentProp(val, "TextColor3", accent)
 	local control = {}
 	function control.Set(v) val.Text = tostring(v) end
@@ -3390,21 +3392,22 @@ local function chartShell(parent, accent, opts, plotHeight)
 		Position = UDim2.new(0, ROW_PAD, 0, 0),
 		BackgroundColor3 = THEME.Element, ClipsDescendants = true, Parent = parent,
 	}, {
-		corner(12), stroke(THEME.ElementStroke, 1, 0.3), padding(12),
-		Create("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(216, 216, 216)), Transparency = NumberSequence.new(0.9) }),
+		corner(3), stroke(THEME.ElementStroke, 1, 0), padding(12),
 	})
 	tagSearch(card, opts.text or opts.name or "Chart")
 	local head = Create("Frame", { Size = UDim2.new(1, 0, 0, 20), BackgroundTransparency = 1, Parent = card })
-	Create("TextLabel", {
-		Size = UDim2.new(0.6, 0, 1, 0), BackgroundTransparency = 1, Font = FONT_BOLD,
-		Text = tostring(opts.text or opts.name or "Chart"), TextColor3 = THEME.Text, TextSize = 15,
+	local chartTitle = Create("TextLabel", {
+		Size = UDim2.new(0.6, 0, 1, 0), BackgroundTransparency = 1, Font = FONT_MONO_SEMI,
+		Text = string.lower(tostring(opts.text or opts.name or "Chart")), TextColor3 = THEME.Text, TextSize = 12,
 		TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = head,
 	})
+	chartTitle:SetAttribute("GlyphMono", true)
 	local valLbl = Create("TextLabel", {
 		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.new(0.4, 0, 1, 0),
-		BackgroundTransparency = 1, Font = FONT_BOLD, Text = "", TextColor3 = CHART_ACCENT, TextSize = 18,
+		BackgroundTransparency = 1, Font = FONT_MONO_BOLD, Text = "", TextColor3 = CHART_ACCENT, TextSize = 14,
 		TextXAlignment = Enum.TextXAlignment.Right, Parent = head,
 	})
+	valLbl:SetAttribute("GlyphMono", true)
 	local plot = Create("Frame", {
 		Position = UDim2.new(0, 0, 0, 30), Size = UDim2.new(1, 0, 1, -30), BackgroundTransparency = 1, Parent = card,
 	})
@@ -3444,12 +3447,12 @@ function Elements.BarChart(parent, accent, opts)
 			local bar = Create("Frame", {
 				AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new((i - 0.5) / n, 0, 1, -labelRoom),
 				Size = UDim2.new(0, bw, 0, animate and 0 or h), BackgroundColor3 = barColor, ZIndex = 2, Parent = plot,
-			}, { corner(6), barGrad })
+			}, { corner(2), barGrad })
 			bars[#bars + 1] = bar
 			if hasLabels then
 				local lc = Create("TextLabel", {
 					AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new((i - 0.5) / n, 0, 1, 0), Size = UDim2.new(0, slot, 0, 12),
-					BackgroundTransparency = 1, Font = FONT, Text = tostring(labels[i] or ""), TextColor3 = THEME.SubText, TextSize = 10,
+					BackgroundTransparency = 1, Font = FONT_MONO, Text = tostring(labels[i] or ""), TextColor3 = THEME.SubText, TextSize = 10,
 					TextTruncate = Enum.TextTruncate.AtEnd, Parent = plot,
 				})
 				bars[#bars + 1] = lc
@@ -3869,10 +3872,11 @@ function Elements.ShimmerLabel(parent, accent, opts)
 	if type(opts) == "string" then opts = { text = opts } end
 	local row = Create("Frame", { Size = UDim2.new(1, -ROW_PAD * 2, 0, opts.height or 24), Position = UDim2.new(0, ROW_PAD, 0, 0), BackgroundTransparency = 1, Parent = parent })
 	local lbl = Create("TextLabel", {
-		Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Font = opts.bold and FONT_BOLD or FONT_SEMI,
-		Text = tostring(opts.text or "Shimmer"), TextColor3 = THEME.SubText, TextSize = opts.textSize or 14,
+		Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Font = opts.bold and FONT_MONO_BOLD or FONT_MONO_SEMI,
+		Text = string.lower(tostring(opts.text or "Shimmer")), TextColor3 = THEME.SubText, TextSize = opts.textSize or 14,
 		TextXAlignment = Enum.TextXAlignment.Left, Parent = row,
 	})
+	lbl:SetAttribute("GlyphMono", true)
 	tagSearch(row, opts.text)
 	local grad = Create("UIGradient", {
 		Rotation = opts.rotation or 0, Parent = lbl,
@@ -3906,7 +3910,8 @@ function Elements.ScrollHint(parent, accent, opts)
 	local wrap = Create("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, 0, 1, 0), AutomaticSize = Enum.AutomaticSize.X, BackgroundTransparency = 1, Parent = row }, {
 		Create("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), VerticalAlignment = Enum.VerticalAlignment.Center }),
 	})
-	local lbl = Create("TextLabel", { Size = UDim2.new(0, 0, 1, 0), AutomaticSize = Enum.AutomaticSize.X, BackgroundTransparency = 1, Font = FONT, Text = tostring(opts.text or "Scroll for more"), TextColor3 = THEME.SubText, TextSize = 12, LayoutOrder = 1, Parent = wrap })
+	local lbl = Create("TextLabel", { Size = UDim2.new(0, 0, 1, 0), AutomaticSize = Enum.AutomaticSize.X, BackgroundTransparency = 1, Font = FONT_MONO, Text = string.lower(tostring(opts.text or "Scroll for more")), TextColor3 = THEME.SubText, TextSize = 11, LayoutOrder = 1, Parent = wrap })
+	lbl:SetAttribute("GlyphMono", true)
 	local arrowHolder = Create("Frame", { Size = UDim2.new(0, 14, 0, 14), BackgroundTransparency = 1, LayoutOrder = 2, Parent = wrap })
 	local spec = resolveIcon(opts.icon or "chevron-down")
 	local arrow = Create("ImageLabel", { Position = UDim2.new(0.5, 0, 0, 0), AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.new(0, 14, 0, 14), BackgroundTransparency = 1, ImageColor3 = THEME.SubText, Parent = arrowHolder })
@@ -3921,7 +3926,7 @@ end
 -- CursorTag: a card that shows a small pill following the mouse while hovered.
 function Elements.CursorTag(parent, accent, opts)
 	opts = opts or {}
-	local row = Create("Frame", { Size = UDim2.new(1, -ROW_PAD * 2, 0, opts.height or 46), Position = UDim2.new(0, ROW_PAD, 0, 0), BackgroundColor3 = THEME.Element, Parent = parent }, { corner(8), stroke(THEME.ElementStroke, 1, 0.4) })
+	local row = Create("Frame", { Size = UDim2.new(1, -ROW_PAD * 2, 0, opts.height or 46), Position = UDim2.new(0, ROW_PAD, 0, 0), BackgroundColor3 = THEME.Element, Parent = parent }, { corner(3), stroke(THEME.ElementStroke, 1, 0.4) })
 	local area = Create("TextButton", { Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, AutoButtonColor = false, Text = "", Parent = row })
 	Create("TextLabel", { Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Font = FONT, Text = tostring(opts.hint or "Hover here"), TextColor3 = THEME.SubText, TextSize = 12, Parent = row })
 	local screenGui = row:FindFirstAncestorWhichIsA("ScreenGui") or row:FindFirstAncestorWhichIsA("LayerCollector")
@@ -3930,7 +3935,7 @@ function Elements.CursorTag(parent, accent, opts)
 		BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 1, Font = FONT_MED, Text = tostring(opts.text or "Tag"),
 		TextColor3 = Color3.fromRGB(20, 20, 24), TextTransparency = 1, TextSize = 12, Visible = false, ZIndex = 60000,
 		Parent = screenGui or row,
-	}, { corner(6), padding(8) })
+	}, { corner(2), padding(8) })
 	local enabled = opts.enabled ~= false
 	local moveConn
 	local function show() chip.Visible = true; tween(chip, { BackgroundTransparency = 0, TextTransparency = 0 }, TI.FAST) end

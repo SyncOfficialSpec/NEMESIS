@@ -1230,13 +1230,16 @@ function PERDITION.Notify(opts)
 		local iconSpec = resolveIcon(opts.icon)
 		local EXP = function(t) return TweenInfo.new(t, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out) end
 
+		-- GLYPH notification: an opaque INVERSION plate (flat law kills the old
+		-- translucency), square, hairline, LED diode for severity, mono title
 		local card = Create("Frame", {
 			Name = "Notif",
-			BackgroundColor3 = THEME.Background,
+			BackgroundColor3 = roleColor("plateinv"),
 			Size = UDim2.new(1, 0, 0, 60),
 			BackgroundTransparency = 1,
 			Parent = notifyHolder,
-		}, { corner(9), stroke(THEME.Text, 1, 1) })
+		}, { corner(3), stroke(roleColor("oninv"), 1, 1) })
+		paintRole(card, "BackgroundColor3", "plateinv")
 		local notifStroke = card:FindFirstChildOfClass("UIStroke")
 		local shadow = dropShadow(card, 1)
 
@@ -1246,22 +1249,33 @@ function PERDITION.Notify(opts)
 		if hasIcon then
 			img = Create("ImageLabel", {
 				AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 20, 0.5, 0), Size = UDim2.new(0, 30, 0, 30),
-				BackgroundTransparency = 1, ImageColor3 = THEME.Text, ImageTransparency = 1, Parent = card,
+				BackgroundTransparency = 1, ImageColor3 = roleColor("oninv"), ImageTransparency = 1, Parent = card,
 			})
 			applyIcon(img, iconSpec)
+			paintRole(img, "ImageColor3", "oninv")
 		end
+		-- severity diode: accent for info, DANGER red when opts.error
+		local diode = Create("Frame", {
+			AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 10),
+			Size = UDim2.new(0, 5, 0, 5), BackgroundColor3 = opts.error and DANGER or seqPrimary(accent),
+			BorderSizePixel = 0, BackgroundTransparency = 1, Parent = card,
+		})
+		if not opts.error then accentProp(diode, "BackgroundColor3", accent) end
 		local title = Create("TextLabel", {
-			Name = "Title", Position = UDim2.new(0, textLeft, 0, 12), Size = UDim2.new(1, -textLeft - 16, 0, 16),
-			BackgroundTransparency = 1, Font = FONT_SEMI, Text = tostring(opts.title or "Notification"),
-			TextColor3 = THEME.Text, TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
+			Name = "Title", Position = UDim2.new(0, textLeft, 0, 12), Size = UDim2.new(1, -textLeft - 26, 0, 16),
+			BackgroundTransparency = 1, Font = FONT_MONO_SEMI, Text = string.lower(tostring(opts.title or "Notification")),
+			TextColor3 = roleColor("oninv"), TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
 			TextTransparency = 1, Parent = card,
 		})
+		title:SetAttribute("GlyphMono", true)
+		paintRole(title, "TextColor3", "oninv")
 		local desc = Create("TextLabel", {
 			Name = "Content", Position = UDim2.new(0, textLeft, 0, 30), Size = UDim2.new(1, -textLeft - 16, 0, 0),
 			AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, Font = FONT, Text = tostring(opts.content or ""),
-			TextColor3 = THEME.Text, TextSize = 13, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left,
+			TextColor3 = roleColor("oninv"), TextSize = 13, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left,
 			TextTransparency = 1, Parent = card,
 		})
+		paintRole(desc, "TextColor3", "oninv")
 
 		-- measure text, size the card, then collapse to 0 and grow in
 		task.wait()
@@ -1270,28 +1284,29 @@ function PERDITION.Notify(opts)
 		local fullH = math.max(tb + db + 31, 60)
 		card.Size = UDim2.new(1, 0, 0, 0)
 
-		tween(card, { Size = UDim2.new(1, 0, 0, fullH) }, EXP(0.6))
-		task.wait(0.15)
-		tween(card, { BackgroundTransparency = 0.45 }, EXP(0.4))
-		tween(title, { TextTransparency = 0 }, EXP(0.3))
-		task.wait(0.05)
-		if img then tween(img, { ImageTransparency = 0 }, EXP(0.3)) end
-		task.wait(0.05)
-		tween(desc, { TextTransparency = 0.35 }, EXP(0.3))
-		if notifStroke then tween(notifStroke, { Transparency = 0.95 }, EXP(0.4)) end
-		if shadow then tween(shadow, { ImageTransparency = 0.82 }, EXP(0.3)) end
+		-- GLYPH: structure arrives with intent (one 0.18s grow), then a snap cascade
+		tween(card, { Size = UDim2.new(1, 0, 0, fullH) }, EXP(0.18))
+		task.wait(0.08)
+		tween(card, { BackgroundTransparency = 0 }, EXP(0.12))
+		tween(title, { TextTransparency = 0 }, EXP(0.12))
+		if img then tween(img, { ImageTransparency = 0 }, EXP(0.12)) end
+		tween(desc, { TextTransparency = 0.25 }, EXP(0.12))
+		tween(diode, { BackgroundTransparency = 0 }, EXP(0.12))
+		if notifStroke then tween(notifStroke, { Transparency = 0.8 }, EXP(0.12)) end
+		if shadow then tween(shadow, { ImageTransparency = 0.82 }, EXP(0.12)) end
 
 		local duration = tonumber(opts.duration) or math.min(math.max(#tostring(opts.content or "") * 0.1 + 2.5, 3), 10)
 		task.wait(duration)
 
 		if img then img.Visible = false end
-		tween(card, { BackgroundTransparency = 1 }, EXP(0.4))
-		if notifStroke then tween(notifStroke, { Transparency = 1 }, EXP(0.4)) end
-		if shadow then tween(shadow, { ImageTransparency = 1 }, EXP(0.3)) end
-		tween(title, { TextTransparency = 1 }, EXP(0.3))
-		tween(desc, { TextTransparency = 1 }, EXP(0.3))
-		tween(card, { Size = UDim2.new(1, 0, 0, 0) }, EXP(1))
-		task.wait(1.05)
+		tween(card, { BackgroundTransparency = 1 }, EXP(0.25))
+		if notifStroke then tween(notifStroke, { Transparency = 1 }, EXP(0.25)) end
+		if shadow then tween(shadow, { ImageTransparency = 1 }, EXP(0.2)) end
+		tween(title, { TextTransparency = 1 }, EXP(0.2))
+		tween(desc, { TextTransparency = 1 }, EXP(0.2))
+		tween(diode, { BackgroundTransparency = 1 }, EXP(0.2))
+		tween(card, { Size = UDim2.new(1, 0, 0, 0) }, EXP(0.4))
+		task.wait(0.45)
 		if card then card:Destroy() end
 	end)
 end
@@ -1311,7 +1326,7 @@ function PERDITION.Modal(opts)
 		Size = UDim2.new(0, 340, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundColor3 = THEME.Group,
 		GroupTransparency = 1, ZIndex = 60001, Parent = gui,
 	}, {
-		corner(14), stroke(THEME.Stroke, 1, 0.3), scale, padding(18),
+		corner(3), stroke(THEME.Stroke, 1, 0), scale, padding(18),
 		Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 12) }),
 	})
 	siblingShadow(card)
@@ -1329,10 +1344,11 @@ function PERDITION.Modal(opts)
 	local function mkBtn(text, x, primary)
 		local b = Create("TextButton", {
 			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(x, x == 1 and 0 or -6, 0.5, 0), Size = UDim2.new(0, 96, 0, 30),
-			BackgroundColor3 = primary and THEME.Accent or THEME.Element, AutoButtonColor = false, Font = FONT_MED,
-			Text = tostring(text), TextColor3 = primary and accentTextColor(THEME.Accent) or THEME.Text, TextSize = 13,
+			BackgroundColor3 = primary and THEME.Accent or THEME.Element, AutoButtonColor = false, Font = FONT_MONO_SEMI,
+			Text = string.lower(tostring(text)), TextColor3 = primary and accentTextColor(THEME.Accent) or THEME.Text, TextSize = 12,
 			TextTruncate = Enum.TextTruncate.AtEnd, Parent = btnRow,
-		}, { corner(7), stroke(THEME.ElementStroke, 1, primary and 1 or 0.4) })
+		}, { corner(2), stroke(THEME.ElementStroke, 1, primary and 1 or 0.4) })
+		b:SetAttribute("GlyphMono", true)
 		return b
 	end
 	local cancel = mkBtn(opts.cancelText or "Cancel", 0.5, false)
@@ -1364,14 +1380,17 @@ function PERDITION.Toast(opts)
 	-- the Size property and, under AutomaticSize, renders as a stray white pill)
 	local scale = Create("UIScale", { Scale = 0.9 })
 	local chip = Create("Frame", {
-		Size = UDim2.new(0, 0, 0, 32), AutomaticSize = Enum.AutomaticSize.X, BackgroundColor3 = THEME.Group,
+		Size = UDim2.new(0, 0, 0, 32), AutomaticSize = Enum.AutomaticSize.X, BackgroundColor3 = roleColor("plateinv"),
 		BackgroundTransparency = 1, LayoutOrder = -toasts, Parent = toastHolder,
-	}, { corner(9), scale, padXY(12, 0), Create("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8) }) })
-	local chipStroke = Create("UIStroke", { Color = THEME.Stroke, Thickness = 1, Transparency = 1, Parent = chip })
+	}, { corner(3), scale, padXY(12, 0), Create("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8) }) })
+	paintRole(chip, "BackgroundColor3", "plateinv")
+	local chipStroke = Create("UIStroke", { Color = roleColor("oninv"), Thickness = 1, Transparency = 1, Parent = chip })
 	local anim = { { chip, "BackgroundTransparency", 0.1 }, { chipStroke, "Transparency", 0.4 } }
 	local spec = resolveIcon(opts.icon)
 	if spec then local img = Create("ImageLabel", { Size = UDim2.new(0, 16, 0, 16), BackgroundTransparency = 1, ImageColor3 = THEME.Accent, ImageTransparency = 1, LayoutOrder = 1, Parent = chip }); applyIcon(img, spec); anim[#anim + 1] = { img, "ImageTransparency", 0 } end
-	local txt = Create("TextLabel", { Size = UDim2.new(0, 0, 1, 0), AutomaticSize = Enum.AutomaticSize.X, BackgroundTransparency = 1, Font = FONT_MED, Text = tostring(opts.content or opts.text or ""), TextColor3 = THEME.Text, TextTransparency = 1, TextSize = 13, LayoutOrder = 2, Parent = chip })
+	local txt = Create("TextLabel", { Size = UDim2.new(0, 0, 1, 0), AutomaticSize = Enum.AutomaticSize.X, BackgroundTransparency = 1, Font = FONT_MONO, Text = string.lower(tostring(opts.content or opts.text or "")), TextColor3 = roleColor("oninv"), TextTransparency = 1, TextSize = 12, LayoutOrder = 2, Parent = chip })
+	txt:SetAttribute("GlyphMono", true)
+	paintRole(txt, "TextColor3", "oninv")
 	anim[#anim + 1] = { txt, "TextTransparency", 0 }
 	local function play(shown)
 		local info = shown and TI.EXPAND or TI.FAST
@@ -1740,7 +1759,7 @@ function Elements.Paragraph(parent, accent, opts)
 		AutomaticSize = Enum.AutomaticSize.Y,
 		Parent = parent,
 	}, {
-		corner(8),
+		corner(3),
 		stroke(THEME.ElementStroke, 1, 0.7),
 		Create("UIPadding", {
 			PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12),
@@ -1848,7 +1867,7 @@ function Elements.Toggle(parent, accent, opts)
 			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 8, 0.5, 0),
 			Size = UDim2.new(0, 24, 0, 24), BackgroundColor3 = hitbox, BackgroundTransparency = 1,
 			BorderSizePixel = 0, ZIndex = 1, Parent = row,
-		}, { corner(7) })
+		}, { corner(2) })
 		hitboxProp(iconBg, "BackgroundColor3", hitbox)
 	end
 
@@ -3006,7 +3025,7 @@ function Elements.ColorPicker(parent, accent, opts)
 			svDot = Create("Frame", {
 				AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(cur().s, 0, 1 - cur().v, 0), Size = UDim2.new(0, 13, 0, 13),
 				BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 1, ZIndex = 52, Parent = sv,
-			}, { corner(7), stroke(Color3.new(1, 1, 1), 2, 0) })
+			}, { corner(2), stroke(Color3.new(1, 1, 1), 2, 0) })
 		end
 		local svHit = Create("TextButton", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Text = "", ZIndex = 53, Parent = sv })
 		do
@@ -4477,7 +4496,7 @@ local function keyGate(kopts, windowTitle)
 		BorderSizePixel = 0,
 		ZIndex = 60001,
 		Parent = card,
-	}, { corner(6) })
+	}, { corner(2) })
 	local fieldStroke = stroke(THEME.ElementStroke, 1, 0.2)
 	fieldStroke.Parent = field
 	local box = Create("TextBox", {
@@ -4501,13 +4520,13 @@ local function keyGate(kopts, windowTitle)
 		Size = UDim2.new(1, 0, 0, 32),
 		BackgroundColor3 = THEME.Accent,
 		AutoButtonColor = false,
-		Font = FONT_SEMI,
-		Text = "UNLOCK",
+		Font = FONT_MONO_SEMI,
+		Text = "unlock",
 		TextColor3 = accentTextColor(THEME.Accent),
 		TextSize = 12,
 		ZIndex = 60001,
 		Parent = card,
-	}, { corner(6) })
+	}, { corner(2) })
 
 	local closeBtn = Create("TextButton", {
 		AnchorPoint = Vector2.new(1, 0),
@@ -5170,7 +5189,7 @@ function PERDITION.Window(opts)
 		Size = UDim2.new(0, 66, 0, 22),
 		BackgroundColor3 = THEME.Element,
 		Parent = sbFooter,
-	}, { corner(7), stroke(THEME.ElementStroke, 1, 0.4) })
+	}, { corner(3), stroke(THEME.ElementStroke, 1, 0.4) })
 	local fpsDot = Create("Frame", {
 		AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0),
 		Size = UDim2.new(0, 5, 0, 5), BackgroundColor3 = THEME.Good, BorderSizePixel = 0, Parent = fpsChip,
@@ -5661,7 +5680,7 @@ function PERDITION.Window(opts)
 			AutoButtonColor = false,
 			Text = "",
 			Parent = header,
-		}, { corner(12), stroke(THEME.ElementStroke, 1, 0.35) })
+		}, { corner(3), stroke(THEME.ElementStroke, 1, 0) })
 		local pillLabel = Create("TextLabel", {
 			Position = UDim2.new(0, 10, 0, 0),
 			Size = UDim2.new(1, -32, 1, 0),
@@ -5748,7 +5767,7 @@ function PERDITION.Window(opts)
 				ClipsDescendants = true,
 				ZIndex = 50001,
 				Parent = layer,
-			}, { corner(10), stroke(THEME.Stroke, 1, 0.3), padXY(6, 6) })
+			}, { corner(3), stroke(THEME.Stroke, 1, 0), padXY(6, 6) })
 			siblingShadow(panel)
 			_ddCurrent = { close = closePanel }
 			tween(panel, { Size = UDim2.new(0, 190, 0, fullH) }, TI.EXP)
@@ -6099,7 +6118,7 @@ function PERDITION.Window(opts)
 				TextColor3 = THEME.Text,
 				TextSize = 13,
 				Parent = screenGui,
-			}, { corner(8), accentProp(stroke(accent, 1, 0.4), "Color", accent) })
+			}, { corner(3), accentProp(stroke(accent, 1, 0.4), "Color", accent) })
 			makeDraggable(watermark, watermark)
 		end
 		watermark.Text = "  " .. tostring(text or "PERDITION") .. "  "
@@ -6242,7 +6261,7 @@ function PERDITION.Window(opts)
 			Name = "IconPicker", AnchorPoint = Vector2.new(0.5, 0.5), Position = openPos,
 			Size = UDim2.new(0, 432, 0, 494), BackgroundColor3 = THEME.Group,
 			Visible = false, ZIndex = 41001, Parent = screenGui,
-		}, { corner(14), stroke(THEME.Stroke, 1, 0.2), pScale })
+		}, { corner(3), stroke(THEME.Stroke, 1, 0), pScale })
 		siblingShadow(card)
 
 		-- header
@@ -6264,14 +6283,14 @@ function PERDITION.Window(opts)
 
 		-- preview of the currently picked icon + which slot is being edited
 		local preview = Create("Frame", { Position = UDim2.new(0, 16, 0, 56), Size = UDim2.new(1, -32, 0, 44), BackgroundTransparency = 1, Parent = card })
-		local previewChip = Create("Frame", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(0, 44, 0, 44), BackgroundColor3 = THEME.Element, Parent = preview }, { corner(11), stroke(THEME.ElementStroke, 1, 0.4) })
+		local previewChip = Create("Frame", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(0, 44, 0, 44), BackgroundColor3 = THEME.Element, Parent = preview }, { corner(3), stroke(THEME.ElementStroke, 1, 0.4) })
 		local previewImg = Create("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, 26, 0, 26), BackgroundTransparency = 1, ImageColor3 = accent, Parent = previewChip })
 		accentProp(previewImg, "ImageColor3", accent)
 		local previewTitle = Create("TextLabel", { AnchorPoint = Vector2.new(0, 0), Position = UDim2.new(0, 56, 0, 4), Size = UDim2.new(1, -56, 0, 18), BackgroundTransparency = 1, Font = FONT_SEMI, Text = "Change icon", TextColor3 = THEME.Text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = preview })
 		local previewSub = Create("TextLabel", { AnchorPoint = Vector2.new(0, 0), Position = UDim2.new(0, 56, 0, 22), Size = UDim2.new(1, -56, 0, 16), BackgroundTransparency = 1, Font = FONT_MONO, Text = "", TextColor3 = THEME.SubText, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = preview })
 
 		-- search field
-		local searchWrap = Create("Frame", { Position = UDim2.new(0, 16, 0, 108), Size = UDim2.new(1, -32, 0, 36), BackgroundColor3 = THEME.Element, Parent = card }, { corner(10), stroke(THEME.ElementStroke, 1, 0.35) })
+		local searchWrap = Create("Frame", { Position = UDim2.new(0, 16, 0, 108), Size = UDim2.new(1, -32, 0, 36), BackgroundColor3 = THEME.Element, Parent = card }, { corner(2), stroke(THEME.ElementStroke, 1, 0.35) })
 		local sIcon = Create("ImageLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 11, 0.5, 0), Size = UDim2.new(0, 15, 0, 15), BackgroundTransparency = 1, ImageColor3 = THEME.SubText, Parent = searchWrap })
 		local hasS = applyIcon(sIcon, resolveIcon("search"))
 		local searchBox = Create("TextBox", { BackgroundTransparency = 1, Position = UDim2.new(0, hasS and 34 or 12, 0, 0), Size = UDim2.new(1, hasS and -44 or -22, 1, 0),
@@ -6299,7 +6318,7 @@ function PERDITION.Window(opts)
 		Create("Frame", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 12, 1, -58), Size = UDim2.new(1, -24, 0, 1), BackgroundColor3 = THEME.Stroke, BackgroundTransparency = 0.4, BorderSizePixel = 0, Parent = card })
 		local footer = Create("Frame", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(1, 0, 0, 58), BackgroundTransparency = 1, Parent = card }, { padXY(16, 0) })
 		local countLabel = Create("TextLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(1, -110, 1, 0), BackgroundTransparency = 1, Font = FONT, Text = "", TextColor3 = THEME.Faint, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, Parent = footer })
-		local applyBtn = Create("TextButton", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 96, 0, 34), BackgroundColor3 = accent, AutoButtonColor = false, Font = FONT_SEMI, Text = "Apply", TextColor3 = accentTextColor(accent), TextSize = 13, Parent = footer }, { corner(9) })
+		local applyBtn = Create("TextButton", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 96, 0, 34), BackgroundColor3 = accent, AutoButtonColor = false, Font = FONT_MONO_SEMI, Text = "apply", TextColor3 = accentTextColor(accent), TextSize = 12, Parent = footer }, { corner(2) })
 		accentProp(applyBtn, "BackgroundColor3", accent)
 
 		local function styleCell(c, sel)
@@ -6336,7 +6355,7 @@ function PERDITION.Window(opts)
 		end
 
 		function createCell()
-			local b = Create("TextButton", { Size = UDim2.new(0, CELL, 0, CELL), BackgroundColor3 = THEME.Element, AutoButtonColor = false, Text = "", Visible = false, Parent = results }, { corner(10) })
+			local b = Create("TextButton", { Size = UDim2.new(0, CELL, 0, CELL), BackgroundColor3 = THEME.Element, AutoButtonColor = false, Text = "", Visible = false, Parent = results }, { corner(2) })
 			local st = stroke(THEME.ElementStroke, 1, 0.4); st.Parent = b
 			local img = Create("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, 25, 0, 25), BackgroundTransparency = 1, ImageColor3 = THEME.SubText, Parent = b })
 			local cell = { button = b, img = img, stroke = st, name = nil, selected = false }
@@ -6836,7 +6855,7 @@ function PERDITION.Window(opts)
 				dropSlot = Create("Frame", {
 					BackgroundColor3 = accent, BackgroundTransparency = 0.86, BorderSizePixel = 0,
 					AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(0, 0, 0, 0),
-				}, { corner(10), stroke(accent, 1.5, 0.35),
+				}, { corner(2), stroke(accent, 1.5, 0.35),
 					Create("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, card.AbsoluteSize.Y / sc) }),
 					Create("TextLabel", { Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Font = FONT_SEMI, Text = "Drop here", TextColor3 = accent, TextTransparency = 0.15, TextSize = 13 }),
 				})
@@ -7372,12 +7391,12 @@ function PERDITION.Window(opts)
 			Position = UDim2.new(0, 12, 0, 12),
 			Size = UDim2.new(0, 44, 0, 44),
 			BackgroundColor3 = THEME.Topbar,
-			Font = FONT_BOLD,
-			Text = "N",
+			Font = FONT_MONO_BOLD,
+			Text = "p",
 			TextColor3 = accent,
-			TextSize = 19,
+			TextSize = 17,
 			Parent = screenGui,
-		}, { corner(8), stroke(THEME.Stroke, 1, 0.15) })
+		}, { corner(3), stroke(THEME.Stroke, 1, 0.15) })
 		dropShadow(fab, 0.6)
 		accentProp(fab, "TextColor3", accent)
 		makeDraggable(fab, fab)
@@ -7442,7 +7461,7 @@ function PERDITION.Window(opts)
 			Name = "OverlayPanel", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0),
 			Size = UDim2.new(0, 400, 0, 468), BackgroundColor3 = THEME.Background,
 			GroupTransparency = 1, Visible = false, ZIndex = 40001, Parent = screenGui,
-		}, { corner(14), stroke(THEME.Stroke, 1, 0.3), pScale })
+		}, { corner(3), stroke(THEME.Stroke, 1, 0), pScale })
 		siblingShadow(card)
 		-- absorb clicks on the panel's empty areas so they don't fall through to the
 		-- backdrop and close it (only the backdrop outside the card, or the X, closes
@@ -7740,7 +7759,7 @@ function PERDITION.Window(opts)
 				Font = FONT, Text = tostring(text), TextColor3 = isUser and accentTextColor(accent) or THEME.Text,
 				TextSize = 13, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left,
 				ZIndex = 40003, Parent = wrap,
-			}, { corner(9), Create("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10), PaddingTop = UDim.new(0, 7), PaddingBottom = UDim.new(0, 7) }), Create("UISizeConstraint", { MaxSize = Vector2.new(300, math.huge) }) })
+			}, { corner(3), Create("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10), PaddingTop = UDim.new(0, 7), PaddingBottom = UDim.new(0, 7) }), Create("UISizeConstraint", { MaxSize = Vector2.new(300, math.huge) }) })
 			if isUser then accentProp(bubble, "BackgroundColor3", accent) end
 			task.defer(function() pcall(function() messages.CanvasPosition = Vector2.new(0, messages.AbsoluteCanvasSize.Y) end) end)
 			return bubble
@@ -7749,13 +7768,13 @@ function PERDITION.Window(opts)
 
 		-- input row (textbox + send)
 		local inputRow = Create("Frame", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -10), Size = UDim2.new(1, -24, 0, 38), BackgroundTransparency = 1, ZIndex = 40002, Parent = card })
-		local inField = Create("Frame", { Size = UDim2.new(1, -46, 1, 0), BackgroundColor3 = THEME.Element, ZIndex = 40002, Parent = inputRow }, { corner(9), stroke(THEME.ElementStroke, 1, 0.4) })
+		local inField = Create("Frame", { Size = UDim2.new(1, -46, 1, 0), BackgroundColor3 = THEME.Element, ZIndex = 40002, Parent = inputRow }, { corner(2), stroke(THEME.ElementStroke, 1, 0.4) })
 		local inBox = Create("TextBox", {
 			Size = UDim2.new(1, -20, 1, 0), Position = UDim2.new(0, 12, 0, 0), BackgroundTransparency = 1, ClearTextOnFocus = false,
 			Font = FONT, PlaceholderText = "Message...", PlaceholderColor3 = THEME.Faint, Text = "",
 			TextColor3 = THEME.Text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 40003, Parent = inField,
 		})
-		local sendBtn = Create("TextButton", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 38, 0, 38), BackgroundColor3 = accent, AutoButtonColor = false, Text = "", ZIndex = 40002, Parent = inputRow }, { corner(9) })
+		local sendBtn = Create("TextButton", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 38, 0, 38), BackgroundColor3 = accent, AutoButtonColor = false, Text = "", ZIndex = 40002, Parent = inputRow }, { corner(2) })
 		accentProp(sendBtn, "BackgroundColor3", accent)
 		local sendIcon = Create("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, 16, 0, 16), BackgroundTransparency = 1, ImageColor3 = accentTextColor(accent), ZIndex = 40003, Parent = sendBtn })
 		applyIcon(sendIcon, resolveIcon("send"))

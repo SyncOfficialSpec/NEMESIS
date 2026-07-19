@@ -3980,10 +3980,11 @@ function Elements.FAQ(parent, accent, opts)
 	for idx, it in ipairs(items) do
 		local q = it.question or it.Question or it[1] or "Question"
 		local a = it.answer or it.Answer or it[2] or ""
-		local card = Create("Frame", { Size = UDim2.new(1, 0, 0, 38), BackgroundColor3 = THEME.Element, ClipsDescendants = true, LayoutOrder = idx, Parent = wrap }, { corner(12), stroke(THEME.ElementStroke, 1, 0.3), Create("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(216, 216, 216)), Transparency = NumberSequence.new(0.9) }) })
+		local card = Create("Frame", { Size = UDim2.new(1, 0, 0, 38), BackgroundColor3 = THEME.Element, ClipsDescendants = true, LayoutOrder = idx, Parent = wrap }, { corner(3), stroke(THEME.ElementStroke, 1, 0) })
 		tagSearch(card, q .. " " .. a)
 		local head = Create("TextButton", { Size = UDim2.new(1, 0, 0, 38), BackgroundTransparency = 1, AutoButtonColor = false, Text = "", Parent = card }, { padXY(ROW_PAD, 0) })
-		Create("TextLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(1, -24, 0, 16), BackgroundTransparency = 1, Font = FONT_MED, Text = tostring(q), TextColor3 = THEME.Text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = head })
+		local qLabel = Create("TextLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(1, -24, 0, 16), BackgroundTransparency = 1, Font = FONT_MONO_SEMI, Text = string.lower(tostring(q)), TextColor3 = THEME.Text, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = head })
+		qLabel:SetAttribute("GlyphMono", true)
 		local chev = iconChevron(head, 14, THEME.SubText, "chevron-down")
 		chev.AnchorPoint = Vector2.new(1, 0.5); chev.Position = UDim2.new(1, 0, 0.5, 0); chev.Rotation = 180
 		local ans = Create("TextLabel", { Position = UDim2.new(0, ROW_PAD, 0, 38), Size = UDim2.new(1, -ROW_PAD * 2, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, Font = FONT, Text = tostring(a), TextColor3 = THEME.SubText, TextSize = 12, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, Parent = card })
@@ -4008,11 +4009,12 @@ end
 function Elements.Changelog(parent, accent, opts)
 	opts = opts or {}
 	local card = Create("Frame", { Size = UDim2.new(1, -ROW_PAD * 2, 0, 0), Position = UDim2.new(0, ROW_PAD, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundColor3 = THEME.Element, Parent = parent }, {
-		corner(10), stroke(THEME.ElementStroke, 1, 0.4), padding(12),
+		corner(3), stroke(THEME.ElementStroke, 1, 0), padding(12),
 		Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 6) }),
 	})
 	local head = Create("Frame", { Size = UDim2.new(1, 0, 0, 20), BackgroundTransparency = 1, LayoutOrder = 1, Parent = card })
-	Create("TextLabel", { Size = UDim2.new(0.6, 0, 1, 0), BackgroundTransparency = 1, Font = FONT_BOLD, Text = tostring(opts.title or "Changelog"), TextColor3 = THEME.Text, TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, Parent = head })
+	local clTitle = Create("TextLabel", { Size = UDim2.new(0.6, 0, 1, 0), BackgroundTransparency = 1, Font = FONT_MONO_SEMI, Text = string.lower(tostring(opts.title or "Changelog")), TextColor3 = THEME.Text, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, Parent = head })
+	clTitle:SetAttribute("GlyphMono", true)
 	Create("TextLabel", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.new(0.4, 0, 1, 0), BackgroundTransparency = 1, Font = FONT_MONO, Text = tostring((opts.version and ("v" .. opts.version) or "") .. (opts.date and ("  " .. opts.date) or "")), TextColor3 = THEME.SubText, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Right, Parent = head })
 	local tagColors = { added = Color3.fromRGB(90, 220, 140), fixed = Color3.fromRGB(90, 190, 255), changed = Color3.fromRGB(255, 190, 80), removed = Color3.fromRGB(255, 110, 110) }
 	for i, e in ipairs(opts.entries or opts.Entries or {}) do
@@ -4021,8 +4023,12 @@ function Elements.Changelog(parent, accent, opts)
 		local row = Create("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = i + 1, Parent = card })
 		local ix = 0
 		if tag then
-			local chipBg = tagColors[string.lower(tostring(tag))] or accent
-			local chip = Create("TextLabel", { Size = UDim2.new(0, 0, 0, 16), AutomaticSize = Enum.AutomaticSize.X, BackgroundColor3 = chipBg, Font = FONT_SEMI, Text = " " .. string.upper(tostring(tag)) .. " ", TextColor3 = accentTextColor(chipBg), TextSize = 10, Parent = row }, { corner(3) })
+			-- GLYPH monochrome law: tags are inversion plates with mono codes,
+			-- distinguished by text not colour
+			local chip = Create("TextLabel", { Size = UDim2.new(0, 0, 0, 16), AutomaticSize = Enum.AutomaticSize.X, BackgroundColor3 = roleColor("plateinv"), Font = FONT_MONO_SEMI, Text = " " .. string.upper(tostring(tag)) .. " ", TextColor3 = roleColor("oninv"), TextSize = 9, Parent = row }, { corner(2) })
+			paintRole(chip, "BackgroundColor3", "plateinv")
+			paintRole(chip, "TextColor3", "oninv")
+			chip:SetAttribute("GlyphMono", true)
 			ix = 6
 			chip:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() end)
 			ix = 60
@@ -4113,11 +4119,12 @@ function Elements.PinnedList(parent, accent, opts)
 		local card = Create("Frame", {
 			AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, (i - 1) * (CARD_H + GAP)),
 			Size = UDim2.new(1, 0, 0, CARD_H), BackgroundColor3 = THEME.Element, Parent = wrap,
-		}, { corner(12), stroke(THEME.ElementStroke, 1, 0.3), padXY(ROW_PAD, 0), Create("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(216, 216, 216)), Transparency = NumberSequence.new(0.9) }) })
+		}, { corner(3), stroke(THEME.ElementStroke, 1, 0), padXY(ROW_PAD, 0) })
 		tagSearch(card, (it.Name or it.name or "Item") .. " " .. (it.Description or it.desc or ""))
 		local ix = 0
 		if it.Icon or it.icon then local img = Create("ImageLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(0, 16, 0, 16), BackgroundTransparency = 1, ImageColor3 = THEME.SubText, Parent = card }); local isp = resolveIcon(it.Icon or it.icon); if isp then applyIcon(img, isp); ix = 24 end end
-		Create("TextLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, ix, 0.5, 0), Size = UDim2.new(1, -34 - ix, 1, 0), BackgroundTransparency = 1, Font = FONT_MED, Text = tostring(it.Name or it.name or "Item"), TextColor3 = THEME.Text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = card })
+		local plName = Create("TextLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, ix, 0.5, 0), Size = UDim2.new(1, -34 - ix, 1, 0), BackgroundTransparency = 1, Font = FONT_MONO_SEMI, Text = string.lower(tostring(it.Name or it.name or "Item")), TextColor3 = THEME.Text, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = card })
+		plName:SetAttribute("GlyphMono", true)
 		local pin = Create("TextButton", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 26, 0, 26), BackgroundTransparency = 1, AutoButtonColor = false, Text = "", Parent = card })
 		local pinIcon = Create("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, 15, 0, 15), BackgroundTransparency = 1, ImageColor3 = THEME.SubText, Parent = pin })
 		local spec = resolveIcon("pin"); if spec then applyIcon(pinIcon, spec) end
@@ -4151,14 +4158,14 @@ function Elements.EnhancedView(parent, accent, opts)
 		Size = UDim2.new(1, -ROW_PAD * 2, 0, h), Position = UDim2.new(0, ROW_PAD, 0, 0),
 		BackgroundColor3 = THEME.Element, ClipsDescendants = true, Parent = parent,
 	}, {
-		corner(12), stroke(THEME.ElementStroke, 1, 0.3), padding(12),
-		Create("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(216, 216, 216)), Transparency = NumberSequence.new(0.9) }),
+		corner(3), stroke(THEME.ElementStroke, 1, 0), padding(12),
 	})
 	tagSearch(card, opts.title or "3D View")
-	Create("TextLabel", {
-		Size = UDim2.new(1, 0, 0, 18), BackgroundTransparency = 1, Font = FONT_BOLD, Text = tostring(opts.title or "3D View"),
-		TextColor3 = THEME.Text, TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, Parent = card,
+	local evTitle = Create("TextLabel", {
+		Size = UDim2.new(1, 0, 0, 18), BackgroundTransparency = 1, Font = FONT_MONO_SEMI, Text = string.lower(tostring(opts.title or "3D View")),
+		TextColor3 = THEME.Text, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, Parent = card,
 	})
+	evTitle:SetAttribute("GlyphMono", true)
 	local stage = Create("Frame", { Position = UDim2.new(0, 0, 0, 26), Size = UDim2.new(1, 0, 1, -26), BackgroundTransparency = 1, Parent = card })
 	local control, rotConn = {}, nil
 	local function mount(obj)

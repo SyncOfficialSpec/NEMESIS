@@ -1957,7 +1957,12 @@ function Elements.Slider(parent, accent, opts)
 		BackgroundTransparency = 1,
 		Parent = row,
 	})
-	-- editable readout chip: mono digits so the value never jitters, click to type
+	-- editable readout chip: mono digits so the value never jitters, click to
+	-- type. GLYPH raw-data: "120/360" when the slider carries no suffix.
+	local function rawFmt(v)
+		if suffix == "" then return fmt(v) .. "/" .. fmt(max) end
+		return fmt(v)
+	end
 	local valueStroke = stroke(THEME.ElementStroke, 1, 1)
 	local valueLabel = Create("TextBox", {
 		BackgroundColor3 = THEME.Element,
@@ -1966,13 +1971,14 @@ function Elements.Slider(parent, accent, opts)
 		AnchorPoint = Vector2.new(0, 0.5),
 		Size = UDim2.new(0, 46, 0, 20),
 		Font = FONT_MONO,
-		Text = fmt(value),
+		Text = rawFmt(value),
 		TextColor3 = THEME.Text,
 		TextSize = 12,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		ClearTextOnFocus = false,
 		Parent = cluster,
-	}, { corner(6), valueStroke })
+	}, { corner(2), valueStroke })
+	valueLabel:SetAttribute("GlyphMono", true)
 	valueLabel.Focused:Connect(function()
 		tween(valueLabel, { BackgroundTransparency = 0 }, TI.HOVER)
 		valueStroke.Color = accent
@@ -2001,7 +2007,7 @@ function Elements.Slider(parent, accent, opts)
 		BackgroundColor3 = THEME.Knob,
 		ZIndex = 2,
 		Parent = bar,
-	}, { corner(3) })
+	}, { corner(2) })
 	-- tall invisible grab strip so the thin bar is easy to drag anywhere
 	local hit = Create("TextButton", {
 		AnchorPoint = Vector2.new(1, 0.5),
@@ -2020,11 +2026,12 @@ function Elements.Slider(parent, accent, opts)
 		local stepped = min + math.floor((raw - min) / increment + 0.5) * increment
 		value = math.clamp(stepped, min, max)
 		local frac = (value - min) / span
-		valueLabel.Text = fmt(value)
-		-- the fill/handle always ease toward the target (Syde Quint catch-up), so even
-		-- a drag reads as a smooth glide rather than a hard snap
-		tween(fill, { Size = UDim2.new(frac, 0, 1, 0) }, TI.SYDE_SIZE)
-		tween(handle, { Position = UDim2.new(frac, 0, 0.5, 0) }, TI.SYDE_SIZE)
+		valueLabel.Text = rawFmt(value)
+		-- GLYPH instant law: a drag moves the knob 1:1 (no catch-up); only a
+		-- programmatic Set eases, and even that is a fast 0.12s
+		local ti = instant and TweenInfo.new(0) or TI.FAST
+		tween(fill, { Size = UDim2.new(frac, 0, 1, 0) }, ti)
+		tween(handle, { Position = UDim2.new(frac, 0, 0.5, 0) }, ti)
 		if opts.flag then PERDITION.Flags[opts.flag] = value end
 		if fire and type(opts.callback) == "function" then
 			pcall(opts.callback, value)
@@ -2049,8 +2056,8 @@ function Elements.Slider(parent, accent, opts)
 		tween(valueLabel, { BackgroundTransparency = 1 }, TI.HOVEROFF)
 		pcall(function() valueStroke.Color = THEME.ElementStroke end)
 		tween(valueStroke, { Transparency = 1 }, TI.HOVEROFF)
-		local num = tonumber((valueLabel.Text:gsub("[^%d%.%-]", "")))
-		if num then control.Set(num) else valueLabel.Text = fmt(value) end
+		local num = tonumber((tostring(valueLabel.Text):match("^%s*([%d%.%-]+)")))
+		if num then control.Set(num) else valueLabel.Text = rawFmt(value) end
 	end)
 
 	if opts.flag then PERDITION.Flags[opts.flag] = value end
@@ -2444,16 +2451,17 @@ function Elements.Input(parent, accent, opts)
 		BackgroundTransparency = 1,
 		Position = UDim2.new(0, 10, 0, 0),
 		Size = UDim2.new(1, -20, 1, 0),
-		Font = FONT,
+		Font = FONT_MONO,
 		PlaceholderText = tostring(opts.placeholder or "..."),
 		Text = tostring(opts.default or ""),
 		TextColor3 = THEME.Text,
 		PlaceholderColor3 = THEME.SubText,
-		TextSize = 15,
+		TextSize = 13,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		ClearTextOnFocus = opts.clearOnFocus and true or false,
 		Parent = clip,
 	})
+	box:SetAttribute("GlyphMono", true)
 	growBox(field, box, MIN_W, MAX_W, 22)
 
 	local control = {}
@@ -2515,7 +2523,7 @@ function Elements.Keybind(parent, accent, opts)
 		Size = UDim2.new(0, 54, 0, 26),
 		BackgroundColor3 = THEME.Element,
 		Parent = row,
-	}, { corner(6), stroke(THEME.ElementStroke, 1, 0.4) })
+	}, { corner(2), stroke(THEME.ElementStroke, 1, 0.4) })
 	local fieldStroke = field:FindFirstChildOfClass("UIStroke")
 	local btn = Create("TextButton", {
 		BackgroundTransparency = 1,
@@ -2527,10 +2535,11 @@ function Elements.Keybind(parent, accent, opts)
 		AutoButtonColor = false,
 		Parent = field,
 	})
+	btn:SetAttribute("GlyphMono", true)
 	local function fitPill()
 		local tb = 40
 		pcall(function() tb = btn.TextBounds.X end)
-		tween(field, { Size = UDim2.new(0, math.clamp(tb + 24, 54, 160), 0, 26) }, TI.SYDE_SIZE)
+		field.Size = UDim2.new(0, math.clamp(tb + 24, 54, 160), 0, 26)
 	end
 	btn:GetPropertyChangedSignal("TextBounds"):Connect(fitPill)
 	task.defer(fitPill)
@@ -3232,16 +3241,17 @@ function Elements.ProgressBar(parent, accent, opts)
 	local bar = Create("Frame", {
 		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -52, 0.5, 0), Size = UDim2.new(0.42, 0, 0, 5),
 		BackgroundColor3 = THEME.ToggleOff, Parent = row,
-	}, { corner(3) })
+	}, { corner(2) })
 	local fillGrad = Create("UIGradient", {})
-	local fill = Create("Frame", { Size = UDim2.new(0, 0, 1, 0), BackgroundColor3 = accent, Parent = bar }, { corner(3), fillGrad })
+	local fill = Create("Frame", { Size = UDim2.new(0, 0, 1, 0), BackgroundColor3 = accent, Parent = bar }, { corner(2), fillGrad })
 	accentProp(fill, "BackgroundColor3", accent); accentGrad(fillGrad, accent)
+	pct:SetAttribute("GlyphMono", true)
 	local control = {}
 	function control.Set(v, animate)
 		value = math.clamp(tonumber(v) or min, min, max)
 		local frac = (value - min) / span
 		pct.Text = (max <= 1 and tostring(math.floor(frac * 100 + 0.5)) or tostring(math.floor(value + 0.5))) .. (opts.suffix or "%")
-		tween(fill, { Size = UDim2.new(frac, 0, 1, 0) }, animate == false and TweenInfo.new(0) or TI.SYDE_SIZE)
+		tween(fill, { Size = UDim2.new(frac, 0, 1, 0) }, animate == false and TweenInfo.new(0) or TI.FAST)
 		if opts.flag then PERDITION.Flags[opts.flag] = value end
 	end
 	function control.Get() return value end

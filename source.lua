@@ -1490,7 +1490,7 @@ local function fieldBox(row, frac)
 		Size = UDim2.new(frac or FIELD_FRAC, 0, 0, 26),
 		BackgroundColor3 = THEME.Element,
 		Parent = row,
-	}, { corner(6), stroke(THEME.ElementStroke, 1, 0.4) })
+	}, { corner(2), stroke(THEME.ElementStroke, 1, 0.4) })
 end
 
 -- Grows a TextBox field to fit the typed text (or the placeholder when empty),
@@ -2455,7 +2455,7 @@ function Elements.Input(parent, accent, opts)
 		BackgroundColor3 = THEME.Element,
 		ClipsDescendants = true,
 		Parent = row,
-	}, { corner(6), stroke(THEME.ElementStroke, 1, 0.4) })
+	}, { corner(2), stroke(THEME.ElementStroke, 1, 0.4) })
 	local fieldStroke = field:FindFirstChildOfClass("UIStroke")
 	-- inner clip rect == the bordered field, so the TextBox can never paint past it
 	local clip = Create("Frame", {
@@ -2736,7 +2736,7 @@ function Elements.ColorPicker(parent, accent, opts)
 		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0),
 		Size = UDim2.new(0, 36, 0, 20), BackgroundColor3 = slotColor(1),
 		Text = "", AutoButtonColor = false, Parent = row,
-	}, { corner(6), stroke(THEME.ElementStroke, 1, 0.25) })
+	}, { corner(2), stroke(THEME.ElementStroke, 1, 0.25) })
 	-- vertical gradient fill: lighter top -> colour bottom in Single, the full gradient in Multi
 	local sw1Grad = Create("UIGradient", { Rotation = 90, Parent = sw1 })
 	local sw2 = Create("TextButton", {
@@ -2823,7 +2823,7 @@ function Elements.ColorPicker(parent, accent, opts)
 		local frame = Create("Frame", {
 			Size = UDim2.new(0, width, 0, 22), BackgroundColor3 = THEME.Element,
 			Parent = nil,
-		}, { corner(6), stroke(THEME.ElementStroke, 1, 0.4) })
+		}, { corner(2), stroke(THEME.ElementStroke, 1, 0.4) })
 		local thumb = Create("Frame", {
 			Size = UDim2.new(1 / n, -6, 1, -6), Position = UDim2.new(0, 3, 0, 3),
 			BackgroundColor3 = accent, BackgroundTransparency = 0.12, BorderSizePixel = 0,
@@ -2865,7 +2865,7 @@ function Elements.ColorPicker(parent, accent, opts)
 			Name = "ColorPanel", AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.new(0, 300, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundColor3 = THEME.Group,
 			GroupTransparency = 1, Visible = false, ZIndex = 50001, Parent = screenGui,
 		}, {
-			corner(12), stroke(THEME.Stroke, 1, 0.3), panelScale,
+			corner(3), stroke(THEME.Stroke, 1, 0), panelScale,
 		})
 		siblingShadow(panel)
 		cpScale = panelScale
@@ -2917,7 +2917,7 @@ function Elements.ColorPicker(parent, accent, opts)
 		local railRow = Create("Frame", { Size = UDim2.new(1, 0, 0, mode == "Multi" and 40 or 0), BackgroundTransparency = 1, Visible = mode == "Multi", LayoutOrder = 2, ClipsDescendants = true, Parent = content })
 		-- inset both the preview and the handle rail by 7px so the end stops (pos 0
 		-- and 1) sit fully inside the panel instead of being clipped at the edges
-		local preview = Create("Frame", { Size = UDim2.new(1, -14, 0, 16), Position = UDim2.new(0, 7, 0, 0), BackgroundColor3 = Color3.new(1, 1, 1), Parent = railRow }, { corner(5), stroke(THEME.ElementStroke, 1, 0.5) })
+		local preview = Create("Frame", { Size = UDim2.new(1, -14, 0, 16), Position = UDim2.new(0, 7, 0, 0), BackgroundColor3 = Color3.new(1, 1, 1), Parent = railRow }, { corner(2), stroke(THEME.ElementStroke, 1, 0.5) })
 		local previewGrad = Create("UIGradient", { Parent = preview })
 		local rail = Create("TextButton", { Size = UDim2.new(1, -14, 0, 18), Position = UDim2.new(0, 7, 0, 20), BackgroundTransparency = 1, AutoButtonColor = false, Text = "", Parent = railRow })
 		local handleFrames = {}
@@ -2932,7 +2932,7 @@ function Elements.ColorPicker(parent, accent, opts)
 					AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(st.pos, 0, 0.5, 0),
 					Size = UDim2.new(0, 12, 0, 12), BackgroundColor3 = stopHandleColor(i), AutoButtonColor = false,
 					Text = "", ZIndex = 3, Parent = rail,
-				}, { corner(6), stroke(i == activeStop and accent or Color3.fromRGB(240, 240, 244), 2, 0) })
+				}, { corner(2), stroke(i == activeStop and accent or Color3.fromRGB(240, 240, 244), 2, 0) })
 				handleFrames[i] = h
 				h.MouseButton1Down:Connect(function()
 					activeStop = i; refreshRail(); syncUI()
@@ -4428,7 +4428,7 @@ local function keyGate(kopts, windowTitle)
 		ClipsDescendants = true,
 		ZIndex = 60000,
 		Parent = screenGui,
-	}, { corner(12), stroke(THEME.Stroke, 1, 0.3), padXY(18, 16) })
+	}, { corner(3), stroke(THEME.Stroke, 1, 0), padXY(18, 16) })
 	siblingShadow(card)
 	makeDraggable(card, card)
 
@@ -7699,7 +7699,7 @@ function PERDITION.Window(opts)
 			Font = FONT_MONO, PlaceholderText = "Paste your Google Gemini API key (optional)",
 			PlaceholderColor3 = THEME.Faint, Text = geminiKey, TextColor3 = THEME.Text, TextSize = 12,
 			TextXAlignment = Enum.TextXAlignment.Left, ClipsDescendants = true, ZIndex = 40002, Parent = card,
-		}, { corner(6), stroke(THEME.ElementStroke, 1, 0.4), padXY(10, 0) })
+		}, { corner(2), stroke(THEME.ElementStroke, 1, 0.4), padXY(10, 0) })
 		keyBox.FocusLost:Connect(function()
 			geminiKey = tostring(keyBox.Text or ""):gsub("^%s+", ""):gsub("%s+$", "")
 			PERDITION.AIKey = geminiKey

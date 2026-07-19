@@ -1521,6 +1521,10 @@ end
 -- Element factories: (parent, accent, opts) -> control { Set, Get }
 local Elements = {}
 local makeSection   -- forward declaration so nesting elements can host their own sections
+-- GLYPH: section/part-code labels bake theme colours into RichText; these
+-- rebuilders refresh them on SetTheme. Window-local lists iterate too.
+local glyphLabelRefreshes = {}
+local sectionSeq = 0   -- cfg–NN counter, reset per window
 
 function Elements.Label(parent, accent, text)
 	-- text inside a subtle rounded card
@@ -4173,10 +4177,11 @@ function makeSection(host, accent, title, startClosed)
 		AutomaticSize = Enum.AutomaticSize.Y,
 		Parent = host,
 	}, {
-		corner(11),
-		stroke(THEME.ElementStroke, 1, 0.35),
+		corner(3),
+		stroke(THEME.Stroke, 1, 0),
 		Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
+	paintRole(card, "BackgroundColor3", "plate")
 
 	local bodyWrap = Create("Frame", {
 		Size = UDim2.new(1, 0, 0, 0),
@@ -4197,7 +4202,7 @@ function makeSection(host, accent, title, startClosed)
 			HorizontalAlignment = Enum.HorizontalAlignment.Center,
 			Padding = UDim.new(0, 6),
 		}),
-		Create("UIPadding", { PaddingTop = UDim.new(0, 10), PaddingBottom = UDim.new(0, 14) }),
+		Create("UIPadding", { PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 12) }),
 	})
 
 	if title and title ~= "" then
@@ -4210,29 +4215,38 @@ function makeSection(host, accent, title, startClosed)
 			LayoutOrder = 1,
 			Parent = card,
 		}, { padXY(ROW_PAD, 0) })
-		-- oxblood accent rule before the title
-		local marker = Create("Frame", {
-			AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0),
-			Size = UDim2.new(0, 3, 0, 14), BackgroundColor3 = accent, BorderSizePixel = 0, Parent = header,
-		}, { corner(2) })
-		accentProp(marker, "BackgroundColor3", accent)
-		Create("TextLabel", {
+		-- GLYPH header: dim cfg–NN code + lowercase mono title, hairline under
+		sectionSeq = sectionSeq + 1
+		local secCode = string.format("cfg\u{2013}%02d", sectionSeq)
+		local secLower = string.lower(tostring(title))
+		local secLabel = Create("TextLabel", {
 			BackgroundTransparency = 1,
 			AnchorPoint = Vector2.new(0, 0.5),
-			Position = UDim2.new(0, 13, 0.5, 0),
-			Size = UDim2.new(1, -40, 1, 0),
-			Font = FONT_SEMI,
-			Text = string.upper(tostring(title)),
+			Position = UDim2.new(0, 0, 0.5, 0),
+			Size = UDim2.new(1, -26, 1, 0),
+			Font = FONT_MONO_SEMI,
+			RichText = true,
+			Text = string.format('<font color="#%s">%s</font>  %s', hexOf(THEME.Faint), secCode, secLower),
 			TextColor3 = THEME.SubText,
 			TextSize = 11,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			TextTruncate = Enum.TextTruncate.AtEnd,
 			Parent = header,
 		})
+		secLabel:SetAttribute("GlyphMono", true)
+		glyphLabelRefreshes[#glyphLabelRefreshes + 1] = function()
+			secLabel.Text = string.format('<font color="#%s">%s</font>  %s', hexOf(THEME.Faint), secCode, secLower)
+		end
 		local chev = iconChevron(header, 15, THEME.Faint, "chevron-down")
 		chev.AnchorPoint = Vector2.new(1, 0.5)
 		chev.Position = UDim2.new(1, 0, 0.5, 0)
-		-- (no header rule: it read as a stray line; header/body separate by spacing)
+		-- GLYPH: 1px rule separating header from body
+		local headRule = Create("Frame", {
+			AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0),
+			Size = UDim2.new(1, 0, 0, 1), BackgroundColor3 = THEME.Stroke,
+			BorderSizePixel = 0, Parent = header,
+		})
+		paintRole(headRule, "BackgroundColor3", "hair")
 		local open = true
 		local SEC_SLIDE = TweenInfo.new(0.36, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
 		sectionSetOpen = function(want, animate)
@@ -4535,6 +4549,7 @@ function PERDITION.Window(opts)
 	-- drag = panels can be picked up by their header and rearranged. Read live by pages.
 	local canvasAutoArrange = true
 	local canvasDrag = false
+	sectionSeq = 0
 	ensureRoot()
 
 	local scale = computeScale()
@@ -5454,6 +5469,19 @@ function PERDITION.Window(opts)
 				if sc then sc.Scale = 1 end
 			end
 		end)
+		-- GLYPH 80ms crossfade: a ground-coloured wipe lifts off the new page
+		if animate ~= false then
+			local wipe = Create("Frame", {
+				Size = UDim2.new(1, 0, 1, 0),
+				BackgroundColor3 = THEME.Background,
+				BorderSizePixel = 0,
+				ZIndex = 500,
+				Parent = pagesHost,
+			})
+			paintRole(wipe, "BackgroundColor3", "ground")
+			tween(wipe, { BackgroundTransparency = 1 }, TweenInfo.new(0.08))
+			task.delay(0.1, function() pcall(function() wipe:Destroy() end) end)
+		end
 		bindFades(page.body)
 		setCrumb(tab, page)
 		runSearch(searchBox.Text)
@@ -5843,6 +5871,7 @@ function PERDITION.Window(opts)
 		end)
 		pcall(rePaint)   -- role-registered (v4) instances recolour directly
 		for _, fn in ipairs(richRefresh) do pcall(fn) end
+		for _, fn in ipairs(glyphLabelRefreshes) do pcall(fn) end
 
 		-- rebuild the colour-embedding rich text + active page tint
 		if activeTab and activeTab.activePage then
@@ -6630,7 +6659,7 @@ function PERDITION.Window(opts)
 			}, {
 				Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder }),
 				Create("UIPadding", {
-					PaddingLeft = UDim.new(0, 18), PaddingRight = UDim.new(0, 18),
+					PaddingLeft = UDim.new(0, 16), PaddingRight = UDim.new(0, 16),
 					PaddingTop = UDim.new(0, 2), PaddingBottom = UDim.new(0, 16),
 				}),
 			})
@@ -6639,7 +6668,7 @@ function PERDITION.Window(opts)
 			-- Responsive masonry: panels are positioned manually so they can smoothly
 			-- reflow (switch columns) when the window is resized. The column count
 			-- adapts to the width; each panel eases to its new slot on every change.
-			local GAP = 10
+			local GAP = 8   -- GLYPH 4px grid
 			local MINCOLW = 300   -- narrower than this and a column is dropped
 			local maxCols = math.clamp(math.floor(popts.columns or windowColumns), 1, 3)
 			local columnsHolder = Create("Frame", {

@@ -565,9 +565,17 @@ local function roleColor(role)
 		local t = THEME.ACC_DIM
 		return (typeof(t) == "Color3") and t or THEME.Accent
 	end
-	if role == "paper" then
+	if role == "paper" or role == "plateinv" then
 		local t = THEME.PAPER
 		return (typeof(t) == "Color3") and t or THEME.Text
+	end
+	if role == "oninv" then
+		local t = THEME.PAPER
+		local plate = (typeof(t) == "Color3") and t or THEME.Text
+		-- inline of accentTextColor (declared later in this file): dark text on
+		-- a light plate, light text on a dark plate
+		local lum = 0.299 * plate.R + 0.587 * plate.G + 0.114 * plate.B
+		return lum > 0.55 and Color3.fromRGB(12, 13, 15) or Color3.fromRGB(242, 244, 246)
 	end
 	if role == "ledoff" then
 		local t = THEME.LED_OFF
@@ -1642,7 +1650,7 @@ function Elements.Listbox(parent, accent, opts)
 	local box = Create("Frame", {
 		Size = UDim2.new(1, 0, 0, rows * 28 + 8), LayoutOrder = 2,
 		BackgroundColor3 = THEME.Element, Parent = wrap,
-	}, { corner(8), stroke(THEME.ElementStroke, 1, 0.5) })
+	}, { corner(3), stroke(THEME.ElementStroke, 1, 0) })
 	local holder = Create("ScrollingFrame", {
 		Size = UDim2.new(1, -8, 1, -8), Position = UDim2.new(0, 4, 0, 4),
 		BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 3,
@@ -1668,7 +1676,7 @@ function Elements.Listbox(parent, accent, opts)
 		for _, rec in ipairs(items) do rec.btn:Destroy() end
 		items = {}
 		for _, v in ipairs(options) do
-			local ob = Create("TextButton", { Size = UDim2.new(1, 0, 0, 26), BackgroundColor3 = THEME.ElementHover, BackgroundTransparency = 1, AutoButtonColor = false, Text = "", Parent = holder }, { corner(6) })
+			local ob = Create("TextButton", { Size = UDim2.new(1, 0, 0, 26), BackgroundColor3 = THEME.ElementHover, BackgroundTransparency = 1, AutoButtonColor = false, Text = "", Parent = holder }, { corner(2) })
 			local dot = Create("Frame", {
 				AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0), Size = UDim2.new(0, 4, 0, 4),
 				BackgroundColor3 = accent, BackgroundTransparency = 1, BorderSizePixel = 0, Parent = ob,
@@ -1676,9 +1684,10 @@ function Elements.Listbox(parent, accent, opts)
 			accentProp(dot, "BackgroundColor3", accent)
 			local lbl = Create("TextLabel", {
 				AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0), Size = UDim2.new(1, -16, 0, 16),
-				BackgroundTransparency = 1, Font = FONT, Text = tostring(v), TextColor3 = THEME.Text, TextTransparency = 0.35,
-				TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = ob,
+				BackgroundTransparency = 1, Font = FONT_MONO, Text = string.lower(tostring(v)), TextColor3 = THEME.Text, TextTransparency = 0.35,
+				TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = ob,
 			})
+			lbl:SetAttribute("GlyphMono", true)
 			local function paint(animate)
 				local on = selected[v] and true or false
 				local info = animate and TI.SYDE_OPT or TweenInfo.new(0)
@@ -2121,14 +2130,15 @@ function Elements.Dropdown(parent, accent, opts)
 		BackgroundTransparency = 1,
 		Position = UDim2.new(0, 10, 0, 0),
 		Size = UDim2.new(1, -32, 1, 0),
-		Font = FONT,
+		Font = FONT_MONO,
 		Text = "...",
 		TextColor3 = THEME.Text,
-		TextSize = 13,
+		TextSize = 12,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		Parent = field,
 	})
+	current:SetAttribute("GlyphMono", true)
 	-- arrow only (no liner / divider before it)
 	local arrowIsImage = false
 	local arrow
@@ -2165,18 +2175,21 @@ function Elements.Dropdown(parent, accent, opts)
 	local OPT_H = 28         -- logical option row height
 	local panelScale = Create("UIScale", { Scale = 1 })
 	local panelStroke = stroke(THEME.Stroke, 1, 1)
+	-- GLYPH: the popover is an INVERSION plate (paper on ink / ink on paper)
+	-- with the one static drop - it never blends into the card it floats over
 	local panel = Create("Frame", {
 		Name = "NemesisDropdown",
-		BackgroundColor3 = THEME.Group,
+		BackgroundColor3 = roleColor("plateinv"),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Visible = false,
 		ZIndex = 50001,
 	}, {
-		corner(10),
+		corner(3),
 		panelStroke,
 		panelScale,
 	})
+	paintRole(panel, "BackgroundColor3", "plateinv")
 	local panelShadow = dropShadow(panel, 1)
 	local holder = Create("ScrollingFrame", {
 		AnchorPoint = Vector2.new(0.5, 0),
@@ -2208,9 +2221,10 @@ function Elements.Dropdown(parent, accent, opts)
 	local function refreshLabel()
 		if multi then
 			local parts = listValues()
-			current.Text = #parts > 0 and table.concat(parts, ", ") or "None"
+			for i, p in ipairs(parts) do parts[i] = string.lower(tostring(p)) end
+			current.Text = #parts > 0 and table.concat(parts, ", ") or "none"
 		else
-			current.Text = single ~= nil and tostring(single) or "None"
+			current.Text = single ~= nil and string.lower(tostring(single)) or "none"
 		end
 		current.TextColor3 = (multi and #listValues() > 0 or single ~= nil) and THEME.Text or THEME.SubText
 	end
@@ -2231,14 +2245,15 @@ function Elements.Dropdown(parent, accent, opts)
 		optionButtons = {}
 		for _, v in ipairs(options) do
 			local ob = Create("TextButton", {
-				BackgroundColor3 = THEME.ElementHover,
+				BackgroundColor3 = roleColor("oninv"),
 				BackgroundTransparency = 1,
 				Size = UDim2.new(1, 0, 0, OPT_H),
 				AutoButtonColor = false,
 				Text = "",
 				ZIndex = 50003,
 				Parent = holder,
-			}, { corner(6) })
+			}, { corner(2) })
+			paintRole(ob, "BackgroundColor3", "oninv")
 			local dot = Create("Frame", {
 				AnchorPoint = Vector2.new(0, 0.5),
 				Position = UDim2.new(0, 8, 0.5, 0),
@@ -2255,16 +2270,18 @@ function Elements.Dropdown(parent, accent, opts)
 				BackgroundTransparency = 1,
 				Position = UDim2.new(0, 8, 0.5, 0),
 				Size = UDim2.new(1, -16, 0, 16),
-				Font = FONT,
-				Text = tostring(v),
-				TextColor3 = THEME.Text,
+				Font = FONT_MONO,
+				Text = optionFont and tostring(v) or string.lower(tostring(v)),
+				TextColor3 = roleColor("oninv"),
 				TextTransparency = 1,
-				TextSize = 13,
+				TextSize = 12,
 				TextXAlignment = Enum.TextXAlignment.Left,
 				TextTruncate = Enum.TextTruncate.AtEnd,
 				ZIndex = 50004,
 				Parent = ob,
 			})
+			olabel:SetAttribute("GlyphMono", true)
+			paintRole(olabel, "TextColor3", "oninv")
 			local of = fontForOption(v)
 			if of then
 				pcall(function() olabel.Font = of end)

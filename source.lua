@@ -511,6 +511,95 @@ PERDITION.Themes = {
 local THEME = { Accent = Color3.fromRGB(156, 42, 32) }   -- oxblood (Paper & Ink)
 for k, v in pairs(PERDITION.Themes.Paper) do THEME[k] = v end
 
+-- =====================================================================
+-- GLYPH v4 token engine (docs/GLYPH.md). Infrastructure for the v4 redesign:
+-- a 3-knob palette generator (base / accent / contrast) plus a role-tag
+-- painting registry. v3 paths are untouched: legacy presets stay literal and
+-- the hex-match re-theme walk still recolours anything not registered.
+-- =====================================================================
+
+-- glyphGeneratePalette(base, accent, contrast) -> THEME-compatible key table
+-- plus token keys (N[0..9], PAPER, ACCENT, ACC_DIM, LED_ON, LED_OFF).
+-- base "ink" = dark ground (GLYPH default), "paper" = light ground.
+-- contrast 0..1 stretches the mid steps (0 crushes, 1 stretches).
+local function glyphGeneratePalette(base, acc, contrast)
+	base = (base == "paper") and "paper" or "ink"
+	acc = (typeof(acc) == "Color3") and acc or Color3.fromRGB(255, 45, 45)
+	contrast = math.clamp(tonumber(contrast) or 0.5, 0, 1)
+	local lo = (base == "ink") and Color3.fromRGB(12, 12, 13) or Color3.fromRGB(242, 242, 242)
+	local hi = (base == "ink") and Color3.fromRGB(242, 242, 242) or Color3.fromRGB(16, 16, 17)
+	-- gamma >1 keeps steps near the ground (low contrast); <1 stretches mids.
+	local gamma = 1.6 - contrast * 1.2
+	local N = {}
+	for i = 0, 9 do
+		N[i] = lo:Lerp(hi, (i / 9) ^ gamma)
+	end
+	local paper = hi
+	return {
+		Background = N[0], Sidebar = N[1], Topbar = N[1],
+		SidebarActive = N[2], SidebarHover = N[4],
+		Group = N[2], Element = N[3], ElementHover = N[4],
+		Stroke = N[5], ElementStroke = N[6], RowDivider = N[5],
+		Text = N[9], SubText = N[8], Faint = N[7],
+		ToggleOff = N[3], Knob = paper, Good = Color3.fromRGB(92, 220, 138),
+		N = N, PAPER = paper, ACCENT = acc,
+		ACC_DIM = acc:Lerp(lo, 0.55),
+		LED_ON = acc, LED_OFF = N[6],
+	}
+end
+
+-- Role-tag painting registry. paintRole(inst, prop, role) applies the role's
+-- current colour and records the binding; rePaint() re-applies after a theme
+-- or accent change. Weak keys: destroyed instances drop out on their own.
+local ROLE_KEY = {
+	ground = "Background", side = "Sidebar", plate = "Group", well = "Element",
+	hover = "ElementHover", hair = "Stroke", hair2 = "ElementStroke",
+	rowline = "RowDivider", ink = "Text", sub = "SubText", mute = "Faint",
+	off = "ToggleOff", knob = "Knob", good = "Good",
+	active = "SidebarActive", sidehover = "SidebarHover",
+}
+local paintReg = setmetatable({}, { __mode = "k" })
+local function roleColor(role)
+	if role == "accent" then return THEME.Accent end
+	if role == "accentdim" then
+		local t = THEME.ACC_DIM
+		return (typeof(t) == "Color3") and t or THEME.Accent
+	end
+	if role == "paper" then
+		local t = THEME.PAPER
+		return (typeof(t) == "Color3") and t or THEME.Text
+	end
+	if role == "ledoff" then
+		local t = THEME.LED_OFF
+		return (typeof(t) == "Color3") and t or THEME.ElementStroke
+	end
+	local key = ROLE_KEY[role]
+	return (key and THEME[key]) or THEME.Text
+end
+local function paintRole(inst, prop, role)
+	local c = roleColor(role)
+	if typeof(c) ~= "Color3" then return end
+	pcall(function() inst[prop] = c end)
+	local bag = paintReg[inst]
+	if not bag then bag = {} paintReg[inst] = bag end
+	bag[prop] = role
+end
+local function rePaint()
+	for inst, bag in pairs(paintReg) do
+		local alive = pcall(function() return inst.Parent ~= nil end)
+		if alive then
+			for prop, role in pairs(bag) do
+				local c = roleColor(role)
+				if typeof(c) == "Color3" then pcall(function() inst[prop] = c end) end
+			end
+		end
+	end
+end
+
+-- public: preview a GLYPH palette without applying it
+-- PERDITION.GenerateTheme("ink"|"paper", accentColor3?, contrast 0..1?) -> table
+PERDITION.GenerateTheme = glyphGeneratePalette
+
 -- Type: Inter carries the words, Roboto Mono carries every numeric readout so
 -- digits never shift width while a value slides. Mono falls back to Inter on
 -- executors with stripped font sets.
@@ -5575,6 +5664,12 @@ function PERDITION.Window(opts)
 	function Win.SetTheme(theme)
 		local palette = (type(theme) == "string") and PERDITION.Themes[theme] or theme
 		if type(palette) ~= "table" then return false end
+		-- GLYPH knob form: { base = "ink"|"paper", accent = Color3, contrast = 0..1 }
+		local knobAccent = nil
+		if type(theme) == "table" and (theme.base ~= nil or theme.contrast ~= nil) then
+			knobAccent = (typeof(theme.accent) == "Color3") and theme.accent or nil
+			palette = glyphGeneratePalette(theme.base, knobAccent or THEME.Accent, theme.contrast)
+		end
 
 		local keys = {}
 		for k in pairs(PERDITION.Themes.Dark) do keys[#keys + 1] = k end
@@ -5610,12 +5705,14 @@ function PERDITION.Window(opts)
 				recolor(inst)
 			end
 		end)
+		pcall(rePaint)   -- role-registered (v4) instances recolour directly
 
 		-- rebuild the colour-embedding rich text + active page tint
 		if activeTab and activeTab.activePage then
 			pcall(function() applyPageVisual(activeTab, activeTab.activePage, false) end)
 			pcall(function() setCrumb(activeTab, activeTab.activePage) end)
 		end
+		if knobAccent then Win.SetAccent(knobAccent) end
 		return true
 	end
 
@@ -7086,6 +7183,7 @@ function PERDITION.Window(opts)
 			pcall(function() applyPageVisual(activeTab, activeTab.activePage, false) end)
 			pcall(function() setCrumb(activeTab, activeTab.activePage) end)
 		end
+		pcall(rePaint)   -- role-registered accent/accentdim instances follow
 	end
 
 	-- Win.SetHitbox(Color3 or nil): the fill/highlight colour of toggles and slider

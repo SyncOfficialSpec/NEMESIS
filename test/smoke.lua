@@ -226,6 +226,18 @@ local midnight = PERDITION.Themes.Midnight
 check(math.abs(Win.Instance.BackgroundColor3.R - midnight.Background.R) < 1e-6, "window recoloured to the Midnight palette")
 check(Win.SetTheme("Dark") == true, "SetTheme back to Dark")
 
+-- GLYPH v4: 3-knob theme generation + token engine
+check(type(PERDITION.GenerateTheme) == "function", "GenerateTheme exists")
+local glyphInk = PERDITION.GenerateTheme("ink", Color3.fromRGB(255, 45, 45), 0.5)
+local nCount = 0 for i = 0, 9 do if glyphInk.N[i] then nCount = nCount + 1 end end
+check(type(glyphInk) == "table" and nCount == 10, "GenerateTheme returns a 10-step N scale")
+check(glyphInk.PAPER.R > glyphInk.Background.R, "ink base: paper pole is lighter than ground")
+local glyphPaper = PERDITION.GenerateTheme("paper", nil, 0.5)
+check(glyphPaper.PAPER.R < glyphPaper.Background.R, "paper base: poles inverted")
+check(glyphInk.ACC_DIM and glyphInk.ACC_DIM.R ~= nil and glyphInk.ACC_DIM.G ~= nil, "ACC_DIM derived from accent")
+check(Win.SetTheme({ base = "ink", accent = Color3.fromRGB(255, 45, 45), contrast = 0.6 }) == true, "SetTheme accepts GLYPH knob form")
+check(Win.SetTheme("Paper") == true, "SetTheme back to a literal preset after knob form")
+
 -- key system: a saved key file unlocks with no prompt (and no blocking)
 STUB_DISK["Nemesis/key.txt"] = "SMOKE-KEY"
 local KWin = PERDITION.Window({ title = "KEYTEST", key = { key = "SMOKE-KEY" } })

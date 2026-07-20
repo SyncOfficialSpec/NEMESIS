@@ -1,6 +1,6 @@
 # GLYPH — PERDITION v4 design system
 
-Status: ratified 2026-07-19 by a 3-judge design panel (unanimous, 42/44/42 vs SIGNAL 38/35/35, HALO 25/21/17).
+Status: ratified 2026-07-19 by a 3-judge design panel (unanimous, 42/44/42 vs SIGNAL 38/35/35, HALO 25/21/17). SHIPPED as v4.0.0 the same day (default identity = ink + alarm red #FF2D2D).
 DNA sources: Neverlose, Primordial, Fatality, Skeet, Syde / Linear, Geist, Raycast, Arc, Nothing OS, Teenage Engineering / Destiny 2, Cyberpunk 2077, Control.
 
 ## Concept
@@ -101,10 +101,13 @@ tables still accepted and snapped to the nearest steps.
 - Pages: cards on the 4px grid, section headers = 1px rule + `cfg–01` code +
   lowercase title, hairline under.
 - Minimize: collapses to a compact instrument bar (wordmark + LED + fps).
-- Overlays (modal, dropdown, notify, popovers): PAPER inversion plates with
-  ink text + one static baked drop. Notifications stack top-right, square,
-  hairline border, LED-coded severity (accent = info, red reserved for real
-  errors via BAD).
+- Overlays (modal, dropdown, notify, toast, popovers): PAPER inversion plates
+  with ink text + one static baked drop. Notifications stack top-right,
+  square, hairline border, LED-coded severity (accent = info, DANGER red for
+  errors). EXCEPTION (ratified during build): tool panels that carry coloured
+  working content (colour picker, icon picker, settings, AI) stay TONAL
+  (N2 plate + hairline + the one drop) so colours are judged on neutral
+  ground - inversion is for simple popovers only.
 
 ## Risks (from judges, with mitigations)
 

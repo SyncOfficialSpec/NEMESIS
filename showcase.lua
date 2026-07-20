@@ -19,7 +19,7 @@ end
 
 local Win = PERDITION.Window({
 	title = "PERDITION",
-	accent = Color3.fromRGB(156, 42, 32),   -- purple accent
+	accent = Color3.fromRGB(255, 45, 45),   -- GLYPH alarm red (the v4 identity)
 	columns = 2,                              -- panels per page (desktop)
 	toggleKey = Enum.KeyCode.RightShift,
 	game = "Showcase",                        -- sidebar footer, first line
@@ -97,7 +97,7 @@ s_co.ColorPicker({ text = "Double color", gradient = true, default = Color3.from
 s_co.ColorPicker({ text = "Multi color", multi = true, colors = { Color3.fromRGB(255, 80, 80), Color3.fromRGB(255, 220, 60), Color3.fromRGB(80, 220, 255) }, flag = "sc_c_multi" })
 s_co.Label("Right-click a swatch to copy its hex. In gradient mode you get two swatches; right-click a saved swatch to remove it.")
 s_co.Divider({ text = "MENU THEME" })
-s_co.ColorPicker({ text = "Menu accent (live)", default = Color3.fromRGB(156, 42, 32), flag = "sc_accent",
+s_co.ColorPicker({ text = "Menu accent (live)", default = Color3.fromRGB(255, 45, 45), flag = "sc_accent",
 	callback = function(color) Win.SetAccent(color) end })
 
 -- Page: Lists (Divider + Listbox)

@@ -27,7 +27,7 @@ local NEMESIS = (function()
 
 local PERDITION = {}
 PERDITION.Flags = {}
-PERDITION.Version = "3.0.0"
+PERDITION.Version = "4.0.0"
 
 -- Services (cloneref-safe)
 local function getService(name)
@@ -513,8 +513,109 @@ PERDITION.Themes = {
 	},
 }
 
-local THEME = { Accent = Color3.fromRGB(156, 42, 32) }   -- oxblood (Paper & Ink)
-for k, v in pairs(PERDITION.Themes.Paper) do THEME[k] = v end
+local THEME = { Accent = Color3.fromRGB(255, 45, 45) }   -- GLYPH alarm red (v4 default identity)
+
+-- =====================================================================
+-- GLYPH v4 token engine (docs/GLYPH.md). Infrastructure for the v4 redesign:
+-- a 3-knob palette generator (base / accent / contrast) plus a role-tag
+-- painting registry. v3 paths are untouched: legacy presets stay literal and
+-- the hex-match re-theme walk still recolours anything not registered.
+-- =====================================================================
+
+-- glyphGeneratePalette(base, accent, contrast) -> THEME-compatible key table
+-- plus token keys (N[0..9], PAPER, ACCENT, ACC_DIM, LED_ON, LED_OFF).
+-- base "ink" = dark ground (GLYPH default), "paper" = light ground.
+-- contrast 0..1 stretches the mid steps (0 crushes, 1 stretches).
+local function glyphGeneratePalette(base, acc, contrast)
+	base = (base == "paper") and "paper" or "ink"
+	acc = (typeof(acc) == "Color3") and acc or Color3.fromRGB(255, 45, 45)
+	contrast = math.clamp(tonumber(contrast) or 0.5, 0, 1)
+	local lo = (base == "ink") and Color3.fromRGB(12, 12, 13) or Color3.fromRGB(242, 242, 242)
+	local hi = (base == "ink") and Color3.fromRGB(242, 242, 242) or Color3.fromRGB(16, 16, 17)
+	-- gamma >1 keeps steps near the ground (low contrast); <1 stretches mids.
+	local gamma = 1.6 - contrast * 1.2
+	local N = {}
+	for i = 0, 9 do
+		N[i] = lo:Lerp(hi, (i / 9) ^ gamma)
+	end
+	local paper = hi
+	return {
+		Background = N[0], Sidebar = N[1], Topbar = N[1],
+		SidebarActive = N[2], SidebarHover = N[4],
+		Group = N[2], Element = N[3], ElementHover = N[4],
+		Stroke = N[5], ElementStroke = N[6], RowDivider = N[5],
+		Text = N[9], SubText = N[8], Faint = N[7],
+		ToggleOff = N[3], Knob = paper, Good = Color3.fromRGB(92, 220, 138),
+		N = N, PAPER = paper, ACCENT = acc,
+		ACC_DIM = acc:Lerp(lo, 0.55),
+		LED_ON = acc, LED_OFF = N[6],
+	}
+end
+
+-- Role-tag painting registry. paintRole(inst, prop, role) applies the role's
+-- current colour and records the binding; rePaint() re-applies after a theme
+-- or accent change. Weak keys: destroyed instances drop out on their own.
+local ROLE_KEY = {
+	ground = "Background", side = "Sidebar", plate = "Group", well = "Element",
+	hover = "ElementHover", hair = "Stroke", hair2 = "ElementStroke",
+	rowline = "RowDivider", ink = "Text", sub = "SubText", mute = "Faint",
+	off = "ToggleOff", knob = "Knob", good = "Good",
+	active = "SidebarActive", sidehover = "SidebarHover",
+}
+local paintReg = setmetatable({}, { __mode = "k" })
+local function roleColor(role)
+	if role == "accent" then return THEME.Accent end
+	if role == "accentdim" then
+		local t = THEME.ACC_DIM
+		return (typeof(t) == "Color3") and t or THEME.Accent
+	end
+	if role == "paper" or role == "plateinv" then
+		local t = THEME.PAPER
+		return (typeof(t) == "Color3") and t or THEME.Text
+	end
+	if role == "oninv" then
+		local t = THEME.PAPER
+		local plate = (typeof(t) == "Color3") and t or THEME.Text
+		-- inline of accentTextColor (declared later in this file): dark text on
+		-- a light plate, light text on a dark plate
+		local lum = 0.299 * plate.R + 0.587 * plate.G + 0.114 * plate.B
+		return lum > 0.55 and Color3.fromRGB(12, 13, 15) or Color3.fromRGB(242, 244, 246)
+	end
+	if role == "ledoff" then
+		local t = THEME.LED_OFF
+		return (typeof(t) == "Color3") and t or THEME.ElementStroke
+	end
+	local key = ROLE_KEY[role]
+	return (key and THEME[key]) or THEME.Text
+end
+local function paintRole(inst, prop, role)
+	local c = roleColor(role)
+	if typeof(c) ~= "Color3" then return end
+	pcall(function() inst[prop] = c end)
+	local bag = paintReg[inst]
+	if not bag then bag = {} paintReg[inst] = bag end
+	bag[prop] = role
+end
+local function rePaint()
+	for inst, bag in pairs(paintReg) do
+		local alive = pcall(function() return inst.Parent ~= nil end)
+		if alive then
+			for prop, role in pairs(bag) do
+				local c = roleColor(role)
+				if typeof(c) == "Color3" then pcall(function() inst[prop] = c end) end
+			end
+		end
+	end
+end
+
+-- the flagship identity as a first-class preset (SetTheme("Glyph"))
+PERDITION.Themes.Glyph = glyphGeneratePalette("ink", Color3.fromRGB(255, 45, 45), 0.5)
+-- THEME boots on the GLYPH identity; Paper/Dark/Midnight/Abyss stay available
+for k, v in pairs(PERDITION.Themes.Glyph) do THEME[k] = v end
+
+-- public: preview a GLYPH palette without applying it
+-- PERDITION.GenerateTheme("ink"|"paper", accentColor3?, contrast 0..1?) -> table
+PERDITION.GenerateTheme = glyphGeneratePalette
 
 -- Type: Inter carries the words, Roboto Mono carries every numeric readout so
 -- digits never shift width while a value slides. Mono falls back to Inter on
@@ -524,14 +625,22 @@ local FONT = Font.new(INTER, Enum.FontWeight.Medium)
 local FONT_MED = Font.new(INTER, Enum.FontWeight.Medium)
 local FONT_SEMI = Font.new(INTER, Enum.FontWeight.SemiBold)
 local FONT_BOLD = Font.new(INTER, Enum.FontWeight.Bold)
-local FONT_MONO
+local FONT_MONO, FONT_MONO_SEMI, FONT_MONO_BOLD
 do
-	local ok, f = pcall(Font.new, "rbxasset://fonts/families/RobotoMono.json", Enum.FontWeight.Medium)
-	FONT_MONO = ok and f or FONT_MED
+	-- GLYPH: RobotoMono is the structural voice (labels / codes / values).
+	-- Inter survives for long prose only. Mono falls back to Inter on
+	-- executors with stripped font sets.
+	local MONO = "rbxasset://fonts/families/RobotoMono.json"
+	local okM, m = pcall(Font.new, MONO, Enum.FontWeight.Medium)
+	local okS, s = pcall(Font.new, MONO, Enum.FontWeight.SemiBold)
+	local okB, b = pcall(Font.new, MONO, Enum.FontWeight.Bold)
+	FONT_MONO = okM and m or FONT_MED
+	FONT_MONO_SEMI = okS and s or FONT_SEMI
+	FONT_MONO_BOLD = okB and b or FONT_BOLD
 end
 
 -- Inline-row layout metrics (scaled by the window's UIScale at runtime)
-local ROW_H = 36          -- height of a setting row (instrument grid)
+local ROW_H = 34          -- height of a setting row (GLYPH instrument grid)
 local ROW_PAD = 12        -- horizontal inset inside a row / section
 -- Right-side control widths are a FRACTION of the row, so they fit any column
 -- count (1 / 2 / 3) and resize. Label takes the complementary fraction.
@@ -827,6 +936,13 @@ end
 
 -- Accent registry: callbacks run on Win.SetAccent so the menu recolours live
 local accentHooks = {}
+-- GLYPH boot kill-switch persisted to disk (Settings > Boot sequence)
+local function bootDisabled()
+	if not hasFileApi() then return false end
+	local ok, data = pcall(fsRead, "Nemesis/glyph_boot.txt")
+	return ok and data == "0"
+end
+
 local function onAccent(fn) accentHooks[#accentHooks + 1] = fn end
 local function accentLight(c) return c:Lerp(Color3.fromRGB(255, 255, 255), 0.35) end
 -- accent / hitbox can be a Color3 OR a ColorSequence (a Multi gradient). flat
@@ -1130,13 +1246,16 @@ function PERDITION.Notify(opts)
 		local iconSpec = resolveIcon(opts.icon)
 		local EXP = function(t) return TweenInfo.new(t, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out) end
 
+		-- GLYPH notification: an opaque INVERSION plate (flat law kills the old
+		-- translucency), square, hairline, LED diode for severity, mono title
 		local card = Create("Frame", {
 			Name = "Notif",
-			BackgroundColor3 = THEME.Background,
+			BackgroundColor3 = roleColor("plateinv"),
 			Size = UDim2.new(1, 0, 0, 60),
 			BackgroundTransparency = 1,
 			Parent = notifyHolder,
-		}, { corner(9), stroke(THEME.Text, 1, 1) })
+		}, { corner(3), stroke(roleColor("oninv"), 1, 1) })
+		paintRole(card, "BackgroundColor3", "plateinv")
 		local notifStroke = card:FindFirstChildOfClass("UIStroke")
 		local shadow = dropShadow(card, 1)
 
@@ -1146,22 +1265,33 @@ function PERDITION.Notify(opts)
 		if hasIcon then
 			img = Create("ImageLabel", {
 				AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 20, 0.5, 0), Size = UDim2.new(0, 30, 0, 30),
-				BackgroundTransparency = 1, ImageColor3 = THEME.Text, ImageTransparency = 1, Parent = card,
+				BackgroundTransparency = 1, ImageColor3 = roleColor("oninv"), ImageTransparency = 1, Parent = card,
 			})
 			applyIcon(img, iconSpec)
+			paintRole(img, "ImageColor3", "oninv")
 		end
+		-- severity diode: accent for info, DANGER red when opts.error
+		local diode = Create("Frame", {
+			AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 10),
+			Size = UDim2.new(0, 5, 0, 5), BackgroundColor3 = opts.error and DANGER or seqPrimary(accent),
+			BorderSizePixel = 0, BackgroundTransparency = 1, Parent = card,
+		})
+		if not opts.error then accentProp(diode, "BackgroundColor3", accent) end
 		local title = Create("TextLabel", {
-			Name = "Title", Position = UDim2.new(0, textLeft, 0, 12), Size = UDim2.new(1, -textLeft - 16, 0, 16),
-			BackgroundTransparency = 1, Font = FONT_SEMI, Text = tostring(opts.title or "Notification"),
-			TextColor3 = THEME.Text, TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
+			Name = "Title", Position = UDim2.new(0, textLeft, 0, 12), Size = UDim2.new(1, -textLeft - 26, 0, 16),
+			BackgroundTransparency = 1, Font = FONT_MONO_SEMI, Text = string.lower(tostring(opts.title or "Notification")),
+			TextColor3 = roleColor("oninv"), TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
 			TextTransparency = 1, Parent = card,
 		})
+		title:SetAttribute("GlyphMono", true)
+		paintRole(title, "TextColor3", "oninv")
 		local desc = Create("TextLabel", {
 			Name = "Content", Position = UDim2.new(0, textLeft, 0, 30), Size = UDim2.new(1, -textLeft - 16, 0, 0),
 			AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, Font = FONT, Text = tostring(opts.content or ""),
-			TextColor3 = THEME.Text, TextSize = 13, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left,
+			TextColor3 = roleColor("oninv"), TextSize = 13, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left,
 			TextTransparency = 1, Parent = card,
 		})
+		paintRole(desc, "TextColor3", "oninv")
 
 		-- measure text, size the card, then collapse to 0 and grow in
 		task.wait()
@@ -1170,28 +1300,29 @@ function PERDITION.Notify(opts)
 		local fullH = math.max(tb + db + 31, 60)
 		card.Size = UDim2.new(1, 0, 0, 0)
 
-		tween(card, { Size = UDim2.new(1, 0, 0, fullH) }, EXP(0.6))
-		task.wait(0.15)
-		tween(card, { BackgroundTransparency = 0.45 }, EXP(0.4))
-		tween(title, { TextTransparency = 0 }, EXP(0.3))
-		task.wait(0.05)
-		if img then tween(img, { ImageTransparency = 0 }, EXP(0.3)) end
-		task.wait(0.05)
-		tween(desc, { TextTransparency = 0.35 }, EXP(0.3))
-		if notifStroke then tween(notifStroke, { Transparency = 0.95 }, EXP(0.4)) end
-		if shadow then tween(shadow, { ImageTransparency = 0.82 }, EXP(0.3)) end
+		-- GLYPH: structure arrives with intent (one 0.18s grow), then a snap cascade
+		tween(card, { Size = UDim2.new(1, 0, 0, fullH) }, EXP(0.18))
+		task.wait(0.08)
+		tween(card, { BackgroundTransparency = 0 }, EXP(0.12))
+		tween(title, { TextTransparency = 0 }, EXP(0.12))
+		if img then tween(img, { ImageTransparency = 0 }, EXP(0.12)) end
+		tween(desc, { TextTransparency = 0.25 }, EXP(0.12))
+		tween(diode, { BackgroundTransparency = 0 }, EXP(0.12))
+		if notifStroke then tween(notifStroke, { Transparency = 0.8 }, EXP(0.12)) end
+		if shadow then tween(shadow, { ImageTransparency = 0.82 }, EXP(0.12)) end
 
 		local duration = tonumber(opts.duration) or math.min(math.max(#tostring(opts.content or "") * 0.1 + 2.5, 3), 10)
 		task.wait(duration)
 
 		if img then img.Visible = false end
-		tween(card, { BackgroundTransparency = 1 }, EXP(0.4))
-		if notifStroke then tween(notifStroke, { Transparency = 1 }, EXP(0.4)) end
-		if shadow then tween(shadow, { ImageTransparency = 1 }, EXP(0.3)) end
-		tween(title, { TextTransparency = 1 }, EXP(0.3))
-		tween(desc, { TextTransparency = 1 }, EXP(0.3))
-		tween(card, { Size = UDim2.new(1, 0, 0, 0) }, EXP(1))
-		task.wait(1.05)
+		tween(card, { BackgroundTransparency = 1 }, EXP(0.25))
+		if notifStroke then tween(notifStroke, { Transparency = 1 }, EXP(0.25)) end
+		if shadow then tween(shadow, { ImageTransparency = 1 }, EXP(0.2)) end
+		tween(title, { TextTransparency = 1 }, EXP(0.2))
+		tween(desc, { TextTransparency = 1 }, EXP(0.2))
+		tween(diode, { BackgroundTransparency = 1 }, EXP(0.2))
+		tween(card, { Size = UDim2.new(1, 0, 0, 0) }, EXP(0.4))
+		task.wait(0.45)
 		if card then card:Destroy() end
 	end)
 end
@@ -1211,7 +1342,7 @@ function PERDITION.Modal(opts)
 		Size = UDim2.new(0, 340, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundColor3 = THEME.Group,
 		GroupTransparency = 1, ZIndex = 60001, Parent = gui,
 	}, {
-		corner(14), stroke(THEME.Stroke, 1, 0.3), scale, padding(18),
+		corner(3), stroke(THEME.Stroke, 1, 0), scale, padding(18),
 		Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 12) }),
 	})
 	siblingShadow(card)
@@ -1229,10 +1360,11 @@ function PERDITION.Modal(opts)
 	local function mkBtn(text, x, primary)
 		local b = Create("TextButton", {
 			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(x, x == 1 and 0 or -6, 0.5, 0), Size = UDim2.new(0, 96, 0, 30),
-			BackgroundColor3 = primary and THEME.Accent or THEME.Element, AutoButtonColor = false, Font = FONT_MED,
-			Text = tostring(text), TextColor3 = primary and accentTextColor(THEME.Accent) or THEME.Text, TextSize = 13,
+			BackgroundColor3 = primary and THEME.Accent or THEME.Element, AutoButtonColor = false, Font = FONT_MONO_SEMI,
+			Text = string.lower(tostring(text)), TextColor3 = primary and accentTextColor(THEME.Accent) or THEME.Text, TextSize = 12,
 			TextTruncate = Enum.TextTruncate.AtEnd, Parent = btnRow,
-		}, { corner(7), stroke(THEME.ElementStroke, 1, primary and 1 or 0.4) })
+		}, { corner(2), stroke(THEME.ElementStroke, 1, primary and 1 or 0.4) })
+		b:SetAttribute("GlyphMono", true)
 		return b
 	end
 	local cancel = mkBtn(opts.cancelText or "Cancel", 0.5, false)
@@ -1264,14 +1396,17 @@ function PERDITION.Toast(opts)
 	-- the Size property and, under AutomaticSize, renders as a stray white pill)
 	local scale = Create("UIScale", { Scale = 0.9 })
 	local chip = Create("Frame", {
-		Size = UDim2.new(0, 0, 0, 32), AutomaticSize = Enum.AutomaticSize.X, BackgroundColor3 = THEME.Group,
+		Size = UDim2.new(0, 0, 0, 32), AutomaticSize = Enum.AutomaticSize.X, BackgroundColor3 = roleColor("plateinv"),
 		BackgroundTransparency = 1, LayoutOrder = -toasts, Parent = toastHolder,
-	}, { corner(9), scale, padXY(12, 0), Create("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8) }) })
-	local chipStroke = Create("UIStroke", { Color = THEME.Stroke, Thickness = 1, Transparency = 1, Parent = chip })
+	}, { corner(3), scale, padXY(12, 0), Create("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8) }) })
+	paintRole(chip, "BackgroundColor3", "plateinv")
+	local chipStroke = Create("UIStroke", { Color = roleColor("oninv"), Thickness = 1, Transparency = 1, Parent = chip })
 	local anim = { { chip, "BackgroundTransparency", 0.1 }, { chipStroke, "Transparency", 0.4 } }
 	local spec = resolveIcon(opts.icon)
 	if spec then local img = Create("ImageLabel", { Size = UDim2.new(0, 16, 0, 16), BackgroundTransparency = 1, ImageColor3 = THEME.Accent, ImageTransparency = 1, LayoutOrder = 1, Parent = chip }); applyIcon(img, spec); anim[#anim + 1] = { img, "ImageTransparency", 0 } end
-	local txt = Create("TextLabel", { Size = UDim2.new(0, 0, 1, 0), AutomaticSize = Enum.AutomaticSize.X, BackgroundTransparency = 1, Font = FONT_MED, Text = tostring(opts.content or opts.text or ""), TextColor3 = THEME.Text, TextTransparency = 1, TextSize = 13, LayoutOrder = 2, Parent = chip })
+	local txt = Create("TextLabel", { Size = UDim2.new(0, 0, 1, 0), AutomaticSize = Enum.AutomaticSize.X, BackgroundTransparency = 1, Font = FONT_MONO, Text = string.lower(tostring(opts.content or opts.text or "")), TextColor3 = roleColor("oninv"), TextTransparency = 1, TextSize = 12, LayoutOrder = 2, Parent = chip })
+	txt:SetAttribute("GlyphMono", true)
+	paintRole(txt, "TextColor3", "oninv")
 	anim[#anim + 1] = { txt, "TextTransparency", 0 }
 	local function play(shown)
 		local info = shown and TI.EXPAND or TI.FAST
@@ -1299,26 +1434,44 @@ local function newRow(parent, height)
 	return row
 end
 
+-- GLYPH element part codes: every row element gets an auto-indexed mono code
+-- (tgl–01, sld–02) at its left edge. Counters reset per window so the user's
+-- own elements number from 01 (settings/AI pre-consume theirs, like cfg).
+local codeCounts = {}
+
 -- Left-hand label (single line by default; optional muted description line).
 -- reserveScale + reservePx clear room on the right for the control:
 -- label width = (1 - reserveScale) scale, minus reservePx pixels.
-local function rowText(parent, text, desc, reserveScale, reservePx, icon)
+-- code (optional): a GLYPH part-code prefix ("tgl", "sld", ...) shown dim-left.
+local function rowText(parent, text, desc, reserveScale, reservePx, icon, code)
 	reserveScale = reserveScale or 0
 	reservePx = reservePx or 48
 	local indent = 0
+	if code then
+		codeCounts[code] = (codeCounts[code] or 0) + 1
+		local cl = Create("TextLabel", {
+			AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, -2, 0.5, 0),
+			Size = UDim2.new(0, 26, 1, 0), BackgroundTransparency = 1,
+			Font = FONT_MONO, Text = string.format("%s\u{2013}%02d", code, codeCounts[code]),
+			TextColor3 = THEME.Faint, TextSize = 9, TextXAlignment = Enum.TextXAlignment.Left, Parent = parent,
+		})
+		cl:SetAttribute("GlyphMono", true)
+		paintRole(cl, "TextColor3", "mute")
+		indent = 28
+	end
 	local iconImg
 	local iconSpec = resolveIcon(icon)
 	if iconSpec then
 		iconImg = Create("ImageLabel", {
 			AnchorPoint = Vector2.new(0, 0.5),
-			Position = UDim2.new(0, 0, 0.5, 0),
+			Position = UDim2.new(0, indent, 0.5, 0),
 			Size = UDim2.new(0, 16, 0, 16),
 			BackgroundTransparency = 1,
 			ImageColor3 = THEME.SubText,
 			Parent = parent,
 		})
 		applyIcon(iconImg, iconSpec)
-		indent = 24
+		indent = indent + 24
 	end
 	local lblSize = UDim2.new(1 - reserveScale, -reservePx - indent, 1, 0)
 	tagSearch(parent, (desc and desc ~= "") and (tostring(text) .. " " .. tostring(desc)) or text)
@@ -1390,7 +1543,7 @@ local function fieldBox(row, frac)
 		Size = UDim2.new(frac or FIELD_FRAC, 0, 0, 26),
 		BackgroundColor3 = THEME.Element,
 		Parent = row,
-	}, { corner(6), stroke(THEME.ElementStroke, 1, 0.4) })
+	}, { corner(2), stroke(THEME.ElementStroke, 1, 0.4) })
 end
 
 -- Grows a TextBox field to fit the typed text (or the placeholder when empty),
@@ -1429,6 +1582,10 @@ end
 -- Element factories: (parent, accent, opts) -> control { Set, Get }
 local Elements = {}
 local makeSection   -- forward declaration so nesting elements can host their own sections
+-- GLYPH: section/part-code labels bake theme colours into RichText; these
+-- rebuilders refresh them on SetTheme. Window-local lists iterate too.
+local glyphLabelRefreshes = {}
+local sectionSeq = 0   -- cfg–NN counter, reset per window
 
 function Elements.Label(parent, accent, text)
 	-- text inside a subtle rounded card
@@ -1440,7 +1597,7 @@ function Elements.Label(parent, accent, text)
 		AutomaticSize = Enum.AutomaticSize.Y,
 		Parent = parent,
 	}, {
-		corner(8),
+		corner(3),
 		Create("UIPadding", {
 			PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10),
 			PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8),
@@ -1481,9 +1638,10 @@ function Elements.Divider(parent, accent, opts)
 		local lbl = Create("TextLabel", {
 			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0),
 			Size = UDim2.new(0, 0, 0, 15), AutomaticSize = Enum.AutomaticSize.X,
-			BackgroundTransparency = 1, Font = FONT_SEMI, Text = string.upper(tostring(label)),
-			TextColor3 = THEME.SubText, TextSize = 12, Parent = row,
+			BackgroundTransparency = 1, Font = FONT_MONO_SEMI, Text = string.lower(tostring(label)),
+			TextColor3 = THEME.SubText, TextSize = 11, Parent = row,
 		})
+		lbl:SetAttribute("GlyphMono", true)
 		local left = Create("Frame", {
 			AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(0, 0, 0, 1),
 			BackgroundColor3 = THEME.RowDivider, BorderSizePixel = 0, Parent = row,
@@ -1546,7 +1704,7 @@ function Elements.Listbox(parent, accent, opts)
 	local box = Create("Frame", {
 		Size = UDim2.new(1, 0, 0, rows * 28 + 8), LayoutOrder = 2,
 		BackgroundColor3 = THEME.Element, Parent = wrap,
-	}, { corner(8), stroke(THEME.ElementStroke, 1, 0.5) })
+	}, { corner(3), stroke(THEME.ElementStroke, 1, 0) })
 	local holder = Create("ScrollingFrame", {
 		Size = UDim2.new(1, -8, 1, -8), Position = UDim2.new(0, 4, 0, 4),
 		BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 3,
@@ -1572,7 +1730,7 @@ function Elements.Listbox(parent, accent, opts)
 		for _, rec in ipairs(items) do rec.btn:Destroy() end
 		items = {}
 		for _, v in ipairs(options) do
-			local ob = Create("TextButton", { Size = UDim2.new(1, 0, 0, 26), BackgroundColor3 = THEME.ElementHover, BackgroundTransparency = 1, AutoButtonColor = false, Text = "", Parent = holder }, { corner(6) })
+			local ob = Create("TextButton", { Size = UDim2.new(1, 0, 0, 26), BackgroundColor3 = THEME.ElementHover, BackgroundTransparency = 1, AutoButtonColor = false, Text = "", Parent = holder }, { corner(2) })
 			local dot = Create("Frame", {
 				AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0), Size = UDim2.new(0, 4, 0, 4),
 				BackgroundColor3 = accent, BackgroundTransparency = 1, BorderSizePixel = 0, Parent = ob,
@@ -1580,9 +1738,10 @@ function Elements.Listbox(parent, accent, opts)
 			accentProp(dot, "BackgroundColor3", accent)
 			local lbl = Create("TextLabel", {
 				AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0), Size = UDim2.new(1, -16, 0, 16),
-				BackgroundTransparency = 1, Font = FONT, Text = tostring(v), TextColor3 = THEME.Text, TextTransparency = 0.35,
-				TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = ob,
+				BackgroundTransparency = 1, Font = FONT_MONO, Text = string.lower(tostring(v)), TextColor3 = THEME.Text, TextTransparency = 0.35,
+				TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = ob,
 			})
+			lbl:SetAttribute("GlyphMono", true)
 			local function paint(animate)
 				local on = selected[v] and true or false
 				local info = animate and TI.SYDE_OPT or TweenInfo.new(0)
@@ -1634,7 +1793,7 @@ function Elements.Paragraph(parent, accent, opts)
 		AutomaticSize = Enum.AutomaticSize.Y,
 		Parent = parent,
 	}, {
-		corner(8),
+		corner(3),
 		stroke(THEME.ElementStroke, 1, 0.7),
 		Create("UIPadding", {
 			PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12),
@@ -1682,40 +1841,44 @@ function Elements.Button(parent, accent, opts)
 		Text = "",
 		Parent = row,
 	})
-	rowText(row, opts.text, opts.desc, 0, 90, opts.icon)
-	local chipStroke = stroke(THEME.ElementStroke, 1, 0.35)
+	rowText(row, opts.text, opts.desc, 0, 90, opts.icon, "btn")
+	-- GLYPH chip: square, mono micro-label, hairline. The confirm blip (accent
+	-- seam flash) is the one hue moment - it stays, now decaying faster.
+	local chipStroke = stroke(THEME.ElementStroke, 1, 0)
 	local chip = Create("TextLabel", {
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, 0, 0.5, 0),
 		Size = UDim2.new(0, 70, 0, 22),
 		BackgroundColor3 = THEME.Element,
-		Font = FONT_SEMI,
-		Text = tostring(opts.button or "Run"),
+		Font = FONT_MONO_SEMI,
+		Text = string.lower(tostring(opts.button or "Run")),
 		TextColor3 = THEME.Text,
-		TextSize = 12,
+		TextSize = 11,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		Parent = row,
-	}, { corner(6), chipStroke })
-	click.MouseEnter:Connect(function() tween(chip, { BackgroundColor3 = THEME.ElementHover }, TI.HOVER) end)
-	click.MouseLeave:Connect(function() tween(chip, { BackgroundColor3 = THEME.Element }, TI.HOVEROFF) end)
+	}, { corner(2), chipStroke })
+	chip:SetAttribute("GlyphMono", true)
+	paintRole(chip, "BackgroundColor3", "well")
+	click.MouseEnter:Connect(function() chip.BackgroundColor3 = THEME.ElementHover end)
+	click.MouseLeave:Connect(function() chip.BackgroundColor3 = THEME.Element end)
 	click.MouseButton1Down:Connect(function()
-		tween(chip, { Position = UDim2.new(1, 0, 0.5, 1) }, TI.TICK)
+		chip.Position = UDim2.new(1, 0, 0.5, 1)
 	end)
 	click.MouseButton1Up:Connect(function()
-		tween(chip, { Position = UDim2.new(1, 0, 0.5, 0) }, TI.TICK)
+		chip.Position = UDim2.new(1, 0, 0.5, 0)
 	end)
 	local control = { Instance = row }
 	function control.Fire()
 		-- confirmation blip: the seam flashes accent and decays
-		chipStroke.Color = accent
+		chipStroke.Color = seqPrimary(accent)
 		chipStroke.Transparency = 0
-		tween(chipStroke, { Transparency = 0.35 }, TI.EXP)
-		task.delay(0.16, function()
-			pcall(function() chipStroke.Color = THEME.ElementStroke end)
+		tween(chipStroke, { Transparency = 1 }, TweenInfo.new(0.25))
+		task.delay(0.26, function()
+			pcall(function() chipStroke.Color = THEME.ElementStroke; chipStroke.Transparency = 0 end)
 		end)
 		if type(opts.callback) == "function" then pcall(opts.callback) end
 	end
-	function control.SetText(t) chip.Text = tostring(t) end
+	function control.SetText(t) chip.Text = string.lower(tostring(t)) end
 	click.MouseButton1Click:Connect(control.Fire)
 	return control
 end
@@ -1727,7 +1890,7 @@ function Elements.Toggle(parent, accent, opts)
 	onHitbox(function(c) hitbox = c end)
 	local state = opts.default and true or false
 	local row = newRow(parent, opts.desc and 50 or ROW_H)
-	local rowLabel, rowIconImg = rowText(row, opts.text, opts.desc, 0, 32, opts.icon)
+	local rowLabel, rowIconImg = rowText(row, opts.text, opts.desc, 0, 32, opts.icon, "tgl")
 
 	-- filled-icon effect: when ON, the row icon lights up (white) inside a filled
 	-- accent rounded chip, the SF Symbols "filled badge" look
@@ -1738,59 +1901,31 @@ function Elements.Toggle(parent, accent, opts)
 			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 8, 0.5, 0),
 			Size = UDim2.new(0, 24, 0, 24), BackgroundColor3 = hitbox, BackgroundTransparency = 1,
 			BorderSizePixel = 0, ZIndex = 1, Parent = row,
-		}, { corner(7) })
+		}, { corner(2) })
 		hitboxProp(iconBg, "BackgroundColor3", hitbox)
 	end
 
-	-- machined checkbox: recessed off-state well, accent fill + check when on,
-	-- with a soft lamp glow behind the lit box
-	local lampArt = loadArt("cal1_glow_dot.png")
-	local lamp
+	-- GLYPH LED toggle: an 18px square instrument well. Off = dead mono dot;
+	-- on = accent LED with one 70ms pop. No slide, no fill fade - the state
+	-- snaps, only the diode acknowledges.
 	local box = Create("Frame", {
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, 0, 0.5, 0),
-		Size = UDim2.new(0, 38, 0, 21),
+		Size = UDim2.new(0, 18, 0, 18),
 		BackgroundColor3 = THEME.ToggleOff,
 		Parent = row,
-	}, { corner(11), stroke(THEME.ElementStroke, 1, 0.35) })
-	if lampArt then
-		lamp = Create("ImageLabel", {
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.new(0.5, 0, 0.5, 0),
-			Size = UDim2.new(0, 30, 0, 30),
-			BackgroundTransparency = 1,
-			Image = lampArt,
-			ImageColor3 = accent,
-			ImageTransparency = 1,
-			ZIndex = 0,
-			Parent = box,
-		})
-		onHitbox(function(c) pcall(function() lamp.ImageColor3 = c end) end)
-	end
-	-- Syde-style fill: a full-size accent overlay that FADES in/out (no grow),
-	-- with a subtle gradient sheen. The box itself also tints to accent.
-	local fillGrad = Create("UIGradient", { Rotation = 90 })
-	local fill = Create("Frame", {
-		Size = UDim2.new(1, 0, 1, 0),
-		BackgroundColor3 = accent,
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		Parent = box,
-	}, { corner(11), fillGrad })
-	hitboxProp(fill, "BackgroundColor3", accent)
-	hitboxGrad(fillGrad, accent)
-	local check   -- pill toggle has no check glyph
-	-- sliding knob: dark on the light off-track, flips to the accent's contrast
-	-- colour when it rides the filled pill (so it reads on any theme)
-	local knob = Create("Frame", {
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 3, 0.5, 0),
-		Size = UDim2.new(0, 15, 0, 15),
-		BackgroundColor3 = THEME.Knob,
+	}, { corner(2), stroke(THEME.ElementStroke, 1, 0) })
+	paintRole(box, "BackgroundColor3", "off")
+	local boxStroke = box:FindFirstChildOfClass("UIStroke")
+	local led = Create("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.5, 0),
+		Size = UDim2.new(0, 4, 0, 4),
+		BackgroundColor3 = THEME.ElementStroke,
 		BorderSizePixel = 0,
 		ZIndex = 3,
 		Parent = box,
-	}, { corner(99) })
+	})
 	local click = Create("TextButton", {
 		BackgroundTransparency = 1,
 		Size = UDim2.new(1, ROW_PAD * 2, 1, 0),
@@ -1801,20 +1936,26 @@ function Elements.Toggle(parent, accent, opts)
 
 	local titleLabel = (rowLabel and rowLabel:IsA("TextLabel")) and rowLabel or nil
 	local control = {}
+	local LED_POP = TweenInfo.new(0.07, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 	local function render(animate)
-		-- Syde toggle: everything eases over 0.7s Exponential (fill fades, check
-		-- fades, glow lamp fades, box tints, title brightens/dims)
-		local info = animate and TI.SYDE or TweenInfo.new(0)
-		local fadeInfo = animate and TI.SYDE_FADE or TweenInfo.new(0)
-		tween(fill, { BackgroundTransparency = state and 0 or 1 }, fadeInfo)
-		tween(knob, {
-			Position = UDim2.new(0, state and 20 or 3, 0.5, 0),
-			BackgroundColor3 = state and accentTextColor(hitbox) or THEME.Knob,
-		}, info)
-		if check then tween(check, { ImageTransparency = state and 0 or 1 }, info) end
-		if lamp then
-			tween(lamp, { ImageTransparency = state and 0.7 or 1 }, info)
+		-- GLYPH instant law: colour snaps at any tempo; the only motion is the
+		-- LED blip when it lights (skipped for instant/config restores)
+		led.BackgroundColor3 = state and seqPrimary(hitbox) or THEME.ElementStroke
+		if boxStroke then
+			boxStroke.Color = state and seqPrimary(hitbox) or THEME.ElementStroke
+			boxStroke.Transparency = state and 0.45 or 0
 		end
+		if state then
+			if animate then
+				led.Size = UDim2.new(0, 4, 0, 4)
+				tween(led, { Size = UDim2.new(0, 8, 0, 8) }, LED_POP)
+			else
+				led.Size = UDim2.new(0, 8, 0, 8)
+			end
+		else
+			led.Size = UDim2.new(0, 4, 0, 4)
+		end
+		local info = animate and TI.FAST or TweenInfo.new(0)
 		if titleLabel then
 			tween(titleLabel, { TextTransparency = state and 0 or 0.35 }, info)
 		end
@@ -1822,11 +1963,11 @@ function Elements.Toggle(parent, accent, opts)
 			tween(rowIconImg, { ImageColor3 = state and accentTextColor(hitbox) or THEME.SubText }, info)
 		end
 		if iconBg then
-			tween(iconBg, { BackgroundTransparency = state and 0.1 or 1 }, fadeInfo)
+			tween(iconBg, { BackgroundTransparency = state and 0.1 or 1 }, info)
 		end
 	end
-	click.MouseEnter:Connect(function() if not state then tween(box, { BackgroundColor3 = THEME.ElementHover }, TI.HOVER) end end)
-	click.MouseLeave:Connect(function() if not state then tween(box, { BackgroundColor3 = THEME.ToggleOff }, TI.HOVEROFF) end end)
+	click.MouseEnter:Connect(function() if not state then box.BackgroundColor3 = THEME.ElementHover end end)
+	click.MouseLeave:Connect(function() if not state then box.BackgroundColor3 = THEME.ToggleOff end end)
 	function control.Set(v, silent, instant)
 		state = v and true or false
 		if opts.flag then PERDITION.Flags[opts.flag] = state end
@@ -1870,7 +2011,7 @@ function Elements.Slider(parent, accent, opts)
 	end
 
 	local row = newRow(parent, opts.desc and 50 or ROW_H)
-	rowText(row, opts.text, opts.desc, SLIDER_FRAC, 12, opts.icon)
+	rowText(row, opts.text, opts.desc, SLIDER_FRAC, 12, opts.icon, "sld")
 
 	local cluster = Create("Frame", {
 		AnchorPoint = Vector2.new(1, 0.5),
@@ -1879,7 +2020,12 @@ function Elements.Slider(parent, accent, opts)
 		BackgroundTransparency = 1,
 		Parent = row,
 	})
-	-- editable readout chip: mono digits so the value never jitters, click to type
+	-- editable readout chip: mono digits so the value never jitters, click to
+	-- type. GLYPH raw-data: "120/360" when the slider carries no suffix.
+	local function rawFmt(v)
+		if suffix == "" then return fmt(v) .. "/" .. fmt(max) end
+		return fmt(v)
+	end
 	local valueStroke = stroke(THEME.ElementStroke, 1, 1)
 	local valueLabel = Create("TextBox", {
 		BackgroundColor3 = THEME.Element,
@@ -1888,13 +2034,14 @@ function Elements.Slider(parent, accent, opts)
 		AnchorPoint = Vector2.new(0, 0.5),
 		Size = UDim2.new(0, 46, 0, 20),
 		Font = FONT_MONO,
-		Text = fmt(value),
+		Text = rawFmt(value),
 		TextColor3 = THEME.Text,
 		TextSize = 12,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		ClearTextOnFocus = false,
 		Parent = cluster,
-	}, { corner(6), valueStroke })
+	}, { corner(2), valueStroke })
+	valueLabel:SetAttribute("GlyphMono", true)
 	valueLabel.Focused:Connect(function()
 		tween(valueLabel, { BackgroundTransparency = 0 }, TI.HOVER)
 		valueStroke.Color = accent
@@ -1923,7 +2070,7 @@ function Elements.Slider(parent, accent, opts)
 		BackgroundColor3 = THEME.Knob,
 		ZIndex = 2,
 		Parent = bar,
-	}, { corner(3) })
+	}, { corner(2) })
 	-- tall invisible grab strip so the thin bar is easy to drag anywhere
 	local hit = Create("TextButton", {
 		AnchorPoint = Vector2.new(1, 0.5),
@@ -1942,11 +2089,12 @@ function Elements.Slider(parent, accent, opts)
 		local stepped = min + math.floor((raw - min) / increment + 0.5) * increment
 		value = math.clamp(stepped, min, max)
 		local frac = (value - min) / span
-		valueLabel.Text = fmt(value)
-		-- the fill/handle always ease toward the target (Syde Quint catch-up), so even
-		-- a drag reads as a smooth glide rather than a hard snap
-		tween(fill, { Size = UDim2.new(frac, 0, 1, 0) }, TI.SYDE_SIZE)
-		tween(handle, { Position = UDim2.new(frac, 0, 0.5, 0) }, TI.SYDE_SIZE)
+		valueLabel.Text = rawFmt(value)
+		-- GLYPH instant law: a drag moves the knob 1:1 (no catch-up); only a
+		-- programmatic Set eases, and even that is a fast 0.12s
+		local ti = instant and TweenInfo.new(0) or TI.FAST
+		tween(fill, { Size = UDim2.new(frac, 0, 1, 0) }, ti)
+		tween(handle, { Position = UDim2.new(frac, 0, 0.5, 0) }, ti)
 		if opts.flag then PERDITION.Flags[opts.flag] = value end
 		if fire and type(opts.callback) == "function" then
 			pcall(opts.callback, value)
@@ -1971,8 +2119,8 @@ function Elements.Slider(parent, accent, opts)
 		tween(valueLabel, { BackgroundTransparency = 1 }, TI.HOVEROFF)
 		pcall(function() valueStroke.Color = THEME.ElementStroke end)
 		tween(valueStroke, { Transparency = 1 }, TI.HOVEROFF)
-		local num = tonumber((valueLabel.Text:gsub("[^%d%.%-]", "")))
-		if num then control.Set(num) else valueLabel.Text = fmt(value) end
+		local num = tonumber((tostring(valueLabel.Text):match("^%s*([%d%.%-]+)")))
+		if num then control.Set(num) else valueLabel.Text = rawFmt(value) end
 	end)
 
 	if opts.flag then PERDITION.Flags[opts.flag] = value end
@@ -2029,21 +2177,22 @@ function Elements.Dropdown(parent, accent, opts)
 	local single = (not multi) and opts.default or nil
 
 	local row = newRow(parent, ROW_H)
-	rowText(row, opts.text, opts.desc, FIELD_FRAC, 16, opts.icon)
+	rowText(row, opts.text, opts.desc, FIELD_FRAC, 16, opts.icon, "drp")
 	local field = fieldBox(row)
 
 	local current = Create("TextLabel", {
 		BackgroundTransparency = 1,
 		Position = UDim2.new(0, 10, 0, 0),
 		Size = UDim2.new(1, -32, 1, 0),
-		Font = FONT,
+		Font = FONT_MONO,
 		Text = "...",
 		TextColor3 = THEME.Text,
-		TextSize = 13,
+		TextSize = 12,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		Parent = field,
 	})
+	current:SetAttribute("GlyphMono", true)
 	-- arrow only (no liner / divider before it)
 	local arrowIsImage = false
 	local arrow
@@ -2080,18 +2229,21 @@ function Elements.Dropdown(parent, accent, opts)
 	local OPT_H = 28         -- logical option row height
 	local panelScale = Create("UIScale", { Scale = 1 })
 	local panelStroke = stroke(THEME.Stroke, 1, 1)
+	-- GLYPH: the popover is an INVERSION plate (paper on ink / ink on paper)
+	-- with the one static drop - it never blends into the card it floats over
 	local panel = Create("Frame", {
 		Name = "NemesisDropdown",
-		BackgroundColor3 = THEME.Group,
+		BackgroundColor3 = roleColor("plateinv"),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Visible = false,
 		ZIndex = 50001,
 	}, {
-		corner(10),
+		corner(3),
 		panelStroke,
 		panelScale,
 	})
+	paintRole(panel, "BackgroundColor3", "plateinv")
 	local panelShadow = dropShadow(panel, 1)
 	local holder = Create("ScrollingFrame", {
 		AnchorPoint = Vector2.new(0.5, 0),
@@ -2123,9 +2275,10 @@ function Elements.Dropdown(parent, accent, opts)
 	local function refreshLabel()
 		if multi then
 			local parts = listValues()
-			current.Text = #parts > 0 and table.concat(parts, ", ") or "None"
+			for i, p in ipairs(parts) do parts[i] = string.lower(tostring(p)) end
+			current.Text = #parts > 0 and table.concat(parts, ", ") or "none"
 		else
-			current.Text = single ~= nil and tostring(single) or "None"
+			current.Text = single ~= nil and string.lower(tostring(single)) or "none"
 		end
 		current.TextColor3 = (multi and #listValues() > 0 or single ~= nil) and THEME.Text or THEME.SubText
 	end
@@ -2146,14 +2299,15 @@ function Elements.Dropdown(parent, accent, opts)
 		optionButtons = {}
 		for _, v in ipairs(options) do
 			local ob = Create("TextButton", {
-				BackgroundColor3 = THEME.ElementHover,
+				BackgroundColor3 = roleColor("oninv"),
 				BackgroundTransparency = 1,
 				Size = UDim2.new(1, 0, 0, OPT_H),
 				AutoButtonColor = false,
 				Text = "",
 				ZIndex = 50003,
 				Parent = holder,
-			}, { corner(6) })
+			}, { corner(2) })
+			paintRole(ob, "BackgroundColor3", "oninv")
 			local dot = Create("Frame", {
 				AnchorPoint = Vector2.new(0, 0.5),
 				Position = UDim2.new(0, 8, 0.5, 0),
@@ -2170,16 +2324,18 @@ function Elements.Dropdown(parent, accent, opts)
 				BackgroundTransparency = 1,
 				Position = UDim2.new(0, 8, 0.5, 0),
 				Size = UDim2.new(1, -16, 0, 16),
-				Font = FONT,
-				Text = tostring(v),
-				TextColor3 = THEME.Text,
+				Font = FONT_MONO,
+				Text = optionFont and tostring(v) or string.lower(tostring(v)),
+				TextColor3 = roleColor("oninv"),
 				TextTransparency = 1,
-				TextSize = 13,
+				TextSize = 12,
 				TextXAlignment = Enum.TextXAlignment.Left,
 				TextTruncate = Enum.TextTruncate.AtEnd,
 				ZIndex = 50004,
 				Parent = ob,
 			})
+			olabel:SetAttribute("GlyphMono", true)
+			paintRole(olabel, "TextColor3", "oninv")
 			local of = fontForOption(v)
 			if of then
 				pcall(function() olabel.Font = of end)
@@ -2342,7 +2498,7 @@ function Elements.Input(parent, accent, opts)
 	opts = opts or {}
 	onAccent(function(c) accent = c end)
 	local row = newRow(parent, ROW_H)
-	rowText(row, opts.text, opts.desc, FIELD_FRAC, 16, opts.icon)
+	rowText(row, opts.text, opts.desc, FIELD_FRAC, 16, opts.icon, "inp")
 	-- starts small, grows with the text up to a cap, then clips
 	-- (past the cap the front scrolls off instead of spilling outside the field)
 	local MIN_W, MAX_W = 84, 220
@@ -2353,7 +2509,7 @@ function Elements.Input(parent, accent, opts)
 		BackgroundColor3 = THEME.Element,
 		ClipsDescendants = true,
 		Parent = row,
-	}, { corner(6), stroke(THEME.ElementStroke, 1, 0.4) })
+	}, { corner(2), stroke(THEME.ElementStroke, 1, 0.4) })
 	local fieldStroke = field:FindFirstChildOfClass("UIStroke")
 	-- inner clip rect == the bordered field, so the TextBox can never paint past it
 	local clip = Create("Frame", {
@@ -2366,16 +2522,17 @@ function Elements.Input(parent, accent, opts)
 		BackgroundTransparency = 1,
 		Position = UDim2.new(0, 10, 0, 0),
 		Size = UDim2.new(1, -20, 1, 0),
-		Font = FONT,
+		Font = FONT_MONO,
 		PlaceholderText = tostring(opts.placeholder or "..."),
 		Text = tostring(opts.default or ""),
 		TextColor3 = THEME.Text,
 		PlaceholderColor3 = THEME.SubText,
-		TextSize = 15,
+		TextSize = 13,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		ClearTextOnFocus = opts.clearOnFocus and true or false,
 		Parent = clip,
 	})
+	box:SetAttribute("GlyphMono", true)
 	growBox(field, box, MIN_W, MAX_W, 22)
 
 	local control = {}
@@ -2428,7 +2585,7 @@ function Elements.Keybind(parent, accent, opts)
 	local mode = opts.mode or "Toggle"
 	local key = opts.default
 	local row = newRow(parent, ROW_H)
-	rowText(row, opts.text, opts.desc, FIELD_FRAC, 16, opts.icon)
+	rowText(row, opts.text, opts.desc, FIELD_FRAC, 16, opts.icon, "key")
 	-- Syde keybind: a pill that auto-sizes to fit the key text and thickens its
 	-- stroke while listening
 	local field = Create("Frame", {
@@ -2437,7 +2594,7 @@ function Elements.Keybind(parent, accent, opts)
 		Size = UDim2.new(0, 54, 0, 26),
 		BackgroundColor3 = THEME.Element,
 		Parent = row,
-	}, { corner(6), stroke(THEME.ElementStroke, 1, 0.4) })
+	}, { corner(2), stroke(THEME.ElementStroke, 1, 0.4) })
 	local fieldStroke = field:FindFirstChildOfClass("UIStroke")
 	local btn = Create("TextButton", {
 		BackgroundTransparency = 1,
@@ -2449,10 +2606,11 @@ function Elements.Keybind(parent, accent, opts)
 		AutoButtonColor = false,
 		Parent = field,
 	})
+	btn:SetAttribute("GlyphMono", true)
 	local function fitPill()
 		local tb = 40
 		pcall(function() tb = btn.TextBounds.X end)
-		tween(field, { Size = UDim2.new(0, math.clamp(tb + 24, 54, 160), 0, 26) }, TI.SYDE_SIZE)
+		field.Size = UDim2.new(0, math.clamp(tb + 24, 54, 160), 0, 26)
 	end
 	btn:GetPropertyChangedSignal("TextBounds"):Connect(fitPill)
 	task.defer(fitPill)
@@ -2620,7 +2778,7 @@ function Elements.ColorPicker(parent, accent, opts)
 	end
 
 	local row = newRow(parent, ROW_H)
-	rowText(row, opts.text, opts.desc, 0, 76, opts.icon)
+	rowText(row, opts.text, opts.desc, 0, 76, opts.icon, "clr")
 
 	-- soft colour glow behind the swatch (gen2 look); made before sw1 so it renders behind it
 	local swGlowArt = loadArt("cal1_glow_dot.png")
@@ -2632,7 +2790,7 @@ function Elements.ColorPicker(parent, accent, opts)
 		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0),
 		Size = UDim2.new(0, 36, 0, 20), BackgroundColor3 = slotColor(1),
 		Text = "", AutoButtonColor = false, Parent = row,
-	}, { corner(6), stroke(THEME.ElementStroke, 1, 0.25) })
+	}, { corner(2), stroke(THEME.ElementStroke, 1, 0.25) })
 	-- vertical gradient fill: lighter top -> colour bottom in Single, the full gradient in Multi
 	local sw1Grad = Create("UIGradient", { Rotation = 90, Parent = sw1 })
 	local sw2 = Create("TextButton", {
@@ -2719,7 +2877,7 @@ function Elements.ColorPicker(parent, accent, opts)
 		local frame = Create("Frame", {
 			Size = UDim2.new(0, width, 0, 22), BackgroundColor3 = THEME.Element,
 			Parent = nil,
-		}, { corner(6), stroke(THEME.ElementStroke, 1, 0.4) })
+		}, { corner(2), stroke(THEME.ElementStroke, 1, 0.4) })
 		local thumb = Create("Frame", {
 			Size = UDim2.new(1 / n, -6, 1, -6), Position = UDim2.new(0, 3, 0, 3),
 			BackgroundColor3 = accent, BackgroundTransparency = 0.12, BorderSizePixel = 0,
@@ -2761,7 +2919,7 @@ function Elements.ColorPicker(parent, accent, opts)
 			Name = "ColorPanel", AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.new(0, 300, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundColor3 = THEME.Group,
 			GroupTransparency = 1, Visible = false, ZIndex = 50001, Parent = screenGui,
 		}, {
-			corner(12), stroke(THEME.Stroke, 1, 0.3), panelScale,
+			corner(3), stroke(THEME.Stroke, 1, 0), panelScale,
 		})
 		siblingShadow(panel)
 		cpScale = panelScale
@@ -2813,7 +2971,7 @@ function Elements.ColorPicker(parent, accent, opts)
 		local railRow = Create("Frame", { Size = UDim2.new(1, 0, 0, mode == "Multi" and 40 or 0), BackgroundTransparency = 1, Visible = mode == "Multi", LayoutOrder = 2, ClipsDescendants = true, Parent = content })
 		-- inset both the preview and the handle rail by 7px so the end stops (pos 0
 		-- and 1) sit fully inside the panel instead of being clipped at the edges
-		local preview = Create("Frame", { Size = UDim2.new(1, -14, 0, 16), Position = UDim2.new(0, 7, 0, 0), BackgroundColor3 = Color3.new(1, 1, 1), Parent = railRow }, { corner(5), stroke(THEME.ElementStroke, 1, 0.5) })
+		local preview = Create("Frame", { Size = UDim2.new(1, -14, 0, 16), Position = UDim2.new(0, 7, 0, 0), BackgroundColor3 = Color3.new(1, 1, 1), Parent = railRow }, { corner(2), stroke(THEME.ElementStroke, 1, 0.5) })
 		local previewGrad = Create("UIGradient", { Parent = preview })
 		local rail = Create("TextButton", { Size = UDim2.new(1, -14, 0, 18), Position = UDim2.new(0, 7, 0, 20), BackgroundTransparency = 1, AutoButtonColor = false, Text = "", Parent = railRow })
 		local handleFrames = {}
@@ -2828,7 +2986,7 @@ function Elements.ColorPicker(parent, accent, opts)
 					AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(st.pos, 0, 0.5, 0),
 					Size = UDim2.new(0, 12, 0, 12), BackgroundColor3 = stopHandleColor(i), AutoButtonColor = false,
 					Text = "", ZIndex = 3, Parent = rail,
-				}, { corner(6), stroke(i == activeStop and accent or Color3.fromRGB(240, 240, 244), 2, 0) })
+				}, { corner(2), stroke(i == activeStop and accent or Color3.fromRGB(240, 240, 244), 2, 0) })
 				handleFrames[i] = h
 				h.MouseButton1Down:Connect(function()
 					activeStop = i; refreshRail(); syncUI()
@@ -2901,7 +3059,7 @@ function Elements.ColorPicker(parent, accent, opts)
 			svDot = Create("Frame", {
 				AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(cur().s, 0, 1 - cur().v, 0), Size = UDim2.new(0, 13, 0, 13),
 				BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 1, ZIndex = 52, Parent = sv,
-			}, { corner(7), stroke(Color3.new(1, 1, 1), 2, 0) })
+			}, { corner(2), stroke(Color3.new(1, 1, 1), 2, 0) })
 		end
 		local svHit = Create("TextButton", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Text = "", ZIndex = 53, Parent = sv })
 		do
@@ -3145,7 +3303,7 @@ function Elements.ProgressBar(parent, accent, opts)
 	local span = (max - min) == 0 and 1 or (max - min)
 	local value = math.clamp(tonumber(opts.value) or min, min, max)
 	local row = newRow(parent, opts.desc and 50 or ROW_H)
-	rowText(row, opts.text or "Progress", opts.desc, 0.42, 44, opts.icon)
+	rowText(row, opts.text or "Progress", opts.desc, 0.42, 44, opts.icon, "prg")
 	local pct = Create("TextLabel", {
 		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 44, 1, 0),
 		BackgroundTransparency = 1, Font = FONT_MONO, Text = "0" .. (opts.suffix or "%"),
@@ -3154,16 +3312,17 @@ function Elements.ProgressBar(parent, accent, opts)
 	local bar = Create("Frame", {
 		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -52, 0.5, 0), Size = UDim2.new(0.42, 0, 0, 5),
 		BackgroundColor3 = THEME.ToggleOff, Parent = row,
-	}, { corner(3) })
+	}, { corner(2) })
 	local fillGrad = Create("UIGradient", {})
-	local fill = Create("Frame", { Size = UDim2.new(0, 0, 1, 0), BackgroundColor3 = accent, Parent = bar }, { corner(3), fillGrad })
+	local fill = Create("Frame", { Size = UDim2.new(0, 0, 1, 0), BackgroundColor3 = accent, Parent = bar }, { corner(2), fillGrad })
 	accentProp(fill, "BackgroundColor3", accent); accentGrad(fillGrad, accent)
+	pct:SetAttribute("GlyphMono", true)
 	local control = {}
 	function control.Set(v, animate)
 		value = math.clamp(tonumber(v) or min, min, max)
 		local frac = (value - min) / span
 		pct.Text = (max <= 1 and tostring(math.floor(frac * 100 + 0.5)) or tostring(math.floor(value + 0.5))) .. (opts.suffix or "%")
-		tween(fill, { Size = UDim2.new(frac, 0, 1, 0) }, animate == false and TweenInfo.new(0) or TI.SYDE_SIZE)
+		tween(fill, { Size = UDim2.new(frac, 0, 1, 0) }, animate == false and TweenInfo.new(0) or TI.FAST)
 		if opts.flag then PERDITION.Flags[opts.flag] = value end
 	end
 	function control.Get() return value end
@@ -3177,13 +3336,14 @@ function Elements.Stat(parent, accent, opts)
 	opts = opts or {}
 	onAccent(function(c) accent = c end)
 	local row = newRow(parent, ROW_H)
-	rowText(row, opts.text or opts.label or "Stat", opts.desc, 0.4, 12, opts.icon)
+	rowText(row, opts.text or opts.label or "Stat", opts.desc, 0.4, 12, opts.icon, "stt")
 	local val = Create("TextLabel", {
 		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0.5, 0, 1, 0),
-		BackgroundTransparency = 1, Font = FONT_BOLD, Text = tostring(opts.value or "0"),
-		TextColor3 = accent, TextSize = 16, TextXAlignment = Enum.TextXAlignment.Right,
+		BackgroundTransparency = 1, Font = FONT_MONO_BOLD, Text = tostring(opts.value or "0"),
+		TextColor3 = accent, TextSize = 14, TextXAlignment = Enum.TextXAlignment.Right,
 		TextTruncate = Enum.TextTruncate.AtEnd, Parent = row,
 	})
+	val:SetAttribute("GlyphMono", true)
 	accentProp(val, "TextColor3", accent)
 	local control = {}
 	function control.Set(v) val.Text = tostring(v) end
@@ -3200,27 +3360,51 @@ function Elements.Checkbox(parent, accent, opts)
 	onHitbox(function(c) hitbox = c end)
 	local state = opts.default and true or false
 	local row = newRow(parent, ROW_H)
-	local box = Create("Frame", {
-		AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(0, 18, 0, 18),
-		BackgroundColor3 = THEME.ToggleOff, Parent = row,
-	}, { corner(5), stroke(THEME.ElementStroke, 1, 0.35) })
-	local checkSpec = resolveIcon("check")
-	local check = checkSpec and Create("ImageLabel", {
-		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, 12, 0, 12),
-		BackgroundTransparency = 1, ImageColor3 = accentTextColor(accent), ImageTransparency = 1, ZIndex = 2, Parent = box,
+	codeCounts["chk"] = (codeCounts["chk"] or 0) + 1
+	local chkCode = Create("TextLabel", {
+		AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, -2, 0.5, 0),
+		Size = UDim2.new(0, 26, 1, 0), BackgroundTransparency = 1,
+		Font = FONT_MONO, Text = string.format("chk\u{2013}%02d", codeCounts["chk"]),
+		TextColor3 = THEME.Faint, TextSize = 9, TextXAlignment = Enum.TextXAlignment.Left, Parent = row,
 	})
-	if check then applyIcon(check, checkSpec); onHitbox(function(c) check.ImageColor3 = accentTextColor(c) end) end
+	chkCode:SetAttribute("GlyphMono", true)
+	paintRole(chkCode, "TextColor3", "mute")
+	-- GLYPH LED well (same diode language as Toggle): dead dot off, accent
+	-- diode on with a 70ms pop, hairline tints while lit
+	local box = Create("Frame", {
+		AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 28, 0.5, 0), Size = UDim2.new(0, 18, 0, 18),
+		BackgroundColor3 = THEME.ToggleOff, Parent = row,
+	}, { corner(2), stroke(THEME.ElementStroke, 1, 0) })
+	paintRole(box, "BackgroundColor3", "off")
+	local boxStroke = box:FindFirstChildOfClass("UIStroke")
+	local led = Create("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0),
+		Size = UDim2.new(0, 4, 0, 4), BackgroundColor3 = THEME.ElementStroke, BorderSizePixel = 0, Parent = box,
+	})
 	Create("TextLabel", {
-		Position = UDim2.new(0, 28, 0, 0), Size = UDim2.new(1, -28, 1, 0), BackgroundTransparency = 1,
+		Position = UDim2.new(0, 56, 0, 0), Size = UDim2.new(1, -56, 1, 0), BackgroundTransparency = 1,
 		Font = FONT_MED, Text = tostring(opts.text or "Checkbox"), TextColor3 = THEME.Text, TextSize = 13,
 		TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = row,
 	})
 	tagSearch(row, opts.text)
 	local control = {}
+	local LED_POP = TweenInfo.new(0.07, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 	local function render(animate)
-		local info = animate and TI.SYDE or TweenInfo.new(0)
-		tween(box, { BackgroundColor3 = state and hitbox or THEME.ToggleOff }, info)
-		if check then tween(check, { ImageTransparency = state and 0 or 1 }, info) end
+		led.BackgroundColor3 = state and seqPrimary(hitbox) or THEME.ElementStroke
+		if boxStroke then
+			boxStroke.Color = state and seqPrimary(hitbox) or THEME.ElementStroke
+			boxStroke.Transparency = state and 0.45 or 0
+		end
+		if state then
+			if animate then
+				led.Size = UDim2.new(0, 4, 0, 4)
+				tween(led, { Size = UDim2.new(0, 8, 0, 8) }, LED_POP)
+			else
+				led.Size = UDim2.new(0, 8, 0, 8)
+			end
+		else
+			led.Size = UDim2.new(0, 4, 0, 4)
+		end
 	end
 	function control.Set(v, fire)
 		state = v and true or false
@@ -3270,21 +3454,22 @@ local function chartShell(parent, accent, opts, plotHeight)
 		Position = UDim2.new(0, ROW_PAD, 0, 0),
 		BackgroundColor3 = THEME.Element, ClipsDescendants = true, Parent = parent,
 	}, {
-		corner(12), stroke(THEME.ElementStroke, 1, 0.3), padding(12),
-		Create("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(216, 216, 216)), Transparency = NumberSequence.new(0.9) }),
+		corner(3), stroke(THEME.ElementStroke, 1, 0), padding(12),
 	})
 	tagSearch(card, opts.text or opts.name or "Chart")
 	local head = Create("Frame", { Size = UDim2.new(1, 0, 0, 20), BackgroundTransparency = 1, Parent = card })
-	Create("TextLabel", {
-		Size = UDim2.new(0.6, 0, 1, 0), BackgroundTransparency = 1, Font = FONT_BOLD,
-		Text = tostring(opts.text or opts.name or "Chart"), TextColor3 = THEME.Text, TextSize = 15,
+	local chartTitle = Create("TextLabel", {
+		Size = UDim2.new(0.6, 0, 1, 0), BackgroundTransparency = 1, Font = FONT_MONO_SEMI,
+		Text = string.lower(tostring(opts.text or opts.name or "Chart")), TextColor3 = THEME.Text, TextSize = 12,
 		TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = head,
 	})
+	chartTitle:SetAttribute("GlyphMono", true)
 	local valLbl = Create("TextLabel", {
 		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.new(0.4, 0, 1, 0),
-		BackgroundTransparency = 1, Font = FONT_BOLD, Text = "", TextColor3 = CHART_ACCENT, TextSize = 18,
+		BackgroundTransparency = 1, Font = FONT_MONO_BOLD, Text = "", TextColor3 = CHART_ACCENT, TextSize = 14,
 		TextXAlignment = Enum.TextXAlignment.Right, Parent = head,
 	})
+	valLbl:SetAttribute("GlyphMono", true)
 	local plot = Create("Frame", {
 		Position = UDim2.new(0, 0, 0, 30), Size = UDim2.new(1, 0, 1, -30), BackgroundTransparency = 1, Parent = card,
 	})
@@ -3324,12 +3509,12 @@ function Elements.BarChart(parent, accent, opts)
 			local bar = Create("Frame", {
 				AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new((i - 0.5) / n, 0, 1, -labelRoom),
 				Size = UDim2.new(0, bw, 0, animate and 0 or h), BackgroundColor3 = barColor, ZIndex = 2, Parent = plot,
-			}, { corner(6), barGrad })
+			}, { corner(2), barGrad })
 			bars[#bars + 1] = bar
 			if hasLabels then
 				local lc = Create("TextLabel", {
 					AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new((i - 0.5) / n, 0, 1, 0), Size = UDim2.new(0, slot, 0, 12),
-					BackgroundTransparency = 1, Font = FONT, Text = tostring(labels[i] or ""), TextColor3 = THEME.SubText, TextSize = 10,
+					BackgroundTransparency = 1, Font = FONT_MONO, Text = tostring(labels[i] or ""), TextColor3 = THEME.SubText, TextSize = 10,
 					TextTruncate = Enum.TextTruncate.AtEnd, Parent = plot,
 				})
 				bars[#bars + 1] = lc
@@ -3578,20 +3763,21 @@ function Elements.RippleButton(parent, accent, opts)
 		Size = UDim2.new(1, ROW_PAD * 2, 1, 0), Position = UDim2.new(0, -ROW_PAD, 0, 0),
 		BackgroundColor3 = THEME.Element, BackgroundTransparency = 1, AutoButtonColor = false, Text = "",
 		ClipsDescendants = true, Parent = row,
-	}, { corner(8) })
-	local label = rowText(row, opts.text or "Action", opts.desc, 0, 0, opts.icon)
-	surface.MouseEnter:Connect(function() tween(surface, { BackgroundTransparency = 0.85 }, TI.HOVER) end)
-	surface.MouseLeave:Connect(function() tween(surface, { BackgroundTransparency = 1 }, TI.HOVEROFF) end)
+	}, { corner(2) })
+	local label = rowText(row, opts.text or "Action", opts.desc, 0, 0, opts.icon, "btn")
+	surface.MouseEnter:Connect(function() surface.BackgroundTransparency = 0.85 end)
+	surface.MouseLeave:Connect(function() surface.BackgroundTransparency = 1 end)
 	surface.InputBegan:Connect(function(input)
 		if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
 		local lx = input.Position.X - surface.AbsolutePosition.X
 		local ly = input.Position.Y - surface.AbsolutePosition.Y
+		-- GLYPH: a hard square shockwave, not a round ripple
 		local ripple = Create("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(lx, ly), Size = UDim2.fromOffset(0, 0),
-			BackgroundColor3 = accent, BackgroundTransparency = 0.5, ZIndex = 5, Parent = surface,
-		}, { corner(200) })
+			BackgroundColor3 = seqPrimary(accent), BackgroundTransparency = 0.6, ZIndex = 5, Parent = surface,
+		})
 		local far = math.max(surface.AbsoluteSize.X, surface.AbsoluteSize.Y) * 2
-		tween(ripple, { Size = UDim2.fromOffset(far, far), BackgroundTransparency = 1 }, TweenInfo.new(0.55, Enum.EasingStyle.Quad, Enum.EasingDirection.Out))
+		tween(ripple, { Size = UDim2.fromOffset(far, far), BackgroundTransparency = 1 }, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out))
 		task.delay(0.6, function() if ripple then ripple:Destroy() end end)
 	end)
 	surface.MouseButton1Click:Connect(function() if type(opts.callback) == "function" then pcall(opts.callback) end end)
@@ -3614,11 +3800,11 @@ function Elements.HoldButton(parent, accent, opts)
 		Size = UDim2.new(1, ROW_PAD * 2, 1, 0), Position = UDim2.new(0, -ROW_PAD, 0, 0),
 		BackgroundColor3 = THEME.Element, BackgroundTransparency = 1, AutoButtonColor = false, Text = "",
 		ClipsDescendants = true, Parent = row,
-	}, { corner(8) })
+	}, { corner(2) })
 	local fillGrad = Create("UIGradient", {})
 	local fill = Create("Frame", { Size = UDim2.new(0, 0, 1, 0), BackgroundColor3 = accent, BackgroundTransparency = 0.6, ZIndex = 0, Parent = surface }, { fillGrad })
 	accentProp(fill, "BackgroundColor3", accent); accentGrad(fillGrad, accent)
-	local label = rowText(row, opts.text or "Hold to confirm", opts.desc, 0, 0, opts.icon)
+	local label = rowText(row, opts.text or "Hold to confirm", opts.desc, 0, 0, opts.icon, "btn")
 	local holding, tw = false, nil
 	local session = 0   -- invalidates a prior press's pending completion timer
 	local function cancel()
@@ -3660,21 +3846,22 @@ function Elements.SlideButton(parent, accent, opts)
 	local track = Create("TextButton", {
 		AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(1, 0, 0, 34),
 		BackgroundColor3 = THEME.Element, AutoButtonColor = false, Text = "", ClipsDescendants = true, Parent = row,
-	}, { corner(10), stroke(THEME.ElementStroke, 1, 0.4) })
+	}, { corner(2), stroke(THEME.ElementStroke, 1, 0.4) })
 	local fillGrad = Create("UIGradient", {})
 	local fill = Create("Frame", {
 		Size = UDim2.new(0, 32, 1, 0), BackgroundColor3 = accent, BackgroundTransparency = 0.15, BorderSizePixel = 0, Parent = track,
-	}, { corner(10), fillGrad })
+	}, { corner(2), fillGrad })
 	accentProp(fill, "BackgroundColor3", accent); accentGrad(fillGrad, accent)
 	local prompt = Create("TextLabel", {
 		Size = UDim2.new(1, -44, 1, 0), Position = UDim2.new(0, 40, 0, 0), BackgroundTransparency = 1,
-		Font = FONT_MED, Text = opts.text or "Slide to confirm", TextColor3 = THEME.SubText, TextSize = 13,
+		Font = FONT_MONO, Text = string.lower(tostring(opts.text or "Slide to confirm")), TextColor3 = THEME.SubText, TextSize = 12,
 		TextXAlignment = Enum.TextXAlignment.Center, Parent = track,
 	})
+	prompt:SetAttribute("GlyphMono", true)
 	local knob = Create("TextButton", {
 		AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 2, 0.5, 0), Size = UDim2.new(0, 30, 0, 30),
 		BackgroundColor3 = THEME.Knob, AutoButtonColor = false, Text = "", ZIndex = 4, Parent = track,
-	}, { corner(8) })
+	}, { corner(2) })
 	local darkGlyph = accentTextColor(THEME.Knob)   -- contrast against the knob on any theme
 	do
 		local aspec = resolveIcon("chevrons-right") or resolveIcon("chevron-right")
@@ -3703,13 +3890,13 @@ function Elements.SlideButton(parent, accent, opts)
 	end
 	local function reset(animate)
 		confirmed = false
-		prompt.Text = opts.text or "Slide to confirm"
+		prompt.Text = string.lower(tostring(opts.text or "Slide to confirm"))
 		place(0, animate)
 	end
 	local function confirm()
 		if confirmed then return end
 		confirmed = true
-		prompt.Text = opts.confirmText or "Confirmed"
+		prompt.Text = string.lower(tostring(opts.confirmText or "Confirmed"))
 		prompt.TextTransparency = 0
 		place(maxX(), true)
 		if type(opts.callback) == "function" then pcall(opts.callback) end
@@ -3736,7 +3923,7 @@ function Elements.SlideButton(parent, accent, opts)
 	end)
 	local control = {}
 	function control.Reset() reset(true) end
-	function control.SetText(t) opts.text = tostring(t); if not confirmed then prompt.Text = opts.text end end
+	function control.SetText(t) opts.text = tostring(t); if not confirmed then prompt.Text = string.lower(opts.text) end end
 	task.defer(function() place(0, false) end)
 	return control
 end
@@ -3747,10 +3934,11 @@ function Elements.ShimmerLabel(parent, accent, opts)
 	if type(opts) == "string" then opts = { text = opts } end
 	local row = Create("Frame", { Size = UDim2.new(1, -ROW_PAD * 2, 0, opts.height or 24), Position = UDim2.new(0, ROW_PAD, 0, 0), BackgroundTransparency = 1, Parent = parent })
 	local lbl = Create("TextLabel", {
-		Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Font = opts.bold and FONT_BOLD or FONT_SEMI,
-		Text = tostring(opts.text or "Shimmer"), TextColor3 = THEME.SubText, TextSize = opts.textSize or 14,
+		Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Font = opts.bold and FONT_MONO_BOLD or FONT_MONO_SEMI,
+		Text = string.lower(tostring(opts.text or "Shimmer")), TextColor3 = THEME.SubText, TextSize = opts.textSize or 14,
 		TextXAlignment = Enum.TextXAlignment.Left, Parent = row,
 	})
+	lbl:SetAttribute("GlyphMono", true)
 	tagSearch(row, opts.text)
 	local grad = Create("UIGradient", {
 		Rotation = opts.rotation or 0, Parent = lbl,
@@ -3784,7 +3972,8 @@ function Elements.ScrollHint(parent, accent, opts)
 	local wrap = Create("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, 0, 1, 0), AutomaticSize = Enum.AutomaticSize.X, BackgroundTransparency = 1, Parent = row }, {
 		Create("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), VerticalAlignment = Enum.VerticalAlignment.Center }),
 	})
-	local lbl = Create("TextLabel", { Size = UDim2.new(0, 0, 1, 0), AutomaticSize = Enum.AutomaticSize.X, BackgroundTransparency = 1, Font = FONT, Text = tostring(opts.text or "Scroll for more"), TextColor3 = THEME.SubText, TextSize = 12, LayoutOrder = 1, Parent = wrap })
+	local lbl = Create("TextLabel", { Size = UDim2.new(0, 0, 1, 0), AutomaticSize = Enum.AutomaticSize.X, BackgroundTransparency = 1, Font = FONT_MONO, Text = string.lower(tostring(opts.text or "Scroll for more")), TextColor3 = THEME.SubText, TextSize = 11, LayoutOrder = 1, Parent = wrap })
+	lbl:SetAttribute("GlyphMono", true)
 	local arrowHolder = Create("Frame", { Size = UDim2.new(0, 14, 0, 14), BackgroundTransparency = 1, LayoutOrder = 2, Parent = wrap })
 	local spec = resolveIcon(opts.icon or "chevron-down")
 	local arrow = Create("ImageLabel", { Position = UDim2.new(0.5, 0, 0, 0), AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.new(0, 14, 0, 14), BackgroundTransparency = 1, ImageColor3 = THEME.SubText, Parent = arrowHolder })
@@ -3799,7 +3988,7 @@ end
 -- CursorTag: a card that shows a small pill following the mouse while hovered.
 function Elements.CursorTag(parent, accent, opts)
 	opts = opts or {}
-	local row = Create("Frame", { Size = UDim2.new(1, -ROW_PAD * 2, 0, opts.height or 46), Position = UDim2.new(0, ROW_PAD, 0, 0), BackgroundColor3 = THEME.Element, Parent = parent }, { corner(8), stroke(THEME.ElementStroke, 1, 0.4) })
+	local row = Create("Frame", { Size = UDim2.new(1, -ROW_PAD * 2, 0, opts.height or 46), Position = UDim2.new(0, ROW_PAD, 0, 0), BackgroundColor3 = THEME.Element, Parent = parent }, { corner(3), stroke(THEME.ElementStroke, 1, 0.4) })
 	local area = Create("TextButton", { Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, AutoButtonColor = false, Text = "", Parent = row })
 	Create("TextLabel", { Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Font = FONT, Text = tostring(opts.hint or "Hover here"), TextColor3 = THEME.SubText, TextSize = 12, Parent = row })
 	local screenGui = row:FindFirstAncestorWhichIsA("ScreenGui") or row:FindFirstAncestorWhichIsA("LayerCollector")
@@ -3808,7 +3997,7 @@ function Elements.CursorTag(parent, accent, opts)
 		BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 1, Font = FONT_MED, Text = tostring(opts.text or "Tag"),
 		TextColor3 = Color3.fromRGB(20, 20, 24), TextTransparency = 1, TextSize = 12, Visible = false, ZIndex = 60000,
 		Parent = screenGui or row,
-	}, { corner(6), padding(8) })
+	}, { corner(2), padding(8) })
 	local enabled = opts.enabled ~= false
 	local moveConn
 	local function show() chip.Visible = true; tween(chip, { BackgroundTransparency = 0, TextTransparency = 0 }, TI.FAST) end
@@ -3853,10 +4042,11 @@ function Elements.FAQ(parent, accent, opts)
 	for idx, it in ipairs(items) do
 		local q = it.question or it.Question or it[1] or "Question"
 		local a = it.answer or it.Answer or it[2] or ""
-		local card = Create("Frame", { Size = UDim2.new(1, 0, 0, 38), BackgroundColor3 = THEME.Element, ClipsDescendants = true, LayoutOrder = idx, Parent = wrap }, { corner(12), stroke(THEME.ElementStroke, 1, 0.3), Create("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(216, 216, 216)), Transparency = NumberSequence.new(0.9) }) })
+		local card = Create("Frame", { Size = UDim2.new(1, 0, 0, 38), BackgroundColor3 = THEME.Element, ClipsDescendants = true, LayoutOrder = idx, Parent = wrap }, { corner(3), stroke(THEME.ElementStroke, 1, 0) })
 		tagSearch(card, q .. " " .. a)
 		local head = Create("TextButton", { Size = UDim2.new(1, 0, 0, 38), BackgroundTransparency = 1, AutoButtonColor = false, Text = "", Parent = card }, { padXY(ROW_PAD, 0) })
-		Create("TextLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(1, -24, 0, 16), BackgroundTransparency = 1, Font = FONT_MED, Text = tostring(q), TextColor3 = THEME.Text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = head })
+		local qLabel = Create("TextLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(1, -24, 0, 16), BackgroundTransparency = 1, Font = FONT_MONO_SEMI, Text = string.lower(tostring(q)), TextColor3 = THEME.Text, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = head })
+		qLabel:SetAttribute("GlyphMono", true)
 		local chev = iconChevron(head, 14, THEME.SubText, "chevron-down")
 		chev.AnchorPoint = Vector2.new(1, 0.5); chev.Position = UDim2.new(1, 0, 0.5, 0); chev.Rotation = 180
 		local ans = Create("TextLabel", { Position = UDim2.new(0, ROW_PAD, 0, 38), Size = UDim2.new(1, -ROW_PAD * 2, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, Font = FONT, Text = tostring(a), TextColor3 = THEME.SubText, TextSize = 12, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, Parent = card })
@@ -3881,11 +4071,12 @@ end
 function Elements.Changelog(parent, accent, opts)
 	opts = opts or {}
 	local card = Create("Frame", { Size = UDim2.new(1, -ROW_PAD * 2, 0, 0), Position = UDim2.new(0, ROW_PAD, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundColor3 = THEME.Element, Parent = parent }, {
-		corner(10), stroke(THEME.ElementStroke, 1, 0.4), padding(12),
+		corner(3), stroke(THEME.ElementStroke, 1, 0), padding(12),
 		Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 6) }),
 	})
 	local head = Create("Frame", { Size = UDim2.new(1, 0, 0, 20), BackgroundTransparency = 1, LayoutOrder = 1, Parent = card })
-	Create("TextLabel", { Size = UDim2.new(0.6, 0, 1, 0), BackgroundTransparency = 1, Font = FONT_BOLD, Text = tostring(opts.title or "Changelog"), TextColor3 = THEME.Text, TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, Parent = head })
+	local clTitle = Create("TextLabel", { Size = UDim2.new(0.6, 0, 1, 0), BackgroundTransparency = 1, Font = FONT_MONO_SEMI, Text = string.lower(tostring(opts.title or "Changelog")), TextColor3 = THEME.Text, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, Parent = head })
+	clTitle:SetAttribute("GlyphMono", true)
 	Create("TextLabel", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.new(0.4, 0, 1, 0), BackgroundTransparency = 1, Font = FONT_MONO, Text = tostring((opts.version and ("v" .. opts.version) or "") .. (opts.date and ("  " .. opts.date) or "")), TextColor3 = THEME.SubText, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Right, Parent = head })
 	local tagColors = { added = Color3.fromRGB(90, 220, 140), fixed = Color3.fromRGB(90, 190, 255), changed = Color3.fromRGB(255, 190, 80), removed = Color3.fromRGB(255, 110, 110) }
 	for i, e in ipairs(opts.entries or opts.Entries or {}) do
@@ -3894,8 +4085,12 @@ function Elements.Changelog(parent, accent, opts)
 		local row = Create("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = i + 1, Parent = card })
 		local ix = 0
 		if tag then
-			local chipBg = tagColors[string.lower(tostring(tag))] or accent
-			local chip = Create("TextLabel", { Size = UDim2.new(0, 0, 0, 16), AutomaticSize = Enum.AutomaticSize.X, BackgroundColor3 = chipBg, Font = FONT_SEMI, Text = " " .. string.upper(tostring(tag)) .. " ", TextColor3 = accentTextColor(chipBg), TextSize = 10, Parent = row }, { corner(3) })
+			-- GLYPH monochrome law: tags are inversion plates with mono codes,
+			-- distinguished by text not colour
+			local chip = Create("TextLabel", { Size = UDim2.new(0, 0, 0, 16), AutomaticSize = Enum.AutomaticSize.X, BackgroundColor3 = roleColor("plateinv"), Font = FONT_MONO_SEMI, Text = " " .. string.upper(tostring(tag)) .. " ", TextColor3 = roleColor("oninv"), TextSize = 9, Parent = row }, { corner(2) })
+			paintRole(chip, "BackgroundColor3", "plateinv")
+			paintRole(chip, "TextColor3", "oninv")
+			chip:SetAttribute("GlyphMono", true)
 			ix = 6
 			chip:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() end)
 			ix = 60
@@ -3912,25 +4107,27 @@ function Elements.SegmentedPicker(parent, accent, opts)
 	local options = opts.options or opts.Options or { "A", "B" }
 	local n = #options
 	local row = newRow(parent, opts.desc and 50 or ROW_H)
-	rowText(row, opts.text or opts.name or "Picker", opts.desc, 0.55, 10, opts.icon)
+	rowText(row, opts.text or opts.name or "Picker", opts.desc, 0.55, 10, opts.icon, "seg")
 	local track = Create("Frame", {
 		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0.55, 0, 0, 24),
 		BackgroundColor3 = THEME.Element, ClipsDescendants = true, Parent = row,
-	}, { corner(7), stroke(THEME.ElementStroke, 1, 0.4) })
-	local thumb = Create("Frame", { Size = UDim2.new(1 / n, -6, 1, -6), Position = UDim2.new(0, 3, 0, 3), BackgroundColor3 = accent, BackgroundTransparency = 0.12, ZIndex = 1, Parent = track }, { corner(5) })
-	accentProp(thumb, "BackgroundColor3", accent)
+	}, { corner(3), stroke(THEME.ElementStroke, 1, 0.4) })
+	-- GLYPH: the selected segment is an inverted plate (paper on ink), not an
+	-- accent fill - hue stays rationed. Position snaps; nothing slides.
+	local thumb = Create("Frame", { Size = UDim2.new(1 / n, -6, 1, -6), Position = UDim2.new(0, 3, 0, 3), BackgroundColor3 = THEME.Text, BackgroundTransparency = 0, ZIndex = 1, Parent = track }, { corner(2) })
+	paintRole(thumb, "BackgroundColor3", "ink")
 	local sel = 1
 	for i, o in ipairs(options) do if o == (opts.default or opts.CurrentOption) then sel = i end end
 	local btns = {}
 	local control = {}
 	local function paint(animate)
-		local info = animate and TI.EXPAND or TweenInfo.new(0)
 		control.CurrentOption = options[sel]
-		tween(thumb, { Position = UDim2.new((sel - 1) / n, 3, 0, 3) }, info)
-		for i, b in ipairs(btns) do tween(b, { TextColor3 = i == sel and accentTextColor(accent) or THEME.SubText }, TI.FAST) end
+		thumb.Position = UDim2.new((sel - 1) / n, 3, 0, 3)
+		for i, b in ipairs(btns) do paintRole(b, "TextColor3", i == sel and "knob" or "sub") end
 	end
 	for i, o in ipairs(options) do
-		local b = Create("TextButton", { Size = UDim2.new(1 / n, 0, 1, 0), Position = UDim2.new((i - 1) / n, 0, 0, 0), BackgroundTransparency = 1, AutoButtonColor = false, Font = FONT_MED, Text = tostring(o), TextColor3 = THEME.SubText, TextSize = 12, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 2, Parent = track })
+		local b = Create("TextButton", { Size = UDim2.new(1 / n, 0, 1, 0), Position = UDim2.new((i - 1) / n, 0, 0, 0), BackgroundTransparency = 1, AutoButtonColor = false, Font = FONT_MONO, Text = string.lower(tostring(o)), TextColor3 = THEME.SubText, TextSize = 11, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 2, Parent = track })
+		b:SetAttribute("GlyphMono", true)
 		btns[i] = b
 		b.MouseButton1Click:Connect(function() sel = i; paint(true); if opts.flag then PERDITION.Flags[opts.flag] = options[sel] end if type(opts.callback) == "function" then pcall(opts.callback, options[sel]) end end)
 	end
@@ -3984,11 +4181,12 @@ function Elements.PinnedList(parent, accent, opts)
 		local card = Create("Frame", {
 			AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, (i - 1) * (CARD_H + GAP)),
 			Size = UDim2.new(1, 0, 0, CARD_H), BackgroundColor3 = THEME.Element, Parent = wrap,
-		}, { corner(12), stroke(THEME.ElementStroke, 1, 0.3), padXY(ROW_PAD, 0), Create("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(216, 216, 216)), Transparency = NumberSequence.new(0.9) }) })
+		}, { corner(3), stroke(THEME.ElementStroke, 1, 0), padXY(ROW_PAD, 0) })
 		tagSearch(card, (it.Name or it.name or "Item") .. " " .. (it.Description or it.desc or ""))
 		local ix = 0
 		if it.Icon or it.icon then local img = Create("ImageLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(0, 16, 0, 16), BackgroundTransparency = 1, ImageColor3 = THEME.SubText, Parent = card }); local isp = resolveIcon(it.Icon or it.icon); if isp then applyIcon(img, isp); ix = 24 end end
-		Create("TextLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, ix, 0.5, 0), Size = UDim2.new(1, -34 - ix, 1, 0), BackgroundTransparency = 1, Font = FONT_MED, Text = tostring(it.Name or it.name or "Item"), TextColor3 = THEME.Text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = card })
+		local plName = Create("TextLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, ix, 0.5, 0), Size = UDim2.new(1, -34 - ix, 1, 0), BackgroundTransparency = 1, Font = FONT_MONO_SEMI, Text = string.lower(tostring(it.Name or it.name or "Item")), TextColor3 = THEME.Text, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = card })
+		plName:SetAttribute("GlyphMono", true)
 		local pin = Create("TextButton", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 26, 0, 26), BackgroundTransparency = 1, AutoButtonColor = false, Text = "", Parent = card })
 		local pinIcon = Create("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, 15, 0, 15), BackgroundTransparency = 1, ImageColor3 = THEME.SubText, Parent = pin })
 		local spec = resolveIcon("pin"); if spec then applyIcon(pinIcon, spec) end
@@ -4022,14 +4220,14 @@ function Elements.EnhancedView(parent, accent, opts)
 		Size = UDim2.new(1, -ROW_PAD * 2, 0, h), Position = UDim2.new(0, ROW_PAD, 0, 0),
 		BackgroundColor3 = THEME.Element, ClipsDescendants = true, Parent = parent,
 	}, {
-		corner(12), stroke(THEME.ElementStroke, 1, 0.3), padding(12),
-		Create("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(216, 216, 216)), Transparency = NumberSequence.new(0.9) }),
+		corner(3), stroke(THEME.ElementStroke, 1, 0), padding(12),
 	})
 	tagSearch(card, opts.title or "3D View")
-	Create("TextLabel", {
-		Size = UDim2.new(1, 0, 0, 18), BackgroundTransparency = 1, Font = FONT_BOLD, Text = tostring(opts.title or "3D View"),
-		TextColor3 = THEME.Text, TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, Parent = card,
+	local evTitle = Create("TextLabel", {
+		Size = UDim2.new(1, 0, 0, 18), BackgroundTransparency = 1, Font = FONT_MONO_SEMI, Text = string.lower(tostring(opts.title or "3D View")),
+		TextColor3 = THEME.Text, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, Parent = card,
 	})
+	evTitle:SetAttribute("GlyphMono", true)
 	local stage = Create("Frame", { Position = UDim2.new(0, 0, 0, 26), Size = UDim2.new(1, 0, 1, -26), BackgroundTransparency = 1, Parent = card })
 	local control, rotConn = {}, nil
 	local function mount(obj)
@@ -4081,10 +4279,11 @@ function makeSection(host, accent, title, startClosed)
 		AutomaticSize = Enum.AutomaticSize.Y,
 		Parent = host,
 	}, {
-		corner(11),
-		stroke(THEME.ElementStroke, 1, 0.35),
+		corner(3),
+		stroke(THEME.Stroke, 1, 0),
 		Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
+	paintRole(card, "BackgroundColor3", "plate")
 
 	local bodyWrap = Create("Frame", {
 		Size = UDim2.new(1, 0, 0, 0),
@@ -4105,7 +4304,7 @@ function makeSection(host, accent, title, startClosed)
 			HorizontalAlignment = Enum.HorizontalAlignment.Center,
 			Padding = UDim.new(0, 6),
 		}),
-		Create("UIPadding", { PaddingTop = UDim.new(0, 10), PaddingBottom = UDim.new(0, 14) }),
+		Create("UIPadding", { PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 12) }),
 	})
 
 	if title and title ~= "" then
@@ -4118,29 +4317,38 @@ function makeSection(host, accent, title, startClosed)
 			LayoutOrder = 1,
 			Parent = card,
 		}, { padXY(ROW_PAD, 0) })
-		-- oxblood accent rule before the title
-		local marker = Create("Frame", {
-			AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0),
-			Size = UDim2.new(0, 3, 0, 14), BackgroundColor3 = accent, BorderSizePixel = 0, Parent = header,
-		}, { corner(2) })
-		accentProp(marker, "BackgroundColor3", accent)
-		Create("TextLabel", {
+		-- GLYPH header: dim cfg–NN code + lowercase mono title, hairline under
+		sectionSeq = sectionSeq + 1
+		local secCode = string.format("cfg\u{2013}%02d", sectionSeq)
+		local secLower = string.lower(tostring(title))
+		local secLabel = Create("TextLabel", {
 			BackgroundTransparency = 1,
 			AnchorPoint = Vector2.new(0, 0.5),
-			Position = UDim2.new(0, 13, 0.5, 0),
-			Size = UDim2.new(1, -40, 1, 0),
-			Font = FONT_SEMI,
-			Text = string.upper(tostring(title)),
+			Position = UDim2.new(0, 0, 0.5, 0),
+			Size = UDim2.new(1, -26, 1, 0),
+			Font = FONT_MONO_SEMI,
+			RichText = true,
+			Text = string.format('<font color="#%s">%s</font>  %s', hexOf(THEME.Faint), secCode, secLower),
 			TextColor3 = THEME.SubText,
 			TextSize = 11,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			TextTruncate = Enum.TextTruncate.AtEnd,
 			Parent = header,
 		})
+		secLabel:SetAttribute("GlyphMono", true)
+		glyphLabelRefreshes[#glyphLabelRefreshes + 1] = function()
+			secLabel.Text = string.format('<font color="#%s">%s</font>  %s', hexOf(THEME.Faint), secCode, secLower)
+		end
 		local chev = iconChevron(header, 15, THEME.Faint, "chevron-down")
 		chev.AnchorPoint = Vector2.new(1, 0.5)
 		chev.Position = UDim2.new(1, 0, 0.5, 0)
-		-- (no header rule: it read as a stray line; header/body separate by spacing)
+		-- GLYPH: 1px rule separating header from body
+		local headRule = Create("Frame", {
+			AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0),
+			Size = UDim2.new(1, 0, 0, 1), BackgroundColor3 = THEME.Stroke,
+			BorderSizePixel = 0, Parent = header,
+		})
+		paintRole(headRule, "BackgroundColor3", "hair")
 		local open = true
 		local SEC_SLIDE = TweenInfo.new(0.36, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
 		sectionSetOpen = function(want, animate)
@@ -4294,7 +4502,7 @@ local function keyGate(kopts, windowTitle)
 		ClipsDescendants = true,
 		ZIndex = 60000,
 		Parent = screenGui,
-	}, { corner(12), stroke(THEME.Stroke, 1, 0.3), padXY(18, 16) })
+	}, { corner(3), stroke(THEME.Stroke, 1, 0), padXY(18, 16) })
 	siblingShadow(card)
 	makeDraggable(card, card)
 
@@ -4331,7 +4539,7 @@ local function keyGate(kopts, windowTitle)
 		BorderSizePixel = 0,
 		ZIndex = 60001,
 		Parent = card,
-	}, { corner(6) })
+	}, { corner(2) })
 	local fieldStroke = stroke(THEME.ElementStroke, 1, 0.2)
 	fieldStroke.Parent = field
 	local box = Create("TextBox", {
@@ -4355,13 +4563,13 @@ local function keyGate(kopts, windowTitle)
 		Size = UDim2.new(1, 0, 0, 32),
 		BackgroundColor3 = THEME.Accent,
 		AutoButtonColor = false,
-		Font = FONT_SEMI,
-		Text = "UNLOCK",
+		Font = FONT_MONO_SEMI,
+		Text = "unlock",
 		TextColor3 = accentTextColor(THEME.Accent),
 		TextSize = 12,
 		ZIndex = 60001,
 		Parent = card,
-	}, { corner(6) })
+	}, { corner(2) })
 
 	local closeBtn = Create("TextButton", {
 		AnchorPoint = Vector2.new(1, 0),
@@ -4443,6 +4651,7 @@ function PERDITION.Window(opts)
 	-- drag = panels can be picked up by their header and rearranged. Read live by pages.
 	local canvasAutoArrange = true
 	local canvasDrag = false
+	sectionSeq = 0
 	ensureRoot()
 
 	local scale = computeScale()
@@ -4451,7 +4660,7 @@ function PERDITION.Window(opts)
 	local TOPBAR_H = 52
 	local SIDEBAR_W = IS_MOBILE and 148 or 176
 	local FOOTER_H = 96
-	local RADIUS = 14
+	local RADIUS = 4   -- GLYPH: window radius (cards 3 / controls 2 at their own sites)
 
 	local root = Create("Frame", {
 		Name = "Window",
@@ -4532,6 +4741,33 @@ function PERDITION.Window(opts)
 		end)
 	end)
 
+	-- GLYPH registration marks: 1px crop-ticks pinned just outside the four
+	-- window corners. Pure identity, no tweens; they ride the shadow holder.
+	do
+		local TICK_L, TICK_O = 7, 5   -- tick length / gap outside the corner
+		local function tick(w, h, pos)
+			local t = Create("Frame", {
+				Position = pos, Size = UDim2.new(0, w, 0, h),
+				BackgroundColor3 = THEME.Faint, BackgroundTransparency = 0.25,
+				BorderSizePixel = 0, ZIndex = 0, Parent = rootShadowHolder,
+			})
+			paintRole(t, "BackgroundColor3", "mute")
+			return t
+		end
+		-- top-left
+		tick(TICK_L, 1, UDim2.new(0, -TICK_O - TICK_L, 0, -TICK_O))
+		tick(1, TICK_L, UDim2.new(0, -TICK_O, 0, -TICK_O - TICK_L))
+		-- top-right
+		tick(TICK_L, 1, UDim2.new(1, TICK_O, 0, -TICK_O))
+		tick(1, TICK_L, UDim2.new(1, TICK_O, 0, -TICK_O - TICK_L))
+		-- bottom-left
+		tick(TICK_L, 1, UDim2.new(0, -TICK_O - TICK_L, 1, TICK_O - 1))
+		tick(1, TICK_L, UDim2.new(0, -TICK_O, 1, TICK_O))
+		-- bottom-right
+		tick(TICK_L, 1, UDim2.new(1, TICK_O, 1, TICK_O - 1))
+		tick(1, TICK_L, UDim2.new(1, TICK_O, 1, TICK_O))
+	end
+
 	-- Top bar: logo + wordmark | top tabs | search + min/close
 	local topbar = Create("Frame", {
 		Size = UDim2.new(1, 0, 0, TOPBAR_H),
@@ -4576,30 +4812,47 @@ function PERDITION.Window(opts)
 		})
 		if not brandAsset and logoSpec then applyIcon(logoImage, logoSpec) end
 	else
-		-- oxblood brand dot before the editorial wordmark
+		-- GLYPH: square LED brand dot + lowercase mono wordmark + version tag.
+		-- Tagged GlyphMono so Win.SetFont never swaps the structural voice.
 		local brandDot = Create("Frame", {
 			AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 16, 0.5, 0),
 			Size = UDim2.new(0, 6, 0, 6), BackgroundColor3 = accent, BorderSizePixel = 0, Parent = topbar,
-		}, { corner(3) })
+		})
 		accentProp(brandDot, "BackgroundColor3", accent)
+		local titleText = string.lower(tostring(opts.title or "perdition"))
+		local wmW = math.max(40, math.min(#titleText, 18) * 9 + 2)   -- mono 15px ~ 9px/char
 		wordmark = Create("TextLabel", {
 			Position = UDim2.new(0, 30, 0.5, 0),
 			AnchorPoint = Vector2.new(0, 0.5),
-			Size = UDim2.new(0, 170, 1, 0),
+			Size = UDim2.new(0, wmW, 1, 0),
 			BackgroundTransparency = 1,
-			Font = FONT_BOLD,
-			Text = string.upper(tostring(opts.title or "PERDITION")),
+			Font = FONT_MONO_BOLD,
+			Text = titleText,
 			TextColor3 = THEME.Text,
-			TextSize = 16,
+			TextSize = 15,
+			TextTruncate = Enum.TextTruncate.AtEnd,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			Parent = topbar,
 		})
+		wordmark:SetAttribute("GlyphMono", true)
+		Create("TextLabel", {
+			Position = UDim2.new(0, 30 + wmW + 8, 0.5, 1),
+			AnchorPoint = Vector2.new(0, 0.5),
+			Size = UDim2.new(0, 90, 1, 0),
+			BackgroundTransparency = 1,
+			Font = FONT_MONO,
+			Text = "prd–" .. tostring(PERDITION.Version or "4.0.0"),
+			TextColor3 = THEME.Faint,
+			TextSize = 10,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Parent = topbar,
+		}):SetAttribute("GlyphMono", true)
 	end
 	local logoGrad  -- kept for Win.SetLogoGradient compatibility
 	-- a machined tick separating the brand from the tabs
 	Create("Frame", {
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 16 + WORDMARK_W + 14, 0.5, 0),
+		Position = UDim2.new(0, 218, 0.5, 0),
 		Size = UDim2.new(0, 1, 0, 16),
 		BackgroundColor3 = THEME.Stroke,
 		BorderSizePixel = 0,
@@ -4621,8 +4874,8 @@ function PERDITION.Window(opts)
 	-- inside it stay centred and reflow automatically as the window resizes
 	local tabArea = Create("Frame", {
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 190, 0.5, 0),
-		Size = UDim2.new(1, -(190 + 176), 1, 0),
+		Position = UDim2.new(0, 226, 0.5, 0),
+		Size = UDim2.new(1, -(226 + 176), 1, 0),
 		BackgroundTransparency = 1,
 		-- confine the tab dock between the logo and the right-side icons so a wide
 		-- dock (many tabs / long names) clips instead of bleeding over them
@@ -4641,6 +4894,9 @@ function PERDITION.Window(opts)
 	local tabs = {}
 	local activeTab
 	local tabBarOrder = 0
+	-- GLYPH: rich-text labels with theme-baked spans (part codes) register a
+	-- rebuild here so SetTheme can refresh their colours after the hex-walk
+	local richRefresh = {}
 
 	-- tab dock: rounded track holding pill tabs; a sliding indicator pill marks
 	-- the open tab and glides between pills
@@ -4703,15 +4959,10 @@ function PERDITION.Window(opts)
 			w = target.AbsoluteSize.X
 		end)
 		if w <= 0 then dockIndicator.BackgroundTransparency = 1; return end
-		local goalPos = UDim2.new(0, x, 1, 0)
-		local goalSize = UDim2.fromOffset(w, 2)
-		if animate then
-			tween(dockIndicator, { Position = goalPos, Size = goalSize, BackgroundTransparency = 0 }, TI.TAB)
-		else
-			dockIndicator.Position = goalPos
-			dockIndicator.Size = goalSize
-			dockIndicator.BackgroundTransparency = 0
-		end
+		-- GLYPH instant law: the indicator snaps, it never glides
+		dockIndicator.Position = UDim2.new(0, x, 1, 0)
+		dockIndicator.Size = UDim2.fromOffset(w, 2)
+		dockIndicator.BackgroundTransparency = 0
 	end
 
 	-- icon button factory (top bar / content header / footer)
@@ -4887,11 +5138,11 @@ function PERDITION.Window(opts)
 		BackgroundColor3 = THEME.Sidebar,
 		BorderSizePixel = 0,
 		Parent = body,
-	}, { corner(12), stroke(THEME.Stroke, 1, 0.5) })
+	}, { corner(4), stroke(THEME.Stroke, 1, 0) })
 
 	-- scroll region (tab sidebars stack here, one visible at a time), leaving
 	-- room for the status footer pinned to the card's bottom
-	local SB_FOOTER_H = 50
+	local SB_FOOTER_H = 62   -- GLYPH: room for the telemetry line
 	local sidebarScroll = Create("ScrollingFrame", {
 		Size = UDim2.new(1, 0, 1, -SB_FOOTER_H),
 		BackgroundTransparency = 1,
@@ -4933,13 +5184,13 @@ function PERDITION.Window(opts)
 	end)
 	local avatar = Create("ImageLabel", {
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 13, 0.5, 0),
+		Position = UDim2.new(0, 13, 0.5, -7),
 		Size = UDim2.new(0, 34, 0, 34),
 		BackgroundColor3 = THEME.Element,
 		Image = profId and ("rbxthumb://type=AvatarHeadShot&id=%d&w=100&h=100"):format(profId) or "",
 		ScaleType = Enum.ScaleType.Crop,
 		Parent = sbFooter,
-	}, { corner(10), stroke(THEME.ElementStroke, 1, 0.3) })
+	}, { corner(3), stroke(THEME.ElementStroke, 1, 0.3) })
 	-- online status dot, ringed in the footer ground so it reads as a badge
 	local statusDot = Create("Frame", {
 		AnchorPoint = Vector2.new(1, 1),
@@ -4949,9 +5200,9 @@ function PERDITION.Window(opts)
 		BorderSizePixel = 0,
 		ZIndex = 3,
 		Parent = avatar,
-	}, { corner(6), stroke(THEME.Sidebar, 2.5, 0) })
+	}, { stroke(THEME.Sidebar, 2.5, 0) })
 	local gameLabel = Create("TextLabel", {
-		Position = UDim2.new(0, 56, 0, 7),
+		Position = UDim2.new(0, 56, 0, 3),
 		Size = UDim2.new(1, -132, 0, 17),
 		BackgroundTransparency = 1,
 		Font = FONT_SEMI,
@@ -4963,7 +5214,7 @@ function PERDITION.Window(opts)
 		Parent = sbFooter,
 	})
 	local statusLabel = Create("TextLabel", {
-		Position = UDim2.new(0, 56, 0, 26),
+		Position = UDim2.new(0, 56, 0, 20),
 		Size = UDim2.new(1, -132, 0, 15),
 		BackgroundTransparency = 1,
 		Font = FONT,
@@ -4974,47 +5225,64 @@ function PERDITION.Window(opts)
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Parent = sbFooter,
 	})
-	-- live fps chip: a green pulse dot + mono readout in a bordered pill
-	local fpsChip = Create("Frame", {
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -12, 0.5, 0),
-		Size = UDim2.new(0, 66, 0, 22),
-		BackgroundColor3 = THEME.Element,
+	-- GLYPH telemetry line: raw instrument readout across the footer's bottom
+	-- edge (fps - ping - clock) with a 1Hz heartbeat LED. The one permitted
+	-- loop in the whole UI, because hardware LEDs blink.
+	local teleLed = Create("Frame", {
+		Position = UDim2.new(0, 13, 0, 48),
+		Size = UDim2.new(0, 5, 0, 5),
+		BackgroundColor3 = seqPrimary(accent),
+		BorderSizePixel = 0,
 		Parent = sbFooter,
-	}, { corner(7), stroke(THEME.ElementStroke, 1, 0.4) })
-	local fpsDot = Create("Frame", {
-		AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0),
-		Size = UDim2.new(0, 5, 0, 5), BackgroundColor3 = THEME.Good, BorderSizePixel = 0, Parent = fpsChip,
-	}, { corner(3) })
-	local fpsLabel = Create("TextLabel", {
-		Size = UDim2.new(1, -22, 1, 0),
-		Position = UDim2.new(0, 17, 0, 0),
+	})
+	accentProp(teleLed, "BackgroundColor3", accent)
+	local teleLabel = Create("TextLabel", {
+		Position = UDim2.new(0, 24, 0, 44),
+		Size = UDim2.new(1, -34, 0, 14),
 		BackgroundTransparency = 1,
 		Font = FONT_MONO,
 		Text = "",
-		TextColor3 = THEME.SubText,
-		TextSize = 12,
-		TextXAlignment = Enum.TextXAlignment.Center,
-		Parent = fpsChip,
+		TextColor3 = THEME.Faint,
+		TextSize = 10,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = sbFooter,
 	})
+	teleLabel:SetAttribute("GlyphMono", true)
+	paintRole(teleLabel, "TextColor3", "mute")
+	-- minimized bar readout (wordmark + LED + fps, per the GLYPH chrome spec)
+	local minFps = Create("TextLabel", {
+		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -150, 0.5, 0),
+		Size = UDim2.new(0, 70, 1, 0), BackgroundTransparency = 1, Visible = false,
+		Font = FONT_MONO, Text = "", TextColor3 = THEME.Faint, TextSize = 10,
+		TextXAlignment = Enum.TextXAlignment.Right, Parent = topbar,
+	})
+	minFps:SetAttribute("GlyphMono", true)
+	paintRole(minFps, "TextColor3", "mute")
+	local statsSvc
+	pcall(function() statsSvc = game:GetService("Stats") end)
 	local fpsConn
 	local sessConn   -- Settings SESSION heartbeat; torn down in Win.Destroy
 	do
-		-- live FPS readout only. Motion is user-controlled via the Settings
-		-- "Animations" toggle; nothing auto-reduces animation on fps dips.
-		local frames, acc = 0, 0
+		local frames, acc, blink = 0, 0, false
 		local ok = pcall(function()
 			fpsConn = RunService.Heartbeat:Connect(function(dt)
 				frames = frames + 1
 				acc = acc + (tonumber(dt) or 0)
 				if acc >= 0.5 then
 					local fps = math.floor(frames / acc + 0.5)
-					fpsLabel.Text = tostring(fps) .. " fps"
 					frames, acc = 0, 0
+					local ping = 0
+					pcall(function()
+						ping = math.floor(statsSvc.Network.ServerStatsItem["Data Ping"]:GetValue())
+					end)
+					teleLabel.Text = string.format("fps %d \u{00B7} ping %d \u{00B7} %s", fps, ping, os.date("%H:%M:%S"))
+					if minFps.Visible then minFps.Text = "fps " .. tostring(fps) end
+					blink = not blink
+					teleLed.BackgroundTransparency = blink and 0 or 0.65
 				end
 			end)
 		end)
-		if not ok then fpsChip.Visible = false end
+		if not ok then teleLabel.Visible = false teleLed.Visible = false end
 	end
 
 	local content = Create("Frame", {
@@ -5105,10 +5373,92 @@ function PERDITION.Window(opts)
 		task.defer(function() updateFades(body) end)
 	end
 
-	-- open animation (Syde-style): the window unfolds from a smaller centred box
-	-- to full size on a smooth Quint curve (the shadow holder mirrors the size)
-	root.Size = UDim2.new(0, math.floor(W * 0.82), 0, math.floor(H * 0.82))
-	tween(root, { Size = UDim2.new(0, W, 0, H) }, TI.OPEN)
+	-- GLYPH reveal: the window snaps in under 100ms from a hair under full
+	-- size (structure arrives with intent; no unfold theatrics). With boot
+	-- enabled (default, skip via Window({ boot = false })) a dot-matrix
+	-- wordmark card plays first: one 80ms glitch, scanline sweep, then the
+	-- snap. Key-gated windows skip boot (the gate is its own reveal).
+	local bootDone = false
+	local function revealWindow()
+		if bootDone then return end
+		bootDone = true
+		root.Visible = true
+		root.Size = UDim2.new(0, math.floor(W * 0.985), 0, math.floor(H * 0.985))
+		tween(root, { Size = UDim2.new(0, W, 0, H) }, TweenInfo.new(0.09, Enum.EasingStyle.Quint, Enum.EasingDirection.Out))
+	end
+	local function playBoot(onDone)
+		local art = loadArt("gly1_wordmark.png")
+		if not art then return false end   -- no asset pipeline: just snap in
+		local card = Create("CanvasGroup", {
+			Name = "BootCard",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0.5, 0),
+			Size = UDim2.new(0, W, 0, H),
+			BackgroundColor3 = THEME.Background,
+			GroupTransparency = 0,
+			Parent = screenGui,
+		}, { corner(RADIUS), stroke(THEME.Stroke, 1, 0) })
+		paintRole(card, "BackgroundColor3", "ground")
+		local wm = Create("ImageLabel", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0.5, -10),
+			Size = UDim2.new(0, 265, 0, 35),
+			BackgroundTransparency = 1,
+			Image = art,
+			ImageColor3 = seqPrimary(accent),
+			ImageTransparency = 1,
+			ScaleType = Enum.ScaleType.Fit,
+			Parent = card,
+		})
+		accentProp(wm, "ImageColor3", accent)
+		local status = Create("TextLabel", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0.5, 22),
+			Size = UDim2.new(1, 0, 0, 14),
+			BackgroundTransparency = 1,
+			Font = FONT_MONO,
+			Text = string.format("sys ok \u{00B7} %d icons \u{00B7} v%s", #allIconNames(), tostring(PERDITION.Version or "4.0.0")),
+			TextColor3 = THEME.Faint,
+			TextSize = 10,
+			Parent = card,
+		})
+		status:SetAttribute("GlyphMono", true)
+		paintRole(status, "TextColor3", "mute")
+		local scan = Create("Frame", {
+			Size = UDim2.new(1, 0, 0, 1),
+			Position = UDim2.new(0, 0, 0, 0),
+			BackgroundColor3 = seqPrimary(accent),
+			BackgroundTransparency = 0.55,
+			BorderSizePixel = 0,
+			Parent = card,
+		})
+		accentProp(scan, "BackgroundColor3", accent)
+		task.spawn(function()
+			-- 80ms glitch: two visibility flickers + 2px horizontal jitter
+			local basePos = card.Position
+			for i = 1, 2 do
+				card.Visible = false task.wait(0.02)
+				card.Visible = true
+				card.Position = basePos + UDim2.new(0, (i % 2 == 0) and 2 or -2, 0, 0)
+				task.wait(0.02)
+			end
+			card.Position = basePos
+			tween(wm, { ImageTransparency = 0 }, TweenInfo.new(0.12))
+			tween(scan, { Position = UDim2.new(0, 0, 1, 0) }, TweenInfo.new(0.38, Enum.EasingStyle.Linear))
+			task.wait(0.55)
+			tween(card, { GroupTransparency = 1 }, TweenInfo.new(0.12))
+			task.wait(0.14)
+			pcall(function() card:Destroy() end)
+			onDone()
+		end)
+		return true
+	end
+	root.Visible = false
+	if opts.boot ~= false and not opts.key and not reducedMotion and not bootDisabled() then
+		if not playBoot(revealWindow) then revealWindow() end
+	else
+		revealWindow()
+	end
 
 	-- Navigation state
 
@@ -5199,19 +5549,22 @@ function PERDITION.Window(opts)
 		breadcrumb.Text = table.concat(parts, string.format('  <font color="#%s">\u{203A}</font>  ', hexOf(THEME.Faint)))
 	end
 
-	local SIDEBAR_PAGE_TEXT = Color3.fromRGB(168, 173, 180)  -- inactive sub-tab label
 	local function applyPageVisual(tab, page, animate)
 		for _, p in ipairs(tab.pages) do
 			local on = (p == page)
 			p.row.BackgroundColor3 = THEME.SidebarActive
-			if animate then
-				tween(p.row, { BackgroundTransparency = on and 0 or 1 }, TI.EXP)
-				tween(p.label, { TextColor3 = on and THEME.Text or SIDEBAR_PAGE_TEXT }, TI.EXP)
-				if p.icon then tween(p.icon, { ImageColor3 = on and accent or THEME.SubText }, TI.EXP) end
-			else
-				p.row.BackgroundTransparency = on and 0 or 1
-				p.label.TextColor3 = on and THEME.Text or SIDEBAR_PAGE_TEXT
-				if p.icon then p.icon.ImageColor3 = on and accent or THEME.SubText end
+			-- GLYPH: state snaps; the LED gets one 70ms blip as its only cue
+			p.row.BackgroundTransparency = on and 0 or 1
+			p.label.TextColor3 = on and THEME.Text or THEME.SubText
+			if p.icon then p.icon.ImageColor3 = on and accent or THEME.SubText end
+			if p.led then
+				p.led.BackgroundColor3 = on and seqPrimary(accent) or THEME.ElementStroke
+				if on and animate then
+					p.led.Size = UDim2.new(0, 3, 0, 3)
+					tween(p.led, { Size = UDim2.new(0, 5, 0, 5) }, TweenInfo.new(0.07, Enum.EasingStyle.Quad, Enum.EasingDirection.Out))
+				else
+					p.led.Size = UDim2.new(0, 5, 0, 5)
+				end
 			end
 			p.active = on
 		end
@@ -5234,6 +5587,19 @@ function PERDITION.Window(opts)
 				if sc then sc.Scale = 1 end
 			end
 		end)
+		-- GLYPH 80ms crossfade: a ground-coloured wipe lifts off the new page
+		if animate ~= false then
+			local wipe = Create("Frame", {
+				Size = UDim2.new(1, 0, 1, 0),
+				BackgroundColor3 = THEME.Background,
+				BorderSizePixel = 0,
+				ZIndex = 500,
+				Parent = pagesHost,
+			})
+			paintRole(wipe, "BackgroundColor3", "ground")
+			tween(wipe, { BackgroundTransparency = 1 }, TweenInfo.new(0.08))
+			task.delay(0.1, function() pcall(function() wipe:Destroy() end) end)
+		end
 		bindFades(page.body)
 		setCrumb(tab, page)
 		runSearch(searchBox.Text)
@@ -5373,7 +5739,7 @@ function PERDITION.Window(opts)
 			AutoButtonColor = false,
 			Text = "",
 			Parent = header,
-		}, { corner(12), stroke(THEME.ElementStroke, 1, 0.35) })
+		}, { corner(3), stroke(THEME.ElementStroke, 1, 0) })
 		local pillLabel = Create("TextLabel", {
 			Position = UDim2.new(0, 10, 0, 0),
 			Size = UDim2.new(1, -32, 1, 0),
@@ -5460,7 +5826,7 @@ function PERDITION.Window(opts)
 				ClipsDescendants = true,
 				ZIndex = 50001,
 				Parent = layer,
-			}, { corner(10), stroke(THEME.Stroke, 1, 0.3), padXY(6, 6) })
+			}, { corner(3), stroke(THEME.Stroke, 1, 0), padXY(6, 6) })
 			siblingShadow(panel)
 			_ddCurrent = { close = closePanel }
 			tween(panel, { Size = UDim2.new(0, 190, 0, fullH) }, TI.EXP)
@@ -5580,6 +5946,12 @@ function PERDITION.Window(opts)
 	function Win.SetTheme(theme)
 		local palette = (type(theme) == "string") and PERDITION.Themes[theme] or theme
 		if type(palette) ~= "table" then return false end
+		-- GLYPH knob form: { base = "ink"|"paper", accent = Color3, contrast = 0..1 }
+		local knobAccent = nil
+		if type(theme) == "table" and (theme.base ~= nil or theme.contrast ~= nil) then
+			knobAccent = (typeof(theme.accent) == "Color3") and theme.accent or nil
+			palette = glyphGeneratePalette(theme.base, knobAccent or THEME.Accent, theme.contrast)
+		end
 
 		local keys = {}
 		for k in pairs(PERDITION.Themes.Dark) do keys[#keys + 1] = k end
@@ -5615,12 +5987,16 @@ function PERDITION.Window(opts)
 				recolor(inst)
 			end
 		end)
+		pcall(rePaint)   -- role-registered (v4) instances recolour directly
+		for _, fn in ipairs(richRefresh) do pcall(fn) end
+		for _, fn in ipairs(glyphLabelRefreshes) do pcall(fn) end
 
 		-- rebuild the colour-embedding rich text + active page tint
 		if activeTab and activeTab.activePage then
 			pcall(function() applyPageVisual(activeTab, activeTab.activePage, false) end)
 			pcall(function() setCrumb(activeTab, activeTab.activePage) end)
 		end
+		if knobAccent then Win.SetAccent(knobAccent) end
 		return true
 	end
 
@@ -5641,9 +6017,11 @@ function PERDITION.Window(opts)
 			for _, inst in ipairs(screenGui:GetDescendants()) do
 				if inst:IsA("TextLabel") or inst:IsA("TextButton") or inst:IsA("TextBox") then
 					-- labels that preview a specific font (the font picker rows) keep
-					-- their own typeface so the swap never flattens the list
+					-- their own typeface so the swap never flattens the list.
+					-- GlyphMono marks v4 structural mono (wordmark, codes, values):
+					-- the mono voice is load-bearing and never swaps either.
 					local keep = false
-					pcall(function() keep = inst:GetAttribute("NemesisKeepFont") == true end)
+					pcall(function() keep = inst:GetAttribute("NemesisKeepFont") == true or inst:GetAttribute("GlyphMono") == true end)
 					if not keep then
 						pcall(function()
 							local cur = inst.FontFace
@@ -5799,7 +6177,7 @@ function PERDITION.Window(opts)
 				TextColor3 = THEME.Text,
 				TextSize = 13,
 				Parent = screenGui,
-			}, { corner(8), accentProp(stroke(accent, 1, 0.4), "Color", accent) })
+			}, { corner(3), accentProp(stroke(accent, 1, 0.4), "Color", accent) })
 			makeDraggable(watermark, watermark)
 		end
 		watermark.Text = "  " .. tostring(text or "PERDITION") .. "  "
@@ -5906,7 +6284,7 @@ function PERDITION.Window(opts)
 	end
 
 	-- small live setters
-	function Win.SetTitle(t) if wordmark then wordmark.Text = string.upper(tostring(t or "PERDITION")) end end
+	function Win.SetTitle(t) if wordmark then wordmark.Text = string.lower(tostring(t or "perdition")) end end
 	function Win.SetGame(t) gameLabel.Text = tostring(t or "") end
 	function Win.SetStatus(t) statusLabel.Text = tostring(t or "") end
 
@@ -5942,7 +6320,7 @@ function PERDITION.Window(opts)
 			Name = "IconPicker", AnchorPoint = Vector2.new(0.5, 0.5), Position = openPos,
 			Size = UDim2.new(0, 432, 0, 494), BackgroundColor3 = THEME.Group,
 			Visible = false, ZIndex = 41001, Parent = screenGui,
-		}, { corner(14), stroke(THEME.Stroke, 1, 0.2), pScale })
+		}, { corner(3), stroke(THEME.Stroke, 1, 0), pScale })
 		siblingShadow(card)
 
 		-- header
@@ -5964,14 +6342,14 @@ function PERDITION.Window(opts)
 
 		-- preview of the currently picked icon + which slot is being edited
 		local preview = Create("Frame", { Position = UDim2.new(0, 16, 0, 56), Size = UDim2.new(1, -32, 0, 44), BackgroundTransparency = 1, Parent = card })
-		local previewChip = Create("Frame", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(0, 44, 0, 44), BackgroundColor3 = THEME.Element, Parent = preview }, { corner(11), stroke(THEME.ElementStroke, 1, 0.4) })
+		local previewChip = Create("Frame", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(0, 44, 0, 44), BackgroundColor3 = THEME.Element, Parent = preview }, { corner(3), stroke(THEME.ElementStroke, 1, 0.4) })
 		local previewImg = Create("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, 26, 0, 26), BackgroundTransparency = 1, ImageColor3 = accent, Parent = previewChip })
 		accentProp(previewImg, "ImageColor3", accent)
 		local previewTitle = Create("TextLabel", { AnchorPoint = Vector2.new(0, 0), Position = UDim2.new(0, 56, 0, 4), Size = UDim2.new(1, -56, 0, 18), BackgroundTransparency = 1, Font = FONT_SEMI, Text = "Change icon", TextColor3 = THEME.Text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = preview })
 		local previewSub = Create("TextLabel", { AnchorPoint = Vector2.new(0, 0), Position = UDim2.new(0, 56, 0, 22), Size = UDim2.new(1, -56, 0, 16), BackgroundTransparency = 1, Font = FONT_MONO, Text = "", TextColor3 = THEME.SubText, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = preview })
 
 		-- search field
-		local searchWrap = Create("Frame", { Position = UDim2.new(0, 16, 0, 108), Size = UDim2.new(1, -32, 0, 36), BackgroundColor3 = THEME.Element, Parent = card }, { corner(10), stroke(THEME.ElementStroke, 1, 0.35) })
+		local searchWrap = Create("Frame", { Position = UDim2.new(0, 16, 0, 108), Size = UDim2.new(1, -32, 0, 36), BackgroundColor3 = THEME.Element, Parent = card }, { corner(2), stroke(THEME.ElementStroke, 1, 0.35) })
 		local sIcon = Create("ImageLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 11, 0.5, 0), Size = UDim2.new(0, 15, 0, 15), BackgroundTransparency = 1, ImageColor3 = THEME.SubText, Parent = searchWrap })
 		local hasS = applyIcon(sIcon, resolveIcon("search"))
 		local searchBox = Create("TextBox", { BackgroundTransparency = 1, Position = UDim2.new(0, hasS and 34 or 12, 0, 0), Size = UDim2.new(1, hasS and -44 or -22, 1, 0),
@@ -5999,7 +6377,7 @@ function PERDITION.Window(opts)
 		Create("Frame", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 12, 1, -58), Size = UDim2.new(1, -24, 0, 1), BackgroundColor3 = THEME.Stroke, BackgroundTransparency = 0.4, BorderSizePixel = 0, Parent = card })
 		local footer = Create("Frame", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(1, 0, 0, 58), BackgroundTransparency = 1, Parent = card }, { padXY(16, 0) })
 		local countLabel = Create("TextLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(1, -110, 1, 0), BackgroundTransparency = 1, Font = FONT, Text = "", TextColor3 = THEME.Faint, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, Parent = footer })
-		local applyBtn = Create("TextButton", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 96, 0, 34), BackgroundColor3 = accent, AutoButtonColor = false, Font = FONT_SEMI, Text = "Apply", TextColor3 = accentTextColor(accent), TextSize = 13, Parent = footer }, { corner(9) })
+		local applyBtn = Create("TextButton", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 96, 0, 34), BackgroundColor3 = accent, AutoButtonColor = false, Font = FONT_MONO_SEMI, Text = "apply", TextColor3 = accentTextColor(accent), TextSize = 12, Parent = footer }, { corner(2) })
 		accentProp(applyBtn, "BackgroundColor3", accent)
 
 		local function styleCell(c, sel)
@@ -6036,7 +6414,7 @@ function PERDITION.Window(opts)
 		end
 
 		function createCell()
-			local b = Create("TextButton", { Size = UDim2.new(0, CELL, 0, CELL), BackgroundColor3 = THEME.Element, AutoButtonColor = false, Text = "", Visible = false, Parent = results }, { corner(10) })
+			local b = Create("TextButton", { Size = UDim2.new(0, CELL, 0, CELL), BackgroundColor3 = THEME.Element, AutoButtonColor = false, Text = "", Visible = false, Parent = results }, { corner(2) })
 			local st = stroke(THEME.ElementStroke, 1, 0.4); st.Parent = b
 			local img = Create("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, 25, 0, 25), BackgroundTransparency = 1, ImageColor3 = THEME.SubText, Parent = b })
 			local cell = { button = b, img = img, stroke = st, name = nil, selected = false }
@@ -6262,14 +6640,15 @@ function PERDITION.Window(opts)
 			Size = UDim2.new(0, 0, 1, 0),
 			AutomaticSize = Enum.AutomaticSize.X,
 			BackgroundTransparency = 1,
-			Font = FONT_SEMI,
-			Text = string.upper(tostring(name or "Tab")),
+			Font = FONT_MONO_SEMI,
+			Text = string.lower(tostring(name or "Tab")),
 			TextColor3 = THEME.SubText,
 			TextSize = 12,
 			LayoutOrder = 2,
 			ZIndex = 4,
 			Parent = btn,
 		})
+		label:SetAttribute("GlyphMono", true)
 
 		tab.button = btn
 		tab.pill = btn
@@ -6334,7 +6713,16 @@ function PERDITION.Window(opts)
 				AutoButtonColor = false,
 				Text = "",
 				Parent = parentFrame or tab.sidebarFrame,
-			}, { corner(8) })
+			}, { corner(2) })
+			-- GLYPH LED: square dot at the row's right edge; pops accent when active
+			local rowLed = Create("Frame", {
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, -12, 0.5, 0),
+				Size = UDim2.new(0, 5, 0, 5),
+				BackgroundColor3 = THEME.ElementStroke,
+				BorderSizePixel = 0,
+				Parent = row,
+			})
 			local rowIcon
 			local rowIconName = popts.icon
 			local label
@@ -6357,18 +6745,25 @@ function PERDITION.Window(opts)
 				return rowIcon
 			end
 			if rowIconSpec then applyIcon(ensureRowIcon(), rowIconSpec) end
+			local pageCode = string.format("p\u{2013}%02d", #tab.pages + 1)
+			local pageLower = string.lower(tostring(pname or "Page"))
 			label = Create("TextLabel", {
 				BackgroundTransparency = 1,
 				Position = UDim2.new(0, labelX, 0, 0),
-				Size = UDim2.new(1, -labelX - 10, 1, 0),
-				Font = FONT_MED,
-				Text = tostring(pname or "Page"),
-				TextColor3 = SIDEBAR_PAGE_TEXT,
-				TextSize = 13,
+				Size = UDim2.new(1, -labelX - 24, 1, 0),
+				Font = FONT_MONO,
+				RichText = true,
+				Text = string.format('<font color="#%s">%s</font>  %s', hexOf(THEME.Faint), pageCode, pageLower),
+				TextColor3 = THEME.SubText,
+				TextSize = 12,
 				TextXAlignment = Enum.TextXAlignment.Left,
 				TextTruncate = Enum.TextTruncate.AtEnd,
 				Parent = row,
 			})
+			label:SetAttribute("GlyphMono", true)
+			richRefresh[#richRefresh + 1] = function()
+				label.Text = string.format('<font color="#%s">%s</font>  %s', hexOf(THEME.Faint), pageCode, pageLower)
+			end
 			local pageBody = Create("ScrollingFrame", {
 				Size = UDim2.new(1, 0, 1, 0),
 				BackgroundTransparency = 1,
@@ -6382,7 +6777,7 @@ function PERDITION.Window(opts)
 			}, {
 				Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder }),
 				Create("UIPadding", {
-					PaddingLeft = UDim.new(0, 18), PaddingRight = UDim.new(0, 18),
+					PaddingLeft = UDim.new(0, 16), PaddingRight = UDim.new(0, 16),
 					PaddingTop = UDim.new(0, 2), PaddingBottom = UDim.new(0, 16),
 				}),
 			})
@@ -6391,7 +6786,7 @@ function PERDITION.Window(opts)
 			-- Responsive masonry: panels are positioned manually so they can smoothly
 			-- reflow (switch columns) when the window is resized. The column count
 			-- adapts to the width; each panel eases to its new slot on every change.
-			local GAP = 10
+			local GAP = 8   -- GLYPH 4px grid
 			local MINCOLW = 300   -- narrower than this and a column is dropped
 			local maxCols = math.clamp(math.floor(popts.columns or windowColumns), 1, 3)
 			local columnsHolder = Create("Frame", {
@@ -6519,7 +6914,7 @@ function PERDITION.Window(opts)
 				dropSlot = Create("Frame", {
 					BackgroundColor3 = accent, BackgroundTransparency = 0.86, BorderSizePixel = 0,
 					AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(0, 0, 0, 0),
-				}, { corner(10), stroke(accent, 1.5, 0.35),
+				}, { corner(2), stroke(accent, 1.5, 0.35),
 					Create("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, card.AbsoluteSize.Y / sc) }),
 					Create("TextLabel", { Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Font = FONT_SEMI, Text = "Drop here", TextColor3 = accent, TextTransparency = 0.15, TextSize = 13 }),
 				})
@@ -6611,7 +7006,7 @@ function PERDITION.Window(opts)
 			local page = {
 				name = tostring(pname or "Page"),
 				group = groupName,
-				row = row, label = label, icon = rowIcon,
+				row = row, label = label, icon = rowIcon, led = rowLed,
 				body = pageBody, columnsHolder = columnsHolder, active = false,
 			}
 			table.insert(tab.pages, page)
@@ -6667,6 +7062,7 @@ function PERDITION.Window(opts)
 		function Tab.Group(gname, ...)
 			if gname == Tab then gname = ... end -- tolerate Tab:Group("X")
 			groupCount = groupCount + 1
+			local gnum = groupCount   -- captured by value for the header + its refresh
 			-- hairline separating this group from the previous one
 			if groupCount > 1 then
 				Create("Frame", {
@@ -6705,13 +7101,18 @@ function PERDITION.Window(opts)
 				Position = UDim2.new(0, 0, 0.5, 0),
 				Size = UDim2.new(1, -22, 1, 0),
 				BackgroundTransparency = 1,
-				Font = FONT_SEMI,
-				Text = string.upper(tostring(gname or "Group")),
+				Font = FONT_MONO_SEMI,
+				RichText = true,
+				Text = string.format('<font color="#%s">g\u{2013}%02d</font>  %s', hexOf(THEME.Faint), gnum, string.lower(tostring(gname or "Group"))),
 				TextColor3 = THEME.SubText,
-				TextSize = 12,
+				TextSize = 11,
 				TextXAlignment = Enum.TextXAlignment.Left,
 				Parent = header,
 			})
+			headerLabel:SetAttribute("GlyphMono", true)
+			richRefresh[#richRefresh + 1] = function()
+				headerLabel.Text = string.format('<font color="#%s">g\u{2013}%02d</font>  %s', hexOf(THEME.Faint), gnum, string.lower(tostring(gname or "Group")))
+			end
 			Create("Frame", {
 				AnchorPoint = Vector2.new(0, 1),
 				Position = UDim2.new(0, 0, 1, 0),
@@ -6989,6 +7390,7 @@ function PERDITION.Window(opts)
 		-- halo behind the thin bar)
 		tabArea.Visible = not m
 		topbarFiller.Visible = not m
+		if minFps then minFps.Visible = m end
 		local tw = m and MIN_W or W
 		local th = m and TOPBAR_H or H
 		tween(root, { Size = UDim2.new(0, tw, 0, th) }, TI.OPEN)
@@ -7049,12 +7451,12 @@ function PERDITION.Window(opts)
 			Position = UDim2.new(0, 12, 0, 12),
 			Size = UDim2.new(0, 44, 0, 44),
 			BackgroundColor3 = THEME.Topbar,
-			Font = FONT_BOLD,
-			Text = "N",
+			Font = FONT_MONO_BOLD,
+			Text = "p",
 			TextColor3 = accent,
-			TextSize = 19,
+			TextSize = 17,
 			Parent = screenGui,
-		}, { corner(8), stroke(THEME.Stroke, 1, 0.15) })
+		}, { corner(3), stroke(THEME.Stroke, 1, 0.15) })
 		dropShadow(fab, 0.6)
 		accentProp(fab, "TextColor3", accent)
 		makeDraggable(fab, fab)
@@ -7091,6 +7493,7 @@ function PERDITION.Window(opts)
 			pcall(function() applyPageVisual(activeTab, activeTab.activePage, false) end)
 			pcall(function() setCrumb(activeTab, activeTab.activePage) end)
 		end
+		pcall(rePaint)   -- role-registered accent/accentdim instances follow
 	end
 
 	-- Win.SetHitbox(Color3 or nil): the fill/highlight colour of toggles and slider
@@ -7118,7 +7521,7 @@ function PERDITION.Window(opts)
 			Name = "OverlayPanel", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0),
 			Size = UDim2.new(0, 400, 0, 468), BackgroundColor3 = THEME.Background,
 			GroupTransparency = 1, Visible = false, ZIndex = 40001, Parent = screenGui,
-		}, { corner(14), stroke(THEME.Stroke, 1, 0.3), pScale })
+		}, { corner(3), stroke(THEME.Stroke, 1, 0), pScale })
 		siblingShadow(card)
 		-- absorb clicks on the panel's empty areas so they don't fall through to the
 		-- backdrop and close it (only the backdrop outside the card, or the X, closes
@@ -7216,7 +7619,7 @@ function PERDITION.Window(opts)
 
 		local themeSec = S.Section("THEME")
 		themeSec.Dropdown({ text = "Menu theme", icon = "sun-moon",
-			options = { "Paper", "Dark", "Midnight", "Abyss" }, default = "Paper",
+			options = { "Glyph", "Paper", "Dark", "Midnight", "Abyss" }, default = "Glyph",
 			callback = function(v) Win.SetTheme(v) end })
 		themeSec.ColorPicker({ text = "Accent color", icon = "droplet", default = accent,
 			-- pass the full value: a Color3 in Single, a ColorSequence in Multi (so the
@@ -7251,6 +7654,12 @@ function PERDITION.Window(opts)
 			callback = function(v) Win.SetTransparency(v / 100) end })
 		feelSec.Toggle({ text = "Animations", icon = "zap", default = true, desc = "Turn off for instant, motion-free UI.",
 			callback = function(on) Win.SetAnimations(on) end })
+		feelSec.Toggle({ text = "Boot sequence", icon = "power", default = not bootDisabled(), desc = "The dot-matrix power-on card when the menu loads.",
+			callback = function(on)
+				if not hasFileApi() then return end
+				fsEnsureFolder("Nemesis")
+				if on then fsDelete("Nemesis/glyph_boot.txt") else fsWrite("Nemesis/glyph_boot.txt", "0") end
+			end })
 		feelSec.Toggle({ text = "Watermark", icon = "tag", default = false, desc = "A small draggable badge on screen.",
 			callback = function(on) Win.SetWatermark(on, opts.title or "PERDITION") end })
 		feelSec.Slider({ text = "UI scale", icon = "maximize", min = 60, max = 140, default = 100, suffix = "%",
@@ -7387,7 +7796,7 @@ function PERDITION.Window(opts)
 			Font = FONT_MONO, PlaceholderText = "Paste your Google Gemini API key (optional)",
 			PlaceholderColor3 = THEME.Faint, Text = geminiKey, TextColor3 = THEME.Text, TextSize = 12,
 			TextXAlignment = Enum.TextXAlignment.Left, ClipsDescendants = true, ZIndex = 40002, Parent = card,
-		}, { corner(6), stroke(THEME.ElementStroke, 1, 0.4), padXY(10, 0) })
+		}, { corner(2), stroke(THEME.ElementStroke, 1, 0.4), padXY(10, 0) })
 		keyBox.FocusLost:Connect(function()
 			geminiKey = tostring(keyBox.Text or ""):gsub("^%s+", ""):gsub("%s+$", "")
 			PERDITION.AIKey = geminiKey
@@ -7416,7 +7825,7 @@ function PERDITION.Window(opts)
 				Font = FONT, Text = tostring(text), TextColor3 = isUser and accentTextColor(accent) or THEME.Text,
 				TextSize = 13, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left,
 				ZIndex = 40003, Parent = wrap,
-			}, { corner(9), Create("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10), PaddingTop = UDim.new(0, 7), PaddingBottom = UDim.new(0, 7) }), Create("UISizeConstraint", { MaxSize = Vector2.new(300, math.huge) }) })
+			}, { corner(3), Create("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10), PaddingTop = UDim.new(0, 7), PaddingBottom = UDim.new(0, 7) }), Create("UISizeConstraint", { MaxSize = Vector2.new(300, math.huge) }) })
 			if isUser then accentProp(bubble, "BackgroundColor3", accent) end
 			task.defer(function() pcall(function() messages.CanvasPosition = Vector2.new(0, messages.AbsoluteCanvasSize.Y) end) end)
 			return bubble
@@ -7425,13 +7834,13 @@ function PERDITION.Window(opts)
 
 		-- input row (textbox + send)
 		local inputRow = Create("Frame", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -10), Size = UDim2.new(1, -24, 0, 38), BackgroundTransparency = 1, ZIndex = 40002, Parent = card })
-		local inField = Create("Frame", { Size = UDim2.new(1, -46, 1, 0), BackgroundColor3 = THEME.Element, ZIndex = 40002, Parent = inputRow }, { corner(9), stroke(THEME.ElementStroke, 1, 0.4) })
+		local inField = Create("Frame", { Size = UDim2.new(1, -46, 1, 0), BackgroundColor3 = THEME.Element, ZIndex = 40002, Parent = inputRow }, { corner(2), stroke(THEME.ElementStroke, 1, 0.4) })
 		local inBox = Create("TextBox", {
 			Size = UDim2.new(1, -20, 1, 0), Position = UDim2.new(0, 12, 0, 0), BackgroundTransparency = 1, ClearTextOnFocus = false,
 			Font = FONT, PlaceholderText = "Message...", PlaceholderColor3 = THEME.Faint, Text = "",
 			TextColor3 = THEME.Text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 40003, Parent = inField,
 		})
-		local sendBtn = Create("TextButton", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 38, 0, 38), BackgroundColor3 = accent, AutoButtonColor = false, Text = "", ZIndex = 40002, Parent = inputRow }, { corner(9) })
+		local sendBtn = Create("TextButton", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 38, 0, 38), BackgroundColor3 = accent, AutoButtonColor = false, Text = "", ZIndex = 40002, Parent = inputRow }, { corner(2) })
 		accentProp(sendBtn, "BackgroundColor3", accent)
 		local sendIcon = Create("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, 16, 0, 16), BackgroundTransparency = 1, ImageColor3 = accentTextColor(accent), ZIndex = 40003, Parent = sendBtn })
 		applyIcon(sendIcon, resolveIcon("send"))
@@ -7512,6 +7921,11 @@ function PERDITION.Window(opts)
 		pcall(buildAI)
 	end
 
+	-- internal panels (settings / AI) took their cfg numbers during construction;
+	-- the user's own sections count from 01 (the spec sheet is theirs)
+	sectionSeq = 0
+	for k in pairs(codeCounts) do codeCounts[k] = nil end
+
 	Win.Instance = root
 	Win.Notify = PERDITION.Notify
 	return Win
@@ -7542,7 +7956,7 @@ end
 
 local Win = PERDITION.Window({
 	title = "PERDITION",
-	accent = Color3.fromRGB(156, 42, 32),   -- purple accent
+	accent = Color3.fromRGB(255, 45, 45),   -- GLYPH alarm red (the v4 identity)
 	columns = 2,                              -- panels per page (desktop)
 	toggleKey = Enum.KeyCode.RightShift,
 	game = "Showcase",                        -- sidebar footer, first line
@@ -7620,7 +8034,7 @@ s_co.ColorPicker({ text = "Double color", gradient = true, default = Color3.from
 s_co.ColorPicker({ text = "Multi color", multi = true, colors = { Color3.fromRGB(255, 80, 80), Color3.fromRGB(255, 220, 60), Color3.fromRGB(80, 220, 255) }, flag = "sc_c_multi" })
 s_co.Label("Right-click a swatch to copy its hex. In gradient mode you get two swatches; right-click a saved swatch to remove it.")
 s_co.Divider({ text = "MENU THEME" })
-s_co.ColorPicker({ text = "Menu accent (live)", default = Color3.fromRGB(156, 42, 32), flag = "sc_accent",
+s_co.ColorPicker({ text = "Menu accent (live)", default = Color3.fromRGB(255, 45, 45), flag = "sc_accent",
 	callback = function(color) Win.SetAccent(color) end })
 
 -- Page: Lists (Divider + Listbox)

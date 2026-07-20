@@ -508,8 +508,7 @@ PERDITION.Themes = {
 	},
 }
 
-local THEME = { Accent = Color3.fromRGB(156, 42, 32) }   -- oxblood (Paper & Ink)
-for k, v in pairs(PERDITION.Themes.Paper) do THEME[k] = v end
+local THEME = { Accent = Color3.fromRGB(255, 45, 45) }   -- GLYPH alarm red (v4 default identity)
 
 -- =====================================================================
 -- GLYPH v4 token engine (docs/GLYPH.md). Infrastructure for the v4 redesign:
@@ -603,6 +602,11 @@ local function rePaint()
 		end
 	end
 end
+
+-- the flagship identity as a first-class preset (SetTheme("Glyph"))
+PERDITION.Themes.Glyph = glyphGeneratePalette("ink", Color3.fromRGB(255, 45, 45), 0.5)
+-- THEME boots on the GLYPH identity; Paper/Dark/Midnight/Abyss stay available
+for k, v in pairs(PERDITION.Themes.Glyph) do THEME[k] = v end
 
 -- public: preview a GLYPH palette without applying it
 -- PERDITION.GenerateTheme("ink"|"paper", accentColor3?, contrast 0..1?) -> table
@@ -7610,7 +7614,7 @@ function PERDITION.Window(opts)
 
 		local themeSec = S.Section("THEME")
 		themeSec.Dropdown({ text = "Menu theme", icon = "sun-moon",
-			options = { "Paper", "Dark", "Midnight", "Abyss" }, default = "Paper",
+			options = { "Glyph", "Paper", "Dark", "Midnight", "Abyss" }, default = "Glyph",
 			callback = function(v) Win.SetTheme(v) end })
 		themeSec.ColorPicker({ text = "Accent color", icon = "droplet", default = accent,
 			-- pass the full value: a Color3 in Single, a ColorSequence in Multi (so the

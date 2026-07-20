@@ -1,9 +1,15 @@
-# NEMESIS
+# PERDITION (formerly NEMESIS)
 
 A UI library for Roblox script executors. It gives you a desktop style window with
 tabs, a sidebar, collapsible sections, and the usual set of controls (toggles,
 sliders, dropdowns, color pickers, and so on). The API is small and consistent, so
 building a menu is mostly a matter of calling the element you want on a section.
+
+**v4 "GLYPH"**: industrial monochrome hardware. One alarm-red accent on an
+ink-and-paper scale, square LED toggles, RobotoMono part codes on every
+section and element (`cfg–01`, `tgl–02`), raw-data readouts, a dot-matrix
+boot sequence, and instant 0ms states. Same API as v3 — old scripts drop in.
+Design spec: `docs/GLYPH.md`.
 
 MIT licensed. Works with any executor that supports `loadstring` and `game:HttpGet`.
 
@@ -334,20 +340,32 @@ run without a key.
 
 ## Theming
 
-Four presets ship with the library: `Dark` (default), `Midnight`, `Abyss` and
-`Light`. Pick one at creation or switch live, the whole menu recolors in place:
+The default identity is `Glyph` (ink monochrome + alarm red). The v3 presets
+still ship: `Paper`, `Dark`, `Midnight` and `Abyss`. Pick one at creation or
+switch live, the whole menu recolors in place:
 
 ```lua
-NEMESIS.Window({ theme = "Midnight" })
+PERDITION.Window({ theme = "Dark" })
 -- or at runtime, for example from a dropdown callback:
-Window.SetTheme("Light")
+Window.SetTheme("Paper")
+```
+
+v4 also generates palettes from three knobs (base / accent / contrast), so a
+whole coherent theme comes from one accent colour:
+
+```lua
+Window.SetTheme({ base = "ink", accent = Color3.fromRGB(255, 170, 0), contrast = 0.6 })
+-- base: "ink" (dark) or "paper" (light); contrast: 0..1
+
+-- preview a generated palette without applying it:
+local pal = PERDITION.GenerateTheme("paper", Color3.fromRGB(255, 45, 45), 0.5)
 ```
 
 You can also override individual keys per window, or pass a full table to
 `SetTheme`:
 
 ```lua
-NEMESIS.Window({
+PERDITION.Window({
     accent = Color3.fromRGB(0, 200, 120),
     theme = {
         Background = Color3.fromRGB(10, 10, 12),

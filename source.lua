@@ -927,6 +927,13 @@ end
 
 -- Accent registry: callbacks run on Win.SetAccent so the menu recolours live
 local accentHooks = {}
+-- GLYPH boot kill-switch persisted to disk (Settings > Boot sequence)
+local function bootDisabled()
+	if not hasFileApi() then return false end
+	local ok, data = pcall(fsRead, "Nemesis/glyph_boot.txt")
+	return ok and data == "0"
+end
+
 local function onAccent(fn) accentHooks[#accentHooks + 1] = fn end
 local function accentLight(c) return c:Lerp(Color3.fromRGB(255, 255, 255), 0.35) end
 -- accent / hitbox can be a Color3 OR a ColorSequence (a Multi gradient). flat
@@ -1418,26 +1425,44 @@ local function newRow(parent, height)
 	return row
 end
 
+-- GLYPH element part codes: every row element gets an auto-indexed mono code
+-- (tgl–01, sld–02) at its left edge. Counters reset per window so the user's
+-- own elements number from 01 (settings/AI pre-consume theirs, like cfg).
+local codeCounts = {}
+
 -- Left-hand label (single line by default; optional muted description line).
 -- reserveScale + reservePx clear room on the right for the control:
 -- label width = (1 - reserveScale) scale, minus reservePx pixels.
-local function rowText(parent, text, desc, reserveScale, reservePx, icon)
+-- code (optional): a GLYPH part-code prefix ("tgl", "sld", ...) shown dim-left.
+local function rowText(parent, text, desc, reserveScale, reservePx, icon, code)
 	reserveScale = reserveScale or 0
 	reservePx = reservePx or 48
 	local indent = 0
+	if code then
+		codeCounts[code] = (codeCounts[code] or 0) + 1
+		local cl = Create("TextLabel", {
+			AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, -2, 0.5, 0),
+			Size = UDim2.new(0, 26, 1, 0), BackgroundTransparency = 1,
+			Font = FONT_MONO, Text = string.format("%s\u{2013}%02d", code, codeCounts[code]),
+			TextColor3 = THEME.Faint, TextSize = 9, TextXAlignment = Enum.TextXAlignment.Left, Parent = parent,
+		})
+		cl:SetAttribute("GlyphMono", true)
+		paintRole(cl, "TextColor3", "mute")
+		indent = 28
+	end
 	local iconImg
 	local iconSpec = resolveIcon(icon)
 	if iconSpec then
 		iconImg = Create("ImageLabel", {
 			AnchorPoint = Vector2.new(0, 0.5),
-			Position = UDim2.new(0, 0, 0.5, 0),
+			Position = UDim2.new(0, indent, 0.5, 0),
 			Size = UDim2.new(0, 16, 0, 16),
 			BackgroundTransparency = 1,
 			ImageColor3 = THEME.SubText,
 			Parent = parent,
 		})
 		applyIcon(iconImg, iconSpec)
-		indent = 24
+		indent = indent + 24
 	end
 	local lblSize = UDim2.new(1 - reserveScale, -reservePx - indent, 1, 0)
 	tagSearch(parent, (desc and desc ~= "") and (tostring(text) .. " " .. tostring(desc)) or text)
@@ -1807,7 +1832,7 @@ function Elements.Button(parent, accent, opts)
 		Text = "",
 		Parent = row,
 	})
-	rowText(row, opts.text, opts.desc, 0, 90, opts.icon)
+	rowText(row, opts.text, opts.desc, 0, 90, opts.icon, "btn")
 	-- GLYPH chip: square, mono micro-label, hairline. The confirm blip (accent
 	-- seam flash) is the one hue moment - it stays, now decaying faster.
 	local chipStroke = stroke(THEME.ElementStroke, 1, 0)
@@ -1856,7 +1881,7 @@ function Elements.Toggle(parent, accent, opts)
 	onHitbox(function(c) hitbox = c end)
 	local state = opts.default and true or false
 	local row = newRow(parent, opts.desc and 50 or ROW_H)
-	local rowLabel, rowIconImg = rowText(row, opts.text, opts.desc, 0, 32, opts.icon)
+	local rowLabel, rowIconImg = rowText(row, opts.text, opts.desc, 0, 32, opts.icon, "tgl")
 
 	-- filled-icon effect: when ON, the row icon lights up (white) inside a filled
 	-- accent rounded chip, the SF Symbols "filled badge" look
@@ -1977,7 +2002,7 @@ function Elements.Slider(parent, accent, opts)
 	end
 
 	local row = newRow(parent, opts.desc and 50 or ROW_H)
-	rowText(row, opts.text, opts.desc, SLIDER_FRAC, 12, opts.icon)
+	rowText(row, opts.text, opts.desc, SLIDER_FRAC, 12, opts.icon, "sld")
 
 	local cluster = Create("Frame", {
 		AnchorPoint = Vector2.new(1, 0.5),
@@ -2143,7 +2168,7 @@ function Elements.Dropdown(parent, accent, opts)
 	local single = (not multi) and opts.default or nil
 
 	local row = newRow(parent, ROW_H)
-	rowText(row, opts.text, opts.desc, FIELD_FRAC, 16, opts.icon)
+	rowText(row, opts.text, opts.desc, FIELD_FRAC, 16, opts.icon, "drp")
 	local field = fieldBox(row)
 
 	local current = Create("TextLabel", {
@@ -2464,7 +2489,7 @@ function Elements.Input(parent, accent, opts)
 	opts = opts or {}
 	onAccent(function(c) accent = c end)
 	local row = newRow(parent, ROW_H)
-	rowText(row, opts.text, opts.desc, FIELD_FRAC, 16, opts.icon)
+	rowText(row, opts.text, opts.desc, FIELD_FRAC, 16, opts.icon, "inp")
 	-- starts small, grows with the text up to a cap, then clips
 	-- (past the cap the front scrolls off instead of spilling outside the field)
 	local MIN_W, MAX_W = 84, 220
@@ -2551,7 +2576,7 @@ function Elements.Keybind(parent, accent, opts)
 	local mode = opts.mode or "Toggle"
 	local key = opts.default
 	local row = newRow(parent, ROW_H)
-	rowText(row, opts.text, opts.desc, FIELD_FRAC, 16, opts.icon)
+	rowText(row, opts.text, opts.desc, FIELD_FRAC, 16, opts.icon, "key")
 	-- Syde keybind: a pill that auto-sizes to fit the key text and thickens its
 	-- stroke while listening
 	local field = Create("Frame", {
@@ -2744,7 +2769,7 @@ function Elements.ColorPicker(parent, accent, opts)
 	end
 
 	local row = newRow(parent, ROW_H)
-	rowText(row, opts.text, opts.desc, 0, 76, opts.icon)
+	rowText(row, opts.text, opts.desc, 0, 76, opts.icon, "clr")
 
 	-- soft colour glow behind the swatch (gen2 look); made before sw1 so it renders behind it
 	local swGlowArt = loadArt("cal1_glow_dot.png")
@@ -3269,7 +3294,7 @@ function Elements.ProgressBar(parent, accent, opts)
 	local span = (max - min) == 0 and 1 or (max - min)
 	local value = math.clamp(tonumber(opts.value) or min, min, max)
 	local row = newRow(parent, opts.desc and 50 or ROW_H)
-	rowText(row, opts.text or "Progress", opts.desc, 0.42, 44, opts.icon)
+	rowText(row, opts.text or "Progress", opts.desc, 0.42, 44, opts.icon, "prg")
 	local pct = Create("TextLabel", {
 		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 44, 1, 0),
 		BackgroundTransparency = 1, Font = FONT_MONO, Text = "0" .. (opts.suffix or "%"),
@@ -3302,7 +3327,7 @@ function Elements.Stat(parent, accent, opts)
 	opts = opts or {}
 	onAccent(function(c) accent = c end)
 	local row = newRow(parent, ROW_H)
-	rowText(row, opts.text or opts.label or "Stat", opts.desc, 0.4, 12, opts.icon)
+	rowText(row, opts.text or opts.label or "Stat", opts.desc, 0.4, 12, opts.icon, "stt")
 	local val = Create("TextLabel", {
 		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0.5, 0, 1, 0),
 		BackgroundTransparency = 1, Font = FONT_MONO_BOLD, Text = tostring(opts.value or "0"),
@@ -3326,10 +3351,19 @@ function Elements.Checkbox(parent, accent, opts)
 	onHitbox(function(c) hitbox = c end)
 	local state = opts.default and true or false
 	local row = newRow(parent, ROW_H)
+	codeCounts["chk"] = (codeCounts["chk"] or 0) + 1
+	local chkCode = Create("TextLabel", {
+		AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, -2, 0.5, 0),
+		Size = UDim2.new(0, 26, 1, 0), BackgroundTransparency = 1,
+		Font = FONT_MONO, Text = string.format("chk\u{2013}%02d", codeCounts["chk"]),
+		TextColor3 = THEME.Faint, TextSize = 9, TextXAlignment = Enum.TextXAlignment.Left, Parent = row,
+	})
+	chkCode:SetAttribute("GlyphMono", true)
+	paintRole(chkCode, "TextColor3", "mute")
 	-- GLYPH LED well (same diode language as Toggle): dead dot off, accent
 	-- diode on with a 70ms pop, hairline tints while lit
 	local box = Create("Frame", {
-		AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(0, 18, 0, 18),
+		AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 28, 0.5, 0), Size = UDim2.new(0, 18, 0, 18),
 		BackgroundColor3 = THEME.ToggleOff, Parent = row,
 	}, { corner(2), stroke(THEME.ElementStroke, 1, 0) })
 	paintRole(box, "BackgroundColor3", "off")
@@ -3339,7 +3373,7 @@ function Elements.Checkbox(parent, accent, opts)
 		Size = UDim2.new(0, 4, 0, 4), BackgroundColor3 = THEME.ElementStroke, BorderSizePixel = 0, Parent = box,
 	})
 	Create("TextLabel", {
-		Position = UDim2.new(0, 28, 0, 0), Size = UDim2.new(1, -28, 1, 0), BackgroundTransparency = 1,
+		Position = UDim2.new(0, 56, 0, 0), Size = UDim2.new(1, -56, 1, 0), BackgroundTransparency = 1,
 		Font = FONT_MED, Text = tostring(opts.text or "Checkbox"), TextColor3 = THEME.Text, TextSize = 13,
 		TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = row,
 	})
@@ -3721,7 +3755,7 @@ function Elements.RippleButton(parent, accent, opts)
 		BackgroundColor3 = THEME.Element, BackgroundTransparency = 1, AutoButtonColor = false, Text = "",
 		ClipsDescendants = true, Parent = row,
 	}, { corner(2) })
-	local label = rowText(row, opts.text or "Action", opts.desc, 0, 0, opts.icon)
+	local label = rowText(row, opts.text or "Action", opts.desc, 0, 0, opts.icon, "btn")
 	surface.MouseEnter:Connect(function() surface.BackgroundTransparency = 0.85 end)
 	surface.MouseLeave:Connect(function() surface.BackgroundTransparency = 1 end)
 	surface.InputBegan:Connect(function(input)
@@ -3761,7 +3795,7 @@ function Elements.HoldButton(parent, accent, opts)
 	local fillGrad = Create("UIGradient", {})
 	local fill = Create("Frame", { Size = UDim2.new(0, 0, 1, 0), BackgroundColor3 = accent, BackgroundTransparency = 0.6, ZIndex = 0, Parent = surface }, { fillGrad })
 	accentProp(fill, "BackgroundColor3", accent); accentGrad(fillGrad, accent)
-	local label = rowText(row, opts.text or "Hold to confirm", opts.desc, 0, 0, opts.icon)
+	local label = rowText(row, opts.text or "Hold to confirm", opts.desc, 0, 0, opts.icon, "btn")
 	local holding, tw = false, nil
 	local session = 0   -- invalidates a prior press's pending completion timer
 	local function cancel()
@@ -4064,7 +4098,7 @@ function Elements.SegmentedPicker(parent, accent, opts)
 	local options = opts.options or opts.Options or { "A", "B" }
 	local n = #options
 	local row = newRow(parent, opts.desc and 50 or ROW_H)
-	rowText(row, opts.text or opts.name or "Picker", opts.desc, 0.55, 10, opts.icon)
+	rowText(row, opts.text or opts.name or "Picker", opts.desc, 0.55, 10, opts.icon, "seg")
 	local track = Create("Frame", {
 		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0.55, 0, 0, 24),
 		BackgroundColor3 = THEME.Element, ClipsDescendants = true, Parent = row,
@@ -5099,7 +5133,7 @@ function PERDITION.Window(opts)
 
 	-- scroll region (tab sidebars stack here, one visible at a time), leaving
 	-- room for the status footer pinned to the card's bottom
-	local SB_FOOTER_H = 50
+	local SB_FOOTER_H = 62   -- GLYPH: room for the telemetry line
 	local sidebarScroll = Create("ScrollingFrame", {
 		Size = UDim2.new(1, 0, 1, -SB_FOOTER_H),
 		BackgroundTransparency = 1,
@@ -5141,7 +5175,7 @@ function PERDITION.Window(opts)
 	end)
 	local avatar = Create("ImageLabel", {
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 13, 0.5, 0),
+		Position = UDim2.new(0, 13, 0.5, -7),
 		Size = UDim2.new(0, 34, 0, 34),
 		BackgroundColor3 = THEME.Element,
 		Image = profId and ("rbxthumb://type=AvatarHeadShot&id=%d&w=100&h=100"):format(profId) or "",
@@ -5159,7 +5193,7 @@ function PERDITION.Window(opts)
 		Parent = avatar,
 	}, { stroke(THEME.Sidebar, 2.5, 0) })
 	local gameLabel = Create("TextLabel", {
-		Position = UDim2.new(0, 56, 0, 7),
+		Position = UDim2.new(0, 56, 0, 3),
 		Size = UDim2.new(1, -132, 0, 17),
 		BackgroundTransparency = 1,
 		Font = FONT_SEMI,
@@ -5171,7 +5205,7 @@ function PERDITION.Window(opts)
 		Parent = sbFooter,
 	})
 	local statusLabel = Create("TextLabel", {
-		Position = UDim2.new(0, 56, 0, 26),
+		Position = UDim2.new(0, 56, 0, 20),
 		Size = UDim2.new(1, -132, 0, 15),
 		BackgroundTransparency = 1,
 		Font = FONT,
@@ -5182,48 +5216,64 @@ function PERDITION.Window(opts)
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Parent = sbFooter,
 	})
-	-- live fps chip: a green pulse dot + mono readout in a bordered pill
-	local fpsChip = Create("Frame", {
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -12, 0.5, 0),
-		Size = UDim2.new(0, 66, 0, 22),
-		BackgroundColor3 = THEME.Element,
+	-- GLYPH telemetry line: raw instrument readout across the footer's bottom
+	-- edge (fps - ping - clock) with a 1Hz heartbeat LED. The one permitted
+	-- loop in the whole UI, because hardware LEDs blink.
+	local teleLed = Create("Frame", {
+		Position = UDim2.new(0, 13, 0, 48),
+		Size = UDim2.new(0, 5, 0, 5),
+		BackgroundColor3 = seqPrimary(accent),
+		BorderSizePixel = 0,
 		Parent = sbFooter,
-	}, { corner(3), stroke(THEME.ElementStroke, 1, 0.4) })
-	local fpsDot = Create("Frame", {
-		AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0),
-		Size = UDim2.new(0, 5, 0, 5), BackgroundColor3 = THEME.Good, BorderSizePixel = 0, Parent = fpsChip,
 	})
-	local fpsLabel = Create("TextLabel", {
-		Size = UDim2.new(1, -22, 1, 0),
-		Position = UDim2.new(0, 17, 0, 0),
+	accentProp(teleLed, "BackgroundColor3", accent)
+	local teleLabel = Create("TextLabel", {
+		Position = UDim2.new(0, 24, 0, 44),
+		Size = UDim2.new(1, -34, 0, 14),
 		BackgroundTransparency = 1,
 		Font = FONT_MONO,
 		Text = "",
-		TextColor3 = THEME.SubText,
-		TextSize = 12,
-		TextXAlignment = Enum.TextXAlignment.Center,
-		Parent = fpsChip,
+		TextColor3 = THEME.Faint,
+		TextSize = 10,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = sbFooter,
 	})
-	fpsLabel:SetAttribute("GlyphMono", true)
+	teleLabel:SetAttribute("GlyphMono", true)
+	paintRole(teleLabel, "TextColor3", "mute")
+	-- minimized bar readout (wordmark + LED + fps, per the GLYPH chrome spec)
+	local minFps = Create("TextLabel", {
+		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -150, 0.5, 0),
+		Size = UDim2.new(0, 70, 1, 0), BackgroundTransparency = 1, Visible = false,
+		Font = FONT_MONO, Text = "", TextColor3 = THEME.Faint, TextSize = 10,
+		TextXAlignment = Enum.TextXAlignment.Right, Parent = topbar,
+	})
+	minFps:SetAttribute("GlyphMono", true)
+	paintRole(minFps, "TextColor3", "mute")
+	local statsSvc
+	pcall(function() statsSvc = game:GetService("Stats") end)
 	local fpsConn
 	local sessConn   -- Settings SESSION heartbeat; torn down in Win.Destroy
 	do
-		-- live FPS readout only. Motion is user-controlled via the Settings
-		-- "Animations" toggle; nothing auto-reduces animation on fps dips.
-		local frames, acc = 0, 0
+		local frames, acc, blink = 0, 0, false
 		local ok = pcall(function()
 			fpsConn = RunService.Heartbeat:Connect(function(dt)
 				frames = frames + 1
 				acc = acc + (tonumber(dt) or 0)
 				if acc >= 0.5 then
 					local fps = math.floor(frames / acc + 0.5)
-					fpsLabel.Text = "fps " .. tostring(fps)
 					frames, acc = 0, 0
+					local ping = 0
+					pcall(function()
+						ping = math.floor(statsSvc.Network.ServerStatsItem["Data Ping"]:GetValue())
+					end)
+					teleLabel.Text = string.format("fps %d \u{00B7} ping %d \u{00B7} %s", fps, ping, os.date("%H:%M:%S"))
+					if minFps.Visible then minFps.Text = "fps " .. tostring(fps) end
+					blink = not blink
+					teleLed.BackgroundTransparency = blink and 0 or 0.65
 				end
 			end)
 		end)
-		if not ok then fpsChip.Visible = false end
+		if not ok then teleLabel.Visible = false teleLed.Visible = false end
 	end
 
 	local content = Create("Frame", {
@@ -5395,7 +5445,7 @@ function PERDITION.Window(opts)
 		return true
 	end
 	root.Visible = false
-	if opts.boot ~= false and not opts.key and not reducedMotion then
+	if opts.boot ~= false and not opts.key and not reducedMotion and not bootDisabled() then
 		if not playBoot(revealWindow) then revealWindow() end
 	else
 		revealWindow()
@@ -7331,6 +7381,7 @@ function PERDITION.Window(opts)
 		-- halo behind the thin bar)
 		tabArea.Visible = not m
 		topbarFiller.Visible = not m
+		if minFps then minFps.Visible = m end
 		local tw = m and MIN_W or W
 		local th = m and TOPBAR_H or H
 		tween(root, { Size = UDim2.new(0, tw, 0, th) }, TI.OPEN)
@@ -7594,6 +7645,12 @@ function PERDITION.Window(opts)
 			callback = function(v) Win.SetTransparency(v / 100) end })
 		feelSec.Toggle({ text = "Animations", icon = "zap", default = true, desc = "Turn off for instant, motion-free UI.",
 			callback = function(on) Win.SetAnimations(on) end })
+		feelSec.Toggle({ text = "Boot sequence", icon = "power", default = not bootDisabled(), desc = "The dot-matrix power-on card when the menu loads.",
+			callback = function(on)
+				if not hasFileApi() then return end
+				fsEnsureFolder("Nemesis")
+				if on then fsDelete("Nemesis/glyph_boot.txt") else fsWrite("Nemesis/glyph_boot.txt", "0") end
+			end })
 		feelSec.Toggle({ text = "Watermark", icon = "tag", default = false, desc = "A small draggable badge on screen.",
 			callback = function(on) Win.SetWatermark(on, opts.title or "PERDITION") end })
 		feelSec.Slider({ text = "UI scale", icon = "maximize", min = 60, max = 140, default = 100, suffix = "%",
@@ -7858,6 +7915,7 @@ function PERDITION.Window(opts)
 	-- internal panels (settings / AI) took their cfg numbers during construction;
 	-- the user's own sections count from 01 (the spec sheet is theirs)
 	sectionSeq = 0
+	for k in pairs(codeCounts) do codeCounts[k] = nil end
 
 	Win.Instance = root
 	Win.Notify = PERDITION.Notify

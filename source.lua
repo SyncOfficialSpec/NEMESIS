@@ -6831,9 +6831,17 @@ function PERDITION.Window(opts)
 						local h = heights[card] or live
 						local ci = 1
 						for i = 2, cols do if colH[i] < colH[ci] then ci = i end end
-						card.Size = UDim2.new(0, colW, 0, 0)
-						local target = UDim2.fromOffset((ci - 1) * (colW + GAP), colH[ci])
-						if animate then tween(card, { Position = target }, TI.SYDE_REFLOW) else card.Position = target end
+					-- smooth rearrange animates BOTH axes of the move: the column
+					-- width and the slot position. Snapping the width while gliding
+					-- the position read as a broken half-animation.
+					local sizeTarget = UDim2.new(0, colW, 0, 0)
+					local target = UDim2.fromOffset((ci - 1) * (colW + GAP), colH[ci])
+					if animate then
+						tween(card, { Size = sizeTarget, Position = target }, TI.SYDE_REFLOW)
+					else
+						card.Size = sizeTarget
+						card.Position = target
+					end
 						colH[ci] = colH[ci] + h + GAP
 					end
 				end

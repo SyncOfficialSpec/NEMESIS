@@ -2234,7 +2234,7 @@ function Elements.Dropdown(parent, accent, opts)
 		Visible = false,
 		ZIndex = 50001,
 	}, {
-		corner(3),
+		corner(0),   -- GLYPH sharp edges; UIScale used to blow the radius up visually
 		panelStroke,
 		panelScale,
 	})
@@ -2301,7 +2301,7 @@ function Elements.Dropdown(parent, accent, opts)
 				Text = "",
 				ZIndex = 50003,
 				Parent = holder,
-			}, { corner(2) })
+			}, { corner(0) })
 			paintRole(ob, "BackgroundColor3", "oninv")
 			local dot = Create("Frame", {
 				AnchorPoint = Vector2.new(0, 0.5),
@@ -4350,6 +4350,7 @@ function makeSection(host, accent, title, startClosed)
 			open = want
 			local info = animate == false and TweenInfo.new(0) or SEC_SLIDE
 			tween(chev, { Rotation = open and 0 or 180 }, animate == false and TweenInfo.new(0) or TI.FAST)
+			if headRule then headRule.Visible = open end
 			if open then
 				bodyWrap.AutomaticSize = Enum.AutomaticSize.None
 				local target = 0

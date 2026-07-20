@@ -27,7 +27,7 @@ local NEMESIS = (function()
 
 local PERDITION = {}
 PERDITION.Flags = {}
-PERDITION.Version = "4.0.0"
+PERDITION.Version = "1.0.0"
 
 -- Services (cloneref-safe)
 local function getService(name)
@@ -102,8 +102,8 @@ end
 -- versioned path: bump the filename (URL + on-disk cache) whenever the logo
 -- changes, so neither the GitHub CDN nor the executor serves a stale image
 -- grayscale logo so ImageColor3 can tint it to any hue at runtime
-local LOGO_URL = "https://raw.githubusercontent.com/SyncOfficialSpec/NEMESIS/main/assets/nemesis_wordmark_v1.png"
-local LOGO_FILE = "nemesis_wordmark_v1.png"
+local LOGO_URL = "https://raw.githubusercontent.com/SyncOfficialSpec/NEMESIS/main/assets/perdition_wordmark_v1.png"
+local LOGO_FILE = "perdition_wordmark_v1.png"
 local brandLogoCache = nil -- nil = untried, false = failed, string = rbxasset id
 
 local function customAssetFn()
@@ -182,7 +182,7 @@ local function loadIconSheet(n)
 	local getAsset = customAssetFn()
 	if not getAsset or type(writefile) ~= "function" then return nil end
 	pcall(function()
-		local file = "nemesis_icons_" .. ICONS_VER .. "_" .. n .. ".png"
+		local file = "perdition_icons_" .. ICONS_VER .. "_" .. n .. ".png"
 		local have = type(isfile) == "function" and isfile(file)
 		if not have then
 			local data = game:HttpGet(ICONS_BASE .. "icons_" .. ICONS_VER .. "_" .. n .. ".png")
@@ -213,7 +213,7 @@ local function loadArt(name)
 	local getAsset = customAssetFn()
 	if not getAsset or type(writefile) ~= "function" then return nil end
 	pcall(function()
-		local file = "nemesis_art_" .. name
+		local file = "perdition_art_" .. name
 		local have = type(isfile) == "function" and isfile(file)
 		if not have then
 			local data = game:HttpGet(ART_BASE .. name)
@@ -513,12 +513,12 @@ PERDITION.Themes = {
 	},
 }
 
-local THEME = { Accent = Color3.fromRGB(255, 45, 45) }   -- GLYPH alarm red (v4 default identity)
+local THEME = { Accent = Color3.fromRGB(255, 45, 45) }   -- GLYPH alarm red (GLYPH default identity)
 
 -- =====================================================================
--- GLYPH v4 token engine (docs/GLYPH.md). Infrastructure for the v4 redesign:
+-- GLYPH token engine (docs/GLYPH.md). Infrastructure for the GLYPH identity:
 -- a 3-knob palette generator (base / accent / contrast) plus a role-tag
--- painting registry. v3 paths are untouched: legacy presets stay literal and
+-- painting registry. legacy preset paths are untouched: legacy presets stay literal and
 -- the hex-match re-theme walk still recolours anything not registered.
 -- =====================================================================
 
@@ -939,7 +939,7 @@ local accentHooks = {}
 -- GLYPH boot kill-switch persisted to disk (Settings > Boot sequence)
 local function bootDisabled()
 	if not hasFileApi() then return false end
-	local ok, data = pcall(fsRead, "Nemesis/glyph_boot.txt")
+	local ok, data = pcall(fsRead, "Perdition/glyph_boot.txt")
 	return ok and data == "0"
 end
 
@@ -990,21 +990,25 @@ end
 -- the classic Rayfield window shadow, vendored into this repo with the panel
 -- region punched out so it can sit behind OR inside any panel without tinting
 local RF_SHADOW = { name = "cal4_shadow.png", slice = Rect.new(91, 91, 187, 328), pad = 55 }
-local function dropShadow(parent, transparency)
-	local art = loadArt(RF_SHADOW.name)
+-- square-cornered shadow for GLYPH sharp (corner 0) popovers: the rounded art
+-- read as a curved inner boundary around sharp panels
+local SQ_SHADOW = { name = "gly1_shadow.png", slice = Rect.new(48, 48, 80, 80), pad = 26 }
+local function dropShadow(parent, transparency, square)
+	local spec = square and SQ_SHADOW or RF_SHADOW
+	local art = loadArt(spec.name)
 	if not art then return nil end
 	return Create("ImageLabel", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(0.5, 0, 0.5, 0),
-		Size = UDim2.new(1, RF_SHADOW.pad * 2, 1, RF_SHADOW.pad * 2),
+		Size = UDim2.new(1, spec.pad * 2, 1, spec.pad * 2),
 		BackgroundTransparency = 1,
 		Image = art,
 		-- the Rayfield shadow asset is white; tint it a warm near-black so it reads
 		-- as a soft shadow on the paper ground rather than a harsh cold halo
-		ImageColor3 = Color3.fromRGB(34, 27, 18),
+		ImageColor3 = square and Color3.fromRGB(10, 10, 10) or Color3.fromRGB(34, 27, 18),
 		ImageTransparency = transparency or 0.55,
 		ScaleType = Enum.ScaleType.Slice,
-		SliceCenter = RF_SHADOW.slice,
+		SliceCenter = spec.slice,
 		ZIndex = 0,
 		Parent = parent,
 	})
@@ -2141,7 +2145,7 @@ local function dropdownLayer(field)
 	local layer = _ddLayers[sg]
 	if not layer or not layer.Parent then
 		layer = Create("Frame", {
-			Name = "NemesisDropdownLayer",
+			Name = "PerditionDropdownLayer",
 			Size = UDim2.new(1, 0, 1, 0),
 			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
@@ -2232,19 +2236,19 @@ function Elements.Dropdown(parent, accent, opts)
 	-- GLYPH: the popover is an INVERSION plate (paper on ink / ink on paper)
 	-- with the one static drop - it never blends into the card it floats over
 	local panel = Create("Frame", {
-		Name = "NemesisDropdown",
+		Name = "PerditionDropdown",
 		BackgroundColor3 = roleColor("plateinv"),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Visible = false,
 		ZIndex = 50001,
 	}, {
-		corner(3),
+		corner(0),   -- GLYPH sharp edges; UIScale used to blow the radius up visually
 		panelStroke,
 		panelScale,
 	})
 	paintRole(panel, "BackgroundColor3", "plateinv")
-	local panelShadow = dropShadow(panel, 1)
+	local panelShadow = dropShadow(panel, 1, true)   -- square art for the sharp panel
 	local holder = Create("ScrollingFrame", {
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, 6),
@@ -2306,7 +2310,7 @@ function Elements.Dropdown(parent, accent, opts)
 				Text = "",
 				ZIndex = 50003,
 				Parent = holder,
-			}, { corner(2) })
+			}, { corner(0) })
 			paintRole(ob, "BackgroundColor3", "oninv")
 			local dot = Create("Frame", {
 				AnchorPoint = Vector2.new(0, 0.5),
@@ -2341,7 +2345,7 @@ function Elements.Dropdown(parent, accent, opts)
 				pcall(function() olabel.Font = of end)
 				-- pin this label to its own font so a live menu-font swap can't
 				-- overwrite the per-option preview
-				pcall(function() olabel:SetAttribute("NemesisKeepFont", true) end)
+				pcall(function() olabel:SetAttribute("PerditionKeepFont", true) end)
 			end
 			local function apply(animate, visible)
 				local on = multi and selected[v] or (single == v)
@@ -4355,6 +4359,7 @@ function makeSection(host, accent, title, startClosed)
 			open = want
 			local info = animate == false and TweenInfo.new(0) or SEC_SLIDE
 			tween(chev, { Rotation = open and 0 or 180 }, animate == false and TweenInfo.new(0) or TI.FAST)
+			if headRule then headRule.Visible = open end
 			if open then
 				bodyWrap.AutomaticSize = Enum.AutomaticSize.None
 				local target = 0
@@ -4465,7 +4470,7 @@ end
 
 -- Key system. Window({ key = { keys = {"..."}, note = "...", saveKey = true } })
 -- shows a small unlock card and blocks until a listed key is entered. A saved
--- key (Nemesis/key.txt by default) skips the prompt on later runs. Closing the
+-- key (Perdition/key.txt by default) skips the prompt on later runs. Closing the
 -- card raises an error so the caller's script stops instead of running keyless.
 local function keyGate(kopts, windowTitle)
 	local keys = {}
@@ -4484,7 +4489,7 @@ local function keyGate(kopts, windowTitle)
 	end
 
 	local saveKey = kopts.saveKey ~= false
-	local keyFile = kopts.fileName or "Nemesis/key.txt"
+	local keyFile = kopts.fileName or "Perdition/key.txt"
 	if saveKey and hasFileApi() then
 		local saved = fsRead(keyFile)
 		if saved and matches(saved) then return true end
@@ -4593,7 +4598,7 @@ local function keyGate(kopts, windowTitle)
 	local function trySubmit()
 		if matches(box.Text) then
 			if saveKey and hasFileApi() then
-				fsEnsureFolder("Nemesis")
+				fsEnsureFolder("Perdition")
 				fsWrite(keyFile, (box.Text:gsub("^%s+", ""):gsub("%s+$", "")))
 			end
 			finish(true)
@@ -4841,7 +4846,7 @@ function PERDITION.Window(opts)
 			Size = UDim2.new(0, 90, 1, 0),
 			BackgroundTransparency = 1,
 			Font = FONT_MONO,
-			Text = "prd–" .. tostring(PERDITION.Version or "4.0.0"),
+			Text = "prd–" .. tostring(PERDITION.Version or "1.0.0"),
 			TextColor3 = THEME.Faint,
 			TextSize = 10,
 			TextXAlignment = Enum.TextXAlignment.Left,
@@ -4955,8 +4960,12 @@ function PERDITION.Window(opts)
 		if not target then dockIndicator.BackgroundTransparency = 1; return end
 		local x, w = 4, 0
 		pcall(function()
-			x = target.AbsolutePosition.X - dockTrack.AbsolutePosition.X
-			w = target.AbsoluteSize.X
+			-- Absolute* are RENDERED (UIScale-multiplied) pixels; the indicator is
+			-- positioned in LOCAL units inside the scaled tree, so divide back out
+			local s = rootScale.Scale
+			if not s or s <= 0 then s = 1 end
+			x = (target.AbsolutePosition.X - dockTrack.AbsolutePosition.X) / s
+			w = target.AbsoluteSize.X / s
 		end)
 		if w <= 0 then dockIndicator.BackgroundTransparency = 1; return end
 		-- GLYPH instant law: the indicator snaps, it never glides
@@ -5417,7 +5426,7 @@ function PERDITION.Window(opts)
 			Size = UDim2.new(1, 0, 0, 14),
 			BackgroundTransparency = 1,
 			Font = FONT_MONO,
-			Text = string.format("sys ok \u{00B7} %d icons \u{00B7} v%s", #allIconNames(), tostring(PERDITION.Version or "4.0.0")),
+			Text = string.format("sys ok \u{00B7} %d icons \u{00B7} v%s", #allIconNames(), tostring(PERDITION.Version or "1.0.0")),
 			TextColor3 = THEME.Faint,
 			TextSize = 10,
 			Parent = card,
@@ -5489,7 +5498,12 @@ function PERDITION.Window(opts)
 	local function sQuint(t) return TweenInfo.new(t, Enum.EasingStyle.Quint, Enum.EasingDirection.Out) end
 	-- the search bar centres over the tab area (+7 from topbar centre) and never
 	-- grows wider than the tab area, so it can't cover the right-side icon cluster
-	local function searchGeom() return math.clamp(tabArea.AbsoluteSize.X - 16, 120, 360) end
+	local function searchGeom()
+		local s = 1
+		pcall(function() s = rootScale.Scale end)
+		if not s or s <= 0 then s = 1 end
+		return math.clamp(tabArea.AbsoluteSize.X / s - 16, 120, 360)
+	end
 	searchSetCount = function(txt)
 		searchCount.Text = txt
 	end
@@ -5639,7 +5653,7 @@ function PERDITION.Window(opts)
 		local safe = tostring(opts.title or "PERDITION"):gsub("[^%w%-_ ]", ""):gsub("%s+", "_")
 		cfgFolder = (type(opts.config) == "table" and opts.config.folder)
 			or (type(opts.folder) == "string" and opts.folder)
-			or ("Nemesis/" .. safe)
+			or ("Perdition/" .. safe)
 	end
 	local autoloadFile = cfgFolder and (cfgFolder .. "/autoload.txt")
 
@@ -5653,7 +5667,7 @@ function PERDITION.Window(opts)
 	function Win.SaveConfig(name)
 		name = sanitizeName(name)
 		if not (cfgFolder and name) then return false end
-		fsEnsureFolder("Nemesis")
+		fsEnsureFolder("Perdition")
 		fsEnsureFolder(cfgFolder)
 		local out = {}
 		for flag, rec in pairs(flagged) do
@@ -5987,7 +6001,7 @@ function PERDITION.Window(opts)
 				recolor(inst)
 			end
 		end)
-		pcall(rePaint)   -- role-registered (v4) instances recolour directly
+		pcall(rePaint)   -- role-registered (GLYPH) instances recolour directly
 		for _, fn in ipairs(richRefresh) do pcall(fn) end
 		for _, fn in ipairs(glyphLabelRefreshes) do pcall(fn) end
 
@@ -6018,10 +6032,10 @@ function PERDITION.Window(opts)
 				if inst:IsA("TextLabel") or inst:IsA("TextButton") or inst:IsA("TextBox") then
 					-- labels that preview a specific font (the font picker rows) keep
 					-- their own typeface so the swap never flattens the list.
-					-- GlyphMono marks v4 structural mono (wordmark, codes, values):
+					-- GlyphMono marks GLYPH structural mono (wordmark, codes, values):
 					-- the mono voice is load-bearing and never swaps either.
 					local keep = false
-					pcall(function() keep = inst:GetAttribute("NemesisKeepFont") == true or inst:GetAttribute("GlyphMono") == true end)
+					pcall(function() keep = inst:GetAttribute("PerditionKeepFont") == true or inst:GetAttribute("GlyphMono") == true end)
 					if not keep then
 						pcall(function()
 							local cur = inst.FontFace
@@ -6192,7 +6206,7 @@ function PERDITION.Window(opts)
 			if not blurFx then
 				pcall(function()
 					blurFx = Instance.new("BlurEffect")
-					blurFx.Name = "NemesisBlur"
+					blurFx.Name = "PerditionBlur"
 					blurFx.Size = 0
 					blurFx.Parent = game:GetService("Lighting")
 				end)
@@ -6835,9 +6849,17 @@ function PERDITION.Window(opts)
 						local h = heights[card] or live
 						local ci = 1
 						for i = 2, cols do if colH[i] < colH[ci] then ci = i end end
-						card.Size = UDim2.new(0, colW, 0, 0)
-						local target = UDim2.fromOffset((ci - 1) * (colW + GAP), colH[ci])
-						if animate then tween(card, { Position = target }, TI.SYDE_REFLOW) else card.Position = target end
+					-- smooth rearrange animates BOTH axes of the move: the column
+					-- width and the slot position. Snapping the width while gliding
+					-- the position read as a broken half-animation.
+					local sizeTarget = UDim2.new(0, colW, 0, 0)
+					local target = UDim2.fromOffset((ci - 1) * (colW + GAP), colH[ci])
+					if animate then
+						tween(card, { Size = sizeTarget, Position = target }, TI.SYDE_REFLOW)
+					else
+						card.Size = sizeTarget
+						card.Position = target
+					end
 						colH[ci] = colH[ci] + h + GAP
 					end
 				end
@@ -7657,8 +7679,8 @@ function PERDITION.Window(opts)
 		feelSec.Toggle({ text = "Boot sequence", icon = "power", default = not bootDisabled(), desc = "The dot-matrix power-on card when the menu loads.",
 			callback = function(on)
 				if not hasFileApi() then return end
-				fsEnsureFolder("Nemesis")
-				if on then fsDelete("Nemesis/glyph_boot.txt") else fsWrite("Nemesis/glyph_boot.txt", "0") end
+				fsEnsureFolder("Perdition")
+				if on then fsDelete("Perdition/glyph_boot.txt") else fsWrite("Perdition/glyph_boot.txt", "0") end
 			end })
 		feelSec.Toggle({ text = "Watermark", icon = "tag", default = false, desc = "A small draggable badge on screen.",
 			callback = function(on) Win.SetWatermark(on, opts.title or "PERDITION") end })
@@ -7881,7 +7903,7 @@ function PERDITION.Window(opts)
 				local convo = {}
 				for _, m in ipairs(history) do convo[#convo + 1] = (m.role == "user" and "User: " or "AI: ") .. m.parts[1].text end
 				convo[#convo + 1] = "User: " .. prompt
-				local url = "https://text.pollinations.ai/" .. HttpService:UrlEncode("You are a concise Roblox menu assistant. " .. table.concat(convo, "\n") .. "\nAI:") .. "?referrer=nemesis"
+				local url = "https://text.pollinations.ai/" .. HttpService:UrlEncode("You are a concise Roblox menu assistant. " .. table.concat(convo, "\n") .. "\nAI:") .. "?referrer=perdition"
 				reply = game:HttpGet(url)
 			end)
 			if ok and reply and #reply > 0 then
@@ -7956,7 +7978,7 @@ end
 
 local Win = PERDITION.Window({
 	title = "PERDITION",
-	accent = Color3.fromRGB(255, 45, 45),   -- GLYPH alarm red (the v4 identity)
+	accent = Color3.fromRGB(255, 45, 45),   -- GLYPH alarm red (the GLYPH identity)
 	columns = 2,                              -- panels per page (desktop)
 	toggleKey = Enum.KeyCode.RightShift,
 	game = "Showcase",                        -- sidebar footer, first line

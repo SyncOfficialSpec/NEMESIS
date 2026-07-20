@@ -174,7 +174,7 @@ print("  ok: Notify ran without error")
 -- image pointing at a stub-cached sheet with a 48x48 sprite rect
 local function findAtlasImage(inst)
 	local img = inst._props and inst._props.Image
-	if type(img) == "string" and img:find("rbxasset://stub/nemesis_icons_", 1, true) == 1 then
+	if type(img) == "string" and img:find("rbxasset://stub/perdition_icons_", 1, true) == 1 then
 		local rect = inst._props.ImageRectSize
 		if rect and rect.X == 48 and rect.Y == 48 then
 			return inst
@@ -226,7 +226,7 @@ local midnight = PERDITION.Themes.Midnight
 check(math.abs(Win.Instance.BackgroundColor3.R - midnight.Background.R) < 1e-6, "window recoloured to the Midnight palette")
 check(Win.SetTheme("Dark") == true, "SetTheme back to Dark")
 
--- GLYPH v4: 3-knob theme generation + token engine
+-- GLYPH: 3-knob theme generation + token engine
 check(type(PERDITION.GenerateTheme) == "function", "GenerateTheme exists")
 local glyphInk = PERDITION.GenerateTheme("ink", Color3.fromRGB(255, 45, 45), 0.5)
 local nCount = 0 for i = 0, 9 do if glyphInk.N[i] then nCount = nCount + 1 end end
@@ -239,7 +239,7 @@ check(Win.SetTheme({ base = "ink", accent = Color3.fromRGB(255, 45, 45), contras
 check(Win.SetTheme("Paper") == true, "SetTheme back to a literal preset after knob form")
 
 -- key system: a saved key file unlocks with no prompt (and no blocking)
-STUB_DISK["Nemesis/key.txt"] = "SMOKE-KEY"
+STUB_DISK["Perdition/key.txt"] = "SMOKE-KEY"
 local KWin = PERDITION.Window({ title = "KEYTEST", key = { key = "SMOKE-KEY" } })
 check(type(KWin) == "table", "key system: saved key unlocks without prompting")
 KWin.Destroy()

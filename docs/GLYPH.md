@@ -1,4 +1,4 @@
-# GLYPH — PERDITION v4 design system
+# GLYPH: PERDITION design system
 
 Status: ratified 2026-07-19 by a 3-judge design panel (unanimous, 42/44/42 vs SIGNAL 38/35/35, HALO 25/21/17). SHIPPED as v4.0.0 the same day (default identity = ink + alarm red #FF2D2D).
 DNA sources: Neverlose, Primordial, Fatality, Skeet, Syde / Linear, Geist, Raycast, Arc, Nothing OS, Teenage Engineering / Destiny 2, Cyberpunk 2077, Control.

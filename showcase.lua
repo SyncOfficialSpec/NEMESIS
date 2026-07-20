@@ -19,7 +19,7 @@ end
 
 local Win = PERDITION.Window({
 	title = "PERDITION",
-	accent = Color3.fromRGB(255, 45, 45),   -- GLYPH alarm red (the v4 identity)
+	accent = Color3.fromRGB(255, 45, 45),   -- GLYPH alarm red (the GLYPH identity)
 	columns = 2,                              -- panels per page (desktop)
 	toggleKey = Enum.KeyCode.RightShift,
 	game = "Showcase",                        -- sidebar footer, first line

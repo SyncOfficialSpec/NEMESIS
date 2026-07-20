@@ -22,7 +22,7 @@
 
 local PERDITION = {}
 PERDITION.Flags = {}
-PERDITION.Version = "4.0.0"
+PERDITION.Version = "1.0.0"
 
 -- Services (cloneref-safe)
 local function getService(name)
@@ -97,8 +97,8 @@ end
 -- versioned path: bump the filename (URL + on-disk cache) whenever the logo
 -- changes, so neither the GitHub CDN nor the executor serves a stale image
 -- grayscale logo so ImageColor3 can tint it to any hue at runtime
-local LOGO_URL = "https://raw.githubusercontent.com/SyncOfficialSpec/NEMESIS/main/assets/nemesis_wordmark_v1.png"
-local LOGO_FILE = "nemesis_wordmark_v1.png"
+local LOGO_URL = "https://raw.githubusercontent.com/SyncOfficialSpec/NEMESIS/main/assets/perdition_wordmark_v1.png"
+local LOGO_FILE = "perdition_wordmark_v1.png"
 local brandLogoCache = nil -- nil = untried, false = failed, string = rbxasset id
 
 local function customAssetFn()
@@ -177,7 +177,7 @@ local function loadIconSheet(n)
 	local getAsset = customAssetFn()
 	if not getAsset or type(writefile) ~= "function" then return nil end
 	pcall(function()
-		local file = "nemesis_icons_" .. ICONS_VER .. "_" .. n .. ".png"
+		local file = "perdition_icons_" .. ICONS_VER .. "_" .. n .. ".png"
 		local have = type(isfile) == "function" and isfile(file)
 		if not have then
 			local data = game:HttpGet(ICONS_BASE .. "icons_" .. ICONS_VER .. "_" .. n .. ".png")
@@ -208,7 +208,7 @@ local function loadArt(name)
 	local getAsset = customAssetFn()
 	if not getAsset or type(writefile) ~= "function" then return nil end
 	pcall(function()
-		local file = "nemesis_art_" .. name
+		local file = "perdition_art_" .. name
 		local have = type(isfile) == "function" and isfile(file)
 		if not have then
 			local data = game:HttpGet(ART_BASE .. name)
@@ -508,12 +508,12 @@ PERDITION.Themes = {
 	},
 }
 
-local THEME = { Accent = Color3.fromRGB(255, 45, 45) }   -- GLYPH alarm red (v4 default identity)
+local THEME = { Accent = Color3.fromRGB(255, 45, 45) }   -- GLYPH alarm red (GLYPH default identity)
 
 -- =====================================================================
--- GLYPH v4 token engine (docs/GLYPH.md). Infrastructure for the v4 redesign:
+-- GLYPH token engine (docs/GLYPH.md). Infrastructure for the GLYPH identity:
 -- a 3-knob palette generator (base / accent / contrast) plus a role-tag
--- painting registry. v3 paths are untouched: legacy presets stay literal and
+-- painting registry. legacy preset paths are untouched: legacy presets stay literal and
 -- the hex-match re-theme walk still recolours anything not registered.
 -- =====================================================================
 
@@ -934,7 +934,7 @@ local accentHooks = {}
 -- GLYPH boot kill-switch persisted to disk (Settings > Boot sequence)
 local function bootDisabled()
 	if not hasFileApi() then return false end
-	local ok, data = pcall(fsRead, "Nemesis/glyph_boot.txt")
+	local ok, data = pcall(fsRead, "Perdition/glyph_boot.txt")
 	return ok and data == "0"
 end
 
@@ -2140,7 +2140,7 @@ local function dropdownLayer(field)
 	local layer = _ddLayers[sg]
 	if not layer or not layer.Parent then
 		layer = Create("Frame", {
-			Name = "NemesisDropdownLayer",
+			Name = "PerditionDropdownLayer",
 			Size = UDim2.new(1, 0, 1, 0),
 			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
@@ -2231,7 +2231,7 @@ function Elements.Dropdown(parent, accent, opts)
 	-- GLYPH: the popover is an INVERSION plate (paper on ink / ink on paper)
 	-- with the one static drop - it never blends into the card it floats over
 	local panel = Create("Frame", {
-		Name = "NemesisDropdown",
+		Name = "PerditionDropdown",
 		BackgroundColor3 = roleColor("plateinv"),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
@@ -2340,7 +2340,7 @@ function Elements.Dropdown(parent, accent, opts)
 				pcall(function() olabel.Font = of end)
 				-- pin this label to its own font so a live menu-font swap can't
 				-- overwrite the per-option preview
-				pcall(function() olabel:SetAttribute("NemesisKeepFont", true) end)
+				pcall(function() olabel:SetAttribute("PerditionKeepFont", true) end)
 			end
 			local function apply(animate, visible)
 				local on = multi and selected[v] or (single == v)
@@ -4465,7 +4465,7 @@ end
 
 -- Key system. Window({ key = { keys = {"..."}, note = "...", saveKey = true } })
 -- shows a small unlock card and blocks until a listed key is entered. A saved
--- key (Nemesis/key.txt by default) skips the prompt on later runs. Closing the
+-- key (Perdition/key.txt by default) skips the prompt on later runs. Closing the
 -- card raises an error so the caller's script stops instead of running keyless.
 local function keyGate(kopts, windowTitle)
 	local keys = {}
@@ -4484,7 +4484,7 @@ local function keyGate(kopts, windowTitle)
 	end
 
 	local saveKey = kopts.saveKey ~= false
-	local keyFile = kopts.fileName or "Nemesis/key.txt"
+	local keyFile = kopts.fileName or "Perdition/key.txt"
 	if saveKey and hasFileApi() then
 		local saved = fsRead(keyFile)
 		if saved and matches(saved) then return true end
@@ -4593,7 +4593,7 @@ local function keyGate(kopts, windowTitle)
 	local function trySubmit()
 		if matches(box.Text) then
 			if saveKey and hasFileApi() then
-				fsEnsureFolder("Nemesis")
+				fsEnsureFolder("Perdition")
 				fsWrite(keyFile, (box.Text:gsub("^%s+", ""):gsub("%s+$", "")))
 			end
 			finish(true)
@@ -4841,7 +4841,7 @@ function PERDITION.Window(opts)
 			Size = UDim2.new(0, 90, 1, 0),
 			BackgroundTransparency = 1,
 			Font = FONT_MONO,
-			Text = "prd–" .. tostring(PERDITION.Version or "4.0.0"),
+			Text = "prd–" .. tostring(PERDITION.Version or "1.0.0"),
 			TextColor3 = THEME.Faint,
 			TextSize = 10,
 			TextXAlignment = Enum.TextXAlignment.Left,
@@ -5421,7 +5421,7 @@ function PERDITION.Window(opts)
 			Size = UDim2.new(1, 0, 0, 14),
 			BackgroundTransparency = 1,
 			Font = FONT_MONO,
-			Text = string.format("sys ok \u{00B7} %d icons \u{00B7} v%s", #allIconNames(), tostring(PERDITION.Version or "4.0.0")),
+			Text = string.format("sys ok \u{00B7} %d icons \u{00B7} v%s", #allIconNames(), tostring(PERDITION.Version or "1.0.0")),
 			TextColor3 = THEME.Faint,
 			TextSize = 10,
 			Parent = card,
@@ -5648,7 +5648,7 @@ function PERDITION.Window(opts)
 		local safe = tostring(opts.title or "PERDITION"):gsub("[^%w%-_ ]", ""):gsub("%s+", "_")
 		cfgFolder = (type(opts.config) == "table" and opts.config.folder)
 			or (type(opts.folder) == "string" and opts.folder)
-			or ("Nemesis/" .. safe)
+			or ("Perdition/" .. safe)
 	end
 	local autoloadFile = cfgFolder and (cfgFolder .. "/autoload.txt")
 
@@ -5662,7 +5662,7 @@ function PERDITION.Window(opts)
 	function Win.SaveConfig(name)
 		name = sanitizeName(name)
 		if not (cfgFolder and name) then return false end
-		fsEnsureFolder("Nemesis")
+		fsEnsureFolder("Perdition")
 		fsEnsureFolder(cfgFolder)
 		local out = {}
 		for flag, rec in pairs(flagged) do
@@ -5996,7 +5996,7 @@ function PERDITION.Window(opts)
 				recolor(inst)
 			end
 		end)
-		pcall(rePaint)   -- role-registered (v4) instances recolour directly
+		pcall(rePaint)   -- role-registered (GLYPH) instances recolour directly
 		for _, fn in ipairs(richRefresh) do pcall(fn) end
 		for _, fn in ipairs(glyphLabelRefreshes) do pcall(fn) end
 
@@ -6027,10 +6027,10 @@ function PERDITION.Window(opts)
 				if inst:IsA("TextLabel") or inst:IsA("TextButton") or inst:IsA("TextBox") then
 					-- labels that preview a specific font (the font picker rows) keep
 					-- their own typeface so the swap never flattens the list.
-					-- GlyphMono marks v4 structural mono (wordmark, codes, values):
+					-- GlyphMono marks GLYPH structural mono (wordmark, codes, values):
 					-- the mono voice is load-bearing and never swaps either.
 					local keep = false
-					pcall(function() keep = inst:GetAttribute("NemesisKeepFont") == true or inst:GetAttribute("GlyphMono") == true end)
+					pcall(function() keep = inst:GetAttribute("PerditionKeepFont") == true or inst:GetAttribute("GlyphMono") == true end)
 					if not keep then
 						pcall(function()
 							local cur = inst.FontFace
@@ -6201,7 +6201,7 @@ function PERDITION.Window(opts)
 			if not blurFx then
 				pcall(function()
 					blurFx = Instance.new("BlurEffect")
-					blurFx.Name = "NemesisBlur"
+					blurFx.Name = "PerditionBlur"
 					blurFx.Size = 0
 					blurFx.Parent = game:GetService("Lighting")
 				end)
@@ -7674,8 +7674,8 @@ function PERDITION.Window(opts)
 		feelSec.Toggle({ text = "Boot sequence", icon = "power", default = not bootDisabled(), desc = "The dot-matrix power-on card when the menu loads.",
 			callback = function(on)
 				if not hasFileApi() then return end
-				fsEnsureFolder("Nemesis")
-				if on then fsDelete("Nemesis/glyph_boot.txt") else fsWrite("Nemesis/glyph_boot.txt", "0") end
+				fsEnsureFolder("Perdition")
+				if on then fsDelete("Perdition/glyph_boot.txt") else fsWrite("Perdition/glyph_boot.txt", "0") end
 			end })
 		feelSec.Toggle({ text = "Watermark", icon = "tag", default = false, desc = "A small draggable badge on screen.",
 			callback = function(on) Win.SetWatermark(on, opts.title or "PERDITION") end })
@@ -7898,7 +7898,7 @@ function PERDITION.Window(opts)
 				local convo = {}
 				for _, m in ipairs(history) do convo[#convo + 1] = (m.role == "user" and "User: " or "AI: ") .. m.parts[1].text end
 				convo[#convo + 1] = "User: " .. prompt
-				local url = "https://text.pollinations.ai/" .. HttpService:UrlEncode("You are a concise Roblox menu assistant. " .. table.concat(convo, "\n") .. "\nAI:") .. "?referrer=nemesis"
+				local url = "https://text.pollinations.ai/" .. HttpService:UrlEncode("You are a concise Roblox menu assistant. " .. table.concat(convo, "\n") .. "\nAI:") .. "?referrer=perdition"
 				reply = game:HttpGet(url)
 			end)
 			if ok and reply and #reply > 0 then

@@ -1,30 +1,29 @@
-# PERDITION (formerly NEMESIS)
+# PERDITION
 
 A UI library for Roblox script executors. It gives you a desktop style window with
 tabs, a sidebar, collapsible sections, and the usual set of controls (toggles,
 sliders, dropdowns, color pickers, and so on). The API is small and consistent, so
 building a menu is mostly a matter of calling the element you want on a section.
 
-**v4 "GLYPH"**: industrial monochrome hardware. One alarm-red accent on an
-ink-and-paper scale, square LED toggles, RobotoMono part codes on every
-section and element (`cfg–01`, `tgl–02`), raw-data readouts, a dot-matrix
-boot sequence, and instant 0ms states. Same API as v3 — old scripts drop in.
-Design spec: `docs/GLYPH.md`.
+The default identity is **GLYPH**: industrial monochrome hardware. One alarm-red
+accent on an ink-and-paper scale, square LED toggles, RobotoMono part codes on
+every section and element (`cfg–01`, `tgl–02`), raw-data readouts, a dot-matrix
+boot sequence, and instant 0ms states. Design spec: `docs/GLYPH.md`.
 
 MIT licensed. Works with any executor that supports `loadstring` and `game:HttpGet`.
 
 ## Loading
 
 ```lua
-local NEMESIS = loadstring(game:HttpGet("https://raw.githubusercontent.com/SyncOfficialSpec/NEMESIS/main/source.lua"))()
+local PERDITION = loadstring(game:HttpGet("https://raw.githubusercontent.com/SyncOfficialSpec/NEMESIS/main/source.lua"))()
 ```
 
 ## Quick start
 
 ```lua
-local NEMESIS = loadstring(game:HttpGet("https://raw.githubusercontent.com/SyncOfficialSpec/NEMESIS/main/source.lua"))()
+local PERDITION = loadstring(game:HttpGet("https://raw.githubusercontent.com/SyncOfficialSpec/NEMESIS/main/source.lua"))()
 
-local Window = NEMESIS.Window({
+local Window = PERDITION.Window({
     title = "My Script",
     accent = Color3.fromRGB(140, 90, 255),
     toggleKey = Enum.KeyCode.RightShift,
@@ -48,7 +47,7 @@ Section.Slider({
     flag = "aim_fov",
 })
 
-NEMESIS.Notify({ title = "Loaded", content = "Press RightShift to toggle the menu." })
+PERDITION.Notify({ title = "Loaded", content = "Press RightShift to toggle the menu." })
 ```
 
 ## Structure
@@ -71,7 +70,7 @@ an unnamed section for you, which is handy for short pages.
 ## Window
 
 ```lua
-local Window = NEMESIS.Window({
+local Window = PERDITION.Window({
     title = "My Script",                          -- top bar title
     accent = Color3.fromRGB(140, 90, 255),        -- main accent color
     toggleKey = Enum.KeyCode.RightShift,          -- key to hide/show the menu
@@ -84,7 +83,7 @@ local Window = NEMESIS.Window({
     game = "Arsenal",                             -- sidebar footer, first line
     status = "Undetected",                        -- sidebar footer, second line
     configs = { "Legit", "Rage" },                -- preset config names for the header
-    folder = "Nemesis/MyScript",                  -- config folder, defaults to Nemesis/<title>
+    folder = "Perdition/MyScript",                  -- config folder, defaults to Perdition/<title>
     key = { key = "hello123" },                   -- key system, see below
 })
 ```
@@ -154,7 +153,7 @@ Every element takes a single table of options. Most return a control object with
 
 - `text` the label shown on the left
 - `desc` an optional second line of muted text
-- `flag` stores the value in `NEMESIS.Flags[flag]`
+- `flag` stores the value in `PERDITION.Flags[flag]`
 - `callback` runs with the new value whenever it changes
 
 ### Button
@@ -278,7 +277,7 @@ Section.Divider({ text = "ADVANCED" })   -- text is optional
 ## Notifications
 
 ```lua
-NEMESIS.Notify({
+PERDITION.Notify({
     title = "Saved",
     content = "Your config was saved.",
     duration = 4,          -- seconds, optional
@@ -290,19 +289,19 @@ Notifications appear in the top right and dismiss themselves after `duration`.
 
 ## Flags
 
-Any element with a `flag` stores its current value in `NEMESIS.Flags`.
+Any element with a `flag` stores its current value in `PERDITION.Flags`.
 
 ```lua
 Section.Toggle({ text = "Enabled", flag = "enabled" })
 -- later
-if NEMESIS.Flags.enabled then ... end
+if PERDITION.Flags.enabled then ... end
 ```
 
 ## Configs
 
 Every element with a `flag` is saved and restored automatically, including
 colors, gradients and keybinds. Configs are json files in your `folder`
-(default `Nemesis/<title>`).
+(default `Perdition/<title>`).
 
 ```lua
 Window.SaveConfig("legit")     -- write current values
@@ -324,12 +323,12 @@ return false.
 Gate the menu behind a key. Nothing is built until the key checks out.
 
 ```lua
-local Window = NEMESIS.Window({
+local Window = PERDITION.Window({
     title = "My Script",
     key = {
         keys = { "hello123", "vip-key" },  -- any of these unlocks (key = "..." works too)
         note = "Get the key from our discord.",
-        saveKey = true,                    -- remember it (Nemesis/key.txt), default true
+        saveKey = true,                    -- remember it (Perdition/key.txt), default true
     },
 })
 ```
@@ -340,8 +339,8 @@ run without a key.
 
 ## Theming
 
-The default identity is `Glyph` (ink monochrome + alarm red). The v3 presets
-still ship: `Paper`, `Dark`, `Midnight` and `Abyss`. Pick one at creation or
+The default identity is `Glyph` (ink monochrome + alarm red). Four more presets
+ship with it: `Paper`, `Dark`, `Midnight` and `Abyss`. Pick one at creation or
 switch live, the whole menu recolors in place:
 
 ```lua
@@ -350,8 +349,8 @@ PERDITION.Window({ theme = "Dark" })
 Window.SetTheme("Paper")
 ```
 
-v4 also generates palettes from three knobs (base / accent / contrast), so a
-whole coherent theme comes from one accent colour:
+PERDITION also generates palettes from three knobs (base / accent / contrast),
+so a whole coherent theme comes from one accent colour:
 
 ```lua
 Window.SetTheme({ base = "ink", accent = Color3.fromRGB(255, 170, 0), contrast = 0.6 })

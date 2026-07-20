@@ -985,21 +985,25 @@ end
 -- the classic Rayfield window shadow, vendored into this repo with the panel
 -- region punched out so it can sit behind OR inside any panel without tinting
 local RF_SHADOW = { name = "cal4_shadow.png", slice = Rect.new(91, 91, 187, 328), pad = 55 }
-local function dropShadow(parent, transparency)
-	local art = loadArt(RF_SHADOW.name)
+-- square-cornered shadow for GLYPH sharp (corner 0) popovers: the rounded art
+-- read as a curved inner boundary around sharp panels
+local SQ_SHADOW = { name = "gly1_shadow.png", slice = Rect.new(48, 48, 80, 80), pad = 26 }
+local function dropShadow(parent, transparency, square)
+	local spec = square and SQ_SHADOW or RF_SHADOW
+	local art = loadArt(spec.name)
 	if not art then return nil end
 	return Create("ImageLabel", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(0.5, 0, 0.5, 0),
-		Size = UDim2.new(1, RF_SHADOW.pad * 2, 1, RF_SHADOW.pad * 2),
+		Size = UDim2.new(1, spec.pad * 2, 1, spec.pad * 2),
 		BackgroundTransparency = 1,
 		Image = art,
 		-- the Rayfield shadow asset is white; tint it a warm near-black so it reads
 		-- as a soft shadow on the paper ground rather than a harsh cold halo
-		ImageColor3 = Color3.fromRGB(34, 27, 18),
+		ImageColor3 = square and Color3.fromRGB(10, 10, 10) or Color3.fromRGB(34, 27, 18),
 		ImageTransparency = transparency or 0.55,
 		ScaleType = Enum.ScaleType.Slice,
-		SliceCenter = RF_SHADOW.slice,
+		SliceCenter = spec.slice,
 		ZIndex = 0,
 		Parent = parent,
 	})
@@ -2239,7 +2243,7 @@ function Elements.Dropdown(parent, accent, opts)
 		panelScale,
 	})
 	paintRole(panel, "BackgroundColor3", "plateinv")
-	local panelShadow = dropShadow(panel, 1)
+	local panelShadow = dropShadow(panel, 1, true)   -- square art for the sharp panel
 	local holder = Create("ScrollingFrame", {
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, 6),

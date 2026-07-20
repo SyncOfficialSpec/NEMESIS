@@ -4955,8 +4955,12 @@ function PERDITION.Window(opts)
 		if not target then dockIndicator.BackgroundTransparency = 1; return end
 		local x, w = 4, 0
 		pcall(function()
-			x = target.AbsolutePosition.X - dockTrack.AbsolutePosition.X
-			w = target.AbsoluteSize.X
+			-- Absolute* are RENDERED (UIScale-multiplied) pixels; the indicator is
+			-- positioned in LOCAL units inside the scaled tree, so divide back out
+			local s = rootScale.Scale
+			if not s or s <= 0 then s = 1 end
+			x = (target.AbsolutePosition.X - dockTrack.AbsolutePosition.X) / s
+			w = target.AbsoluteSize.X / s
 		end)
 		if w <= 0 then dockIndicator.BackgroundTransparency = 1; return end
 		-- GLYPH instant law: the indicator snaps, it never glides
@@ -5489,7 +5493,12 @@ function PERDITION.Window(opts)
 	local function sQuint(t) return TweenInfo.new(t, Enum.EasingStyle.Quint, Enum.EasingDirection.Out) end
 	-- the search bar centres over the tab area (+7 from topbar centre) and never
 	-- grows wider than the tab area, so it can't cover the right-side icon cluster
-	local function searchGeom() return math.clamp(tabArea.AbsoluteSize.X - 16, 120, 360) end
+	local function searchGeom()
+		local s = 1
+		pcall(function() s = rootScale.Scale end)
+		if not s or s <= 0 then s = 1 end
+		return math.clamp(tabArea.AbsoluteSize.X / s - 16, 120, 360)
+	end
 	searchSetCount = function(txt)
 		searchCount.Text = txt
 	end
